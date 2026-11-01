@@ -33,12 +33,12 @@ cat > "$C/control" <<CTL
 Package: $NAME
 Version: $VER
 Depends: libc, luci-base
-Source: https://github.com/itsmaiGe/luci-theme-lucent
+Source: https://github.com/likz0421/luci-theme-lucent
 SourceName: $NAME
 License: Apache-2.0
 Section: luci
-URL: https://github.com/itsmaiGe/luci-theme-lucent
-Maintainer: itsmaiGe
+URL: https://github.com/likz0421/luci-theme-lucent
+Maintainer: likz0421
 Architecture: all
 Installed-Size: $SIZE
 Description: Lucent 3 — an independent LuCI theme with a dashboard, five palettes,

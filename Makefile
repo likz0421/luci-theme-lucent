@@ -20,7 +20,7 @@ LUCI_DEPENDS:=+luci-base
 LUCI_PKGARCH:=all
 
 PKG_LICENSE:=Apache-2.0
-PKG_MAINTAINER:=itsmaiGe
+PKG_MAINTAINER:=likz0421
 
 define Package/luci-theme-lucent/conffiles
 /etc/config/lucent

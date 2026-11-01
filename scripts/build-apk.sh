@@ -90,8 +90,8 @@ mkdir -p dist
 	--info "arch:noarch" \
 	--info "license:Apache-2.0" \
 	--info "origin:$NAME" \
-	--info "url:https://github.com/itsmaiGe/luci-theme-lucent" \
-	--info "maintainer:itsmaiGe" \
+	--info "url:https://github.com/likz0421/luci-theme-lucent" \
+	--info "maintainer:likz0421" \
 	--info "depends:luci-base" \
 	--info "tags:openwrt:section=luci" \
 	--script "post-install:$S/post-install" \
