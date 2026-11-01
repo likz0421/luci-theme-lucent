@@ -27,8 +27,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.6.1-r1"
-LUCENT_TAG_DEFAULT="v3.6.1"
+LUCENT_VERSION_DEFAULT="3.6.2-r1"
+LUCENT_TAG_DEFAULT="v3.6.2"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -92,6 +92,23 @@ rel_bases() {
 	fi
 }
 
+# 指向"最新发布版"的地址列表：用于获取 latest 指针文件，这样旧版本也能发现新版。
+# 优先用仓库树里的指针文件（随每次发布自动更新、镜像友好、版本无关），
+# 再回退到 GitHub "releases/latest" 资源。指针内容是被选中的资源文件名，
+# 由 get_latest 里的 sed 解析出版本号。
+latest_bases() {
+	gh="https://raw.githubusercontent.com/$LUCENT_REPO/main"
+	jsd="https://cdn.jsdelivr.net/gh/$LUCENT_REPO@main"
+	fastly="https://cdn.fastly.jsdelivr.net/gh/$LUCENT_REPO@main"
+	rel="https://github.com/$LUCENT_REPO/releases/latest/download"
+	if [ "${LUCENT_CN:-0}" = "1" ]; then
+		# 国内优先镜像，再回退直连
+		echo "$jsd $fastly $gh $rel"
+	else
+		echo "$gh $jsd $fastly $rel"
+	fi
+}
+
 # 尝试从多个地址下载某个文件
 try_download() {
 	fname="$1"; dest="$2"
@@ -121,20 +138,35 @@ vkey() {
 }
 
 get_current() {
+	local v=""
 	if have apk; then
-		apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//"
+		v=$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//")
 	elif have opkg; then
-		opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1
+		v=$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1)
 	fi
+	# File-copy installs leave no package record; fall back to the marker we
+	# write at install time so the dashboard can still show the current version.
+	[ -n "$v" ] || v=$(cat /usr/share/lucent/version 2>/dev/null)
+	printf '%s' "$v"
 }
 
 get_latest() {
-	local f
+	local f base
 	if have apk; then f="latest-apk.txt"; else f="latest.txt"; fi
-	if try_download "$f" "$TMP/latest"; then
-		sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
-		return 0
+	if [ -n "$LUCENT_BASE_URL" ]; then
+		if fetch "$LUCENT_BASE_URL/$f" "$TMP/latest"; then
+			sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
+			return 0
+		fi
+		return 1
 	fi
+	for base in $(latest_bases); do
+		log "  检查 $base/$f"
+		if fetch "$base/$f" "$TMP/latest"; then
+			sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
+			return 0
+		fi
+	done
 	return 1
 }
 
@@ -233,6 +265,11 @@ do_install() {
 	fi
 
 	[ "$INSTALLED" = "1" ] || { log "安装失败。" >&2; exit 1; }
+
+	# Record the installed version so file-copy installs (no package manager
+	# record) can still report the current version to the in-page updater.
+	mkdir -p /usr/share/lucent 2>/dev/null || true
+	[ -n "$VER" ] && printf '%s\n' "$VER" > /usr/share/lucent/version
 
 	activate_theme
 	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/ /tmp/lucent-upload

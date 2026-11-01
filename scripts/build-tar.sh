@@ -5,6 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VER=$(sed -n 's/^PKG_VERSION:=//p' Makefile)
+REL=$(sed -n 's/^PKG_RELEASE:=//p' Makefile)
 OUT=dist/lucent-${VER}.tar.gz
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -17,6 +18,7 @@ cp -R htdocs ucode root i18n "$TMP/$DIR/"
 # button works for file-copy installs too (offline-install.sh copies root/*).
 mkdir -p "$TMP/$DIR/root/usr/share/lucent"
 cp install.sh "$TMP/$DIR/root/usr/share/lucent/install.sh"
+printf '%s\n' "${VER}-r${REL}" > "$TMP/$DIR/root/usr/share/lucent/version"
 cp LICENSE README.md CHANGELOG.md uninstall.sh "$TMP/$DIR/" 2>/dev/null || true
 # The archive is the offline option: ship the file-copy installer as install.sh.
 cp scripts/offline-install.sh "$TMP/$DIR/install.sh"

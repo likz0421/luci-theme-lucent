@@ -6,7 +6,7 @@ surfaces, a device list and an appearance panel — but shares no templates,
 stylesheets, scripts or package metadata with them.
 
 - Target: OpenWrt 25.12.x, LuCI 26.x (ucode)
-- Package: `luci-theme-lucent` 3.6.1
+- Package: `luci-theme-lucent` 3.6.2
 - Licence: Apache-2.0
 
 ## Screenshots
@@ -121,7 +121,7 @@ wget -qO /tmp/lucent-install.sh https://cdn.jsdelivr.net/gh/likz0421/luci-theme-
 sh /tmp/lucent-install.sh install
 ```
 
-### 主页在线更新（v3.6.1+）
+### 主页在线更新（v3.6.2+）
 
 安装后，登录 LuCI 进入 **首页**，右下角的 **更新** 卡片即可在线检查并升级主题：
 点 *检查更新* 对比当前版本与 GitHub 上的最新版（沿用与安装脚本相同的国内镜像
@@ -165,27 +165,27 @@ ssh root@192.168.1.1 'sh /tmp/lucent-offline-install.sh install'
 
 | 固件 | 文件 |
 | --- | --- |
-| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.6.1-r1.apk` |
-| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.6.1-r1_all.ipk` |
-| 任意（无包管理器） | `lucent-3.6.1.tar.gz`（解压后 `./install.sh`） |
+| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.6.2-r1.apk` |
+| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.6.2-r1_all.ipk` |
+| 任意（无包管理器） | `lucent-3.6.2.tar.gz`（解压后 `./install.sh`） |
 
 apk:
 
 ```sh
-apk add --allow-untrusted ./luci-theme-lucent-3.6.1-r1.apk
+apk add --allow-untrusted ./luci-theme-lucent-3.6.2-r1.apk
 ```
 
 opkg:
 
 ```sh
-opkg install ./luci-theme-lucent_3.6.1-r1_all.ipk
+opkg install ./luci-theme-lucent_3.6.2-r1_all.ipk
 ```
 
 Manual:
 
 ```sh
-tar -xzf lucent-3.6.1.tar.gz -C /tmp
-cd /tmp/luci-theme-lucent-3.6.1 && ./install.sh
+tar -xzf lucent-3.6.2.tar.gz -C /tmp
+cd /tmp/luci-theme-lucent-3.6.2 && ./install.sh
 ```
 
 The package registers itself as `Lucent` in `/etc/config/luci` and selects

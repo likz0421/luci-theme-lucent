@@ -3,6 +3,24 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.2 — 2026-11-01
+
+### Fixed
+
+- **Mobile dashboard layout was cramped.** On phones the network/system detail
+  items and the KPI stat tiles could render as 3–4 narrow columns, so long
+  values wrapped awkwardly. Up to 600px wide these now use a clean two-column
+  layout; the main cards already collapse to a single column on phones.
+- **In-page updater could not detect the current version or new releases.**
+  - The installed version is now also recorded in a marker file
+    (`/usr/share/lucent/version`, shipped inside every package and written by
+    both installers), so file-copy installs — which leave no apk/opkg record —
+    still report the current version instead of blank.
+  - The "check for updates" step now reads a version-agnostic `latest`
+    pointer from the repository tree (raw GitHub / jsDelivr, with the same
+    China-mirror fallback) and falls back to GitHub `releases/latest`, so an
+    older installed build can still discover the newest release.
+
 ## 3.6.1 — 2026-11-01
 
 ### Fixed

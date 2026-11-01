@@ -589,6 +589,12 @@ body:has(.ltc-login){background:var(--bg)}
 	.modal{margin:3vh auto;padding:17px}
 }
 
+/* 手机（含大屏手机）：信息项与指标卡固定两列，避免 3~4 列挤压换行错乱 */
+@media (max-width:600px){
+	.ltc-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+	.ltc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 @media (max-width:380px){
 	.ltc-acts{grid-template-columns:minmax(0,1fr)}
 	.ltc-swatches{grid-template-columns:repeat(2,minmax(0,1fr))}

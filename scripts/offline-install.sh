@@ -25,6 +25,11 @@ cp -R "$DIR/htdocs/." /www/
 mkdir -p /usr/share/ucode/luci
 cp -R "$DIR/ucode/." /usr/share/ucode/luci/
 cp -R "$DIR/root/." /
+mkdir -p /usr/share/lucent
+# Record the installed version (from the bundled installer's baked default) so
+# the in-page updater can report the current version without a package record.
+LV=$(sed -n 's/^LUCENT_VERSION_DEFAULT="\([^"]*\)".*/\1/p' /usr/share/lucent/install.sh 2>/dev/null | head -n1)
+[ -n "$LV" ] && printf '%s\n' "$LV" > /usr/share/lucent/version
 mkdir -p /usr/lib/lua/luci/i18n
 if [ -d "$DIR/i18n" ]; then
 	cp "$DIR"/i18n/*.lmo /usr/lib/lua/luci/i18n/ 2>/dev/null || true

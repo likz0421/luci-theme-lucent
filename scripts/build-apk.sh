@@ -31,6 +31,7 @@ cp -R root/. "$D/"
 cp i18n/*.lmo "$D/usr/lib/lua/luci/i18n/"
 mkdir -p "$D/usr/share/lucent"
 cp install.sh "$D/usr/share/lucent/install.sh"
+printf '%s\n' "$VER" > "$D/usr/share/lucent/version"
 find "$D" -name .DS_Store -delete
 find "$D" -type d -exec chmod 755 {} +
 find "$D" -type f -exec chmod 644 {} +
