@@ -13,7 +13,10 @@ export COPYFILE_DISABLE=1
 DIR=luci-theme-lucent-${VER}
 mkdir -p "$TMP/$DIR"
 cp -R htdocs ucode root i18n "$TMP/$DIR/"
-cp LICENSE README.md CHANGELOG.md install.sh uninstall.sh "$TMP/$DIR/" 2>/dev/null || true
+cp LICENSE README.md CHANGELOG.md uninstall.sh "$TMP/$DIR/" 2>/dev/null || true
+# The archive is the offline option: ship the file-copy installer as install.sh.
+cp scripts/offline-install.sh "$TMP/$DIR/install.sh"
+chmod 755 "$TMP/$DIR/install.sh" "$TMP/$DIR/uninstall.sh"
 find "$TMP" -name .DS_Store -delete
 
 mkdir -p dist

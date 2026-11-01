@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=3.2.0
+PKG_VERSION:=3.3.0
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard
@@ -21,6 +21,7 @@ LUCI_PKGARCH:=all
 
 PKG_LICENSE:=Apache-2.0
 PKG_MAINTAINER:=likz0421
+PKG_REPO:=likz0421/luci-theme-lucent
 
 define Package/luci-theme-lucent/conffiles
 /etc/config/lucent

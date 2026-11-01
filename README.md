@@ -6,7 +6,7 @@ surfaces, a device list and an appearance panel — but shares no templates,
 stylesheets, scripts or package metadata with them.
 
 - Target: OpenWrt 25.12.x, LuCI 26.x (ucode)
-- Package: `luci-theme-lucent` 3.2.0
+- Package: `luci-theme-lucent` 3.3.0
 - Licence: Apache-2.0
 
 ## Screenshots
@@ -82,60 +82,96 @@ stylesheets, scripts or package metadata with them.
 
 ## Install
 
-Download the artifact that matches your firmware:
+### 一键安装（在线从 GitHub 拉取，推荐）
 
-| Firmware | File |
+在路由器 SSH 里执行一行命令即可。脚本会自动下载对应固件的安装包、
+检测 `apk`/`opkg`、安装并启用 Lucent、注册中文、清理缓存。
+
+**国内用户请用镜像加速**（直连 GitHub 常常很慢或失败）：
+
+```sh
+# 国内推荐：脚本走 jsDelivr，安装包自动回退国内镜像
+wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh
+```
+
+```sh
+# 海外 / 可直连 GitHub：
+wget -qO- https://raw.githubusercontent.com/likz0421/luci-theme-lucent/main/install.sh | sh
+```
+
+没有 `wget` 时用 `curl`：
+
+```sh
+curl -fsSL https://github.com/likz0421/luci-theme-lucent/raw/main/install.sh | sh
+```
+
+卸载 / 查看状态：
+
+```sh
+# 卸载（恢复 Bootstrap，无需联网）
+sh install.sh uninstall
+# 查看状态
+sh install.sh status
+```
+
+如果管道方式不便，可先下载脚本再执行：
+
+```sh
+wget -qO /tmp/lucent-install.sh https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh
+sh /tmp/lucent-install.sh install
+```
+
+镜像与地址控制（环境变量）：
+
+| 变量 | 作用 |
 | --- | --- |
-| Any OpenWrt 23.05+ (one command) | `lucent-onekey-install.sh` |
-| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.2.0-r1.apk` |
-| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.2.0-r1_all.ipk` |
-| Any (manual) | `lucent-3.2.0.tar.gz` |
+| `LUCENT_CN=1` | 强制优先用国内镜像下载 `.apk`/`.ipk` |
+| `LUCENT_BASE_URL=https://你的镜像` | 指定私有 / 内网下载地址 |
+| `LUCENT_VERSION` / `LUCENT_TAG` | 覆盖要安装的版本与 Release 标签 |
 
-One command (theme payload is self-contained; no network needed to install
-the theme itself):
+脚本默认先试直连 GitHub，失败后自动依次回退
+`ghfast.top` → `gh-proxy.com` → `mirror.ghproxy.com` → `github.moeyy.xyz`。
+若 HTTPS 报错，先装证书：`apk add ca-bundle ca-certificates`（或
+`opkg install ca-bundle`）。
+
+`install` 还会先检查 OpenWrt 的 LuCI 界面；若系统缺少 LuCI，会尝试从
+路由器已配置的软件源安装 `luci` / `luci-base`（这一步需要能访问软件源）。
+
+### 离线一键（路由器完全无外网时用）
+
+下载 `lucent-offline-install.sh`（自包含，已内嵌 apk/ipk/文件树），传到
+路由器执行即可，安装主题本身不需要联网：
 
 ```sh
-scp lucent-onekey-install.sh root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'sh /tmp/lucent-onekey-install.sh install'
+scp lucent-offline-install.sh root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'sh /tmp/lucent-offline-install.sh install'
 ```
 
-Other operations:
+### 手动安装
 
-```sh
-sh /tmp/lucent-onekey-install.sh status
-sh /tmp/lucent-onekey-install.sh uninstall
-```
-
-`install` first checks for OpenWrt's LuCI web interface. If the router has
-no LuCI, it tries to install `luci` (or `luci-base`) from the configured
-package feed, so this step requires network access to that feed. The script
-then detects `apk`/`opkg`, installs the bundled package, activates Lucent,
-registers `zh_cn`, clears LuCI caches and restarts `rpcd`/`uhttpd`. If both
-package managers fail it copies the file tree directly. It decodes its
-embedded payload with `base64`, or with ucode's `b64dec()` when the image
-has no `base64`.
-
-`uninstall` removes the package or manually copied files, deletes the theme
-media and bundled Chinese catalogs, restores Bootstrap when Lucent is active,
-and clears caches.
+| 固件 | 文件 |
+| --- | --- |
+| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.3.0-r1.apk` |
+| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.3.0-r1_all.ipk` |
+| 任意（无包管理器） | `lucent-3.3.0.tar.gz`（解压后 `./install.sh`） |
 
 apk:
 
 ```sh
-apk add --allow-untrusted ./luci-theme-lucent-3.2.0-r1.apk
+apk add --allow-untrusted ./luci-theme-lucent-3.3.0-r1.apk
 ```
 
 opkg:
 
 ```sh
-opkg install ./luci-theme-lucent_3.2.0-r1_all.ipk
+opkg install ./luci-theme-lucent_3.3.0-r1_all.ipk
 ```
 
 Manual:
 
 ```sh
-tar -xzf lucent-3.2.0.tar.gz -C /tmp
-cd /tmp/luci-theme-lucent-3.2.0 && ./install.sh
+tar -xzf lucent-3.3.0.tar.gz -C /tmp
+cd /tmp/luci-theme-lucent-3.3.0 && ./install.sh
 ```
 
 The package registers itself as `Lucent` in `/etc/config/luci` and selects
@@ -190,7 +226,7 @@ Standalone artifacts (used for the files in `dist/`) are produced with:
 ./scripts/build-ipk.sh
 ./scripts/build-tar.sh
 ./scripts/build-src.sh
-./scripts/build-onekey.sh   # embeds apk + ipk + file tree
+./scripts/build-onekey.sh   # 生成在线一键脚本 + 离线自包含脚本
 ./scripts/checksums.sh
 ```
 
@@ -213,7 +249,7 @@ Argon and Fluent, but it is not a drop-in clone. Current status:
 | Native LuCI page compatibility | Yes | Uses the standard theme contract |
 | Latency / ping probe | **No** | Not implemented; would need a small helper |
 | OpenClash status card | **No** | Not implemented; avoids coupling to one add-on |
-| One-command offline installer | Yes | `lucent-onekey-install.sh` |
+| One-command installer | Yes | 在线 `install.sh`（GitHub+镜像）与离线 `lucent-offline-install.sh` |
 
 So: the visible core of the upstream dashboard is covered, but latency
 probing and an OpenClash-specific card are deliberately still missing. They

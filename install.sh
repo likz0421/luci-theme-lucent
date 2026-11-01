@@ -1,53 +1,278 @@
 #!/bin/sh
-# Lucent 3 — manual installer for the extracted source tree or tar.gz.
-# Run from this directory:
-#   ./install.sh
-# This is the fallback for images without apk/opkg. Prefer the .apk or .ipk.
-
+#
+# Lucent 3 — 在线一键安装 / 卸载脚本
+#
+# 这是从 GitHub 在线拉取安装包的一键脚本。路由器本身不需要预置任何文件，
+# 只要能够访问 GitHub（或国内镜像）即可。
+#
+# 一行命令安装（在路由器 SSH 里执行）：
+#
+#   直连 GitHub：
+#     wget -qO- https://raw.githubusercontent.com/likz0421/luci-theme-lucent/main/install.sh | sh
+#
+#   国内镜像加速（jsDelivr，拉脚本更快）：
+#     wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh
+#
+#   若路由器没有 wget，可用 curl：
+#     curl -fsSL https://github.com/likz0421/luci-theme-lucent/raw/main/install.sh | sh
+#
+# 卸载：
+#     wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh -s uninstall
+#
+# 环境变量（可选）：
+#   LUCENT_CN=1        强制优先使用国内镜像下载软件包
+#   LUCENT_BASE_URL=…  指定你自己的下载地址（私有镜像 / 内网 / 本地测试）
+#   LUCENT_VERSION=…   覆盖要安装的版本号
+#
 set -e
 
-DIR=$(cd "$(dirname "$0")" && pwd)
+# ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
+LUCENT_VERSION_DEFAULT="3.3.0-r1"
+LUCENT_TAG_DEFAULT="v3.3.0"
+LUCENT_REPO="likz0421/luci-theme-lucent"
+# -------------------------------------------------------------------------
 
-[ -f /etc/openwrt_release ] || { echo "This is not an OpenWrt system." >&2; exit 1; }
-[ -d /usr/share/ucode/luci ] || { echo "ucode based LuCI (OpenWrt 23.05+) is required." >&2; exit 1; }
-[ -d "$DIR/htdocs" ] && [ -d "$DIR/ucode" ] && [ -d "$DIR/root" ] || {
-	echo "Run this script from the extracted Lucent source directory." >&2
-	exit 1
+VER="${LUCENT_VERSION:-$LUCENT_VERSION_DEFAULT}"
+TAG="${LUCENT_TAG:-$LUCENT_TAG_DEFAULT}"
+VER_NO_R="${VER%%-r*}"
+PKG_NAME="luci-theme-lucent"
+
+log() { echo "$@"; }
+
+usage() {
+	cat <<EOF
+Lucent 3 在线一键脚本  (版本 $VER)
+
+  sh install.sh install     在线下载并安装 / 升级（默认）
+  sh install.sh uninstall   卸载并恢复 Bootstrap
+  sh install.sh status      查看安装状态
+
+默认从 GitHub Releases 下载，失败时自动回退到国内镜像。
+强制走镜像：  LUCENT_CN=1 sh install.sh
+自定义地址：  LUCENT_BASE_URL=https://your-host/lucent sh install.sh
+EOF
 }
 
-echo "Installing Lucent 3…"
+ACTION="${1:-install}"
+case "$ACTION" in
+	install|uninstall|status) ;;
+	-h|--help|help) usage; exit 0 ;;
+	*) log "未知操作：$ACTION"; usage; exit 1 ;;
+esac
 
-if [ -f /etc/config/lucent ]; then
-	cp /etc/config/lucent /tmp/lucent-config.$$
-fi
+# ---- 下载工具 --------------------------------------------------------------
+have() { command -v "$1" >/dev/null 2>&1; }
 
-cp -R "$DIR/htdocs/." /www/
-mkdir -p /usr/share/ucode/luci
-cp -R "$DIR/ucode/." /usr/share/ucode/luci/
-cp -R "$DIR/root/." /
-mkdir -p /usr/lib/lua/luci/i18n
-if [ -d "$DIR/i18n" ]; then
-	cp "$DIR"/i18n/*.lmo /usr/lib/lua/luci/i18n/ 2>/dev/null || true
-fi
+fetch() {
+	# fetch <url> <outfile>
+	url="$1"; out="$2"
+	rm -f "$out"
+	if have wget; then
+		# OpenWrt's wget is uclient-fetch: supports -q/-T/-O but NOT -t.
+		wget -q -T 20 -O "$out" "$url" 2>/dev/null
+	elif have curl; then
+		curl -fsSL --connect-timeout 10 --max-time 90 -o "$out" "$url" 2>/dev/null
+	else
+		return 1
+	fi
+	[ -s "$out" ]
+}
 
-if [ -f /tmp/lucent-config.$$ ]; then
-	cp /tmp/lucent-config.$$ /etc/config/lucent
-	rm -f /tmp/lucent-config.$$
-else
-	cp "$DIR/root/etc/config/lucent" /etc/config/lucent
-fi
+# 构造候选下载地址列表（release 资源）
+rel_bases() {
+	rel="https://github.com/$LUCENT_REPO/releases/download/$TAG"
+	mirrors="https://ghfast.top/$rel https://gh-proxy.com/$rel https://mirror.ghproxy.com/$rel https://github.moeyy.xyz/$rel"
+	if [ "${LUCENT_CN:-0}" = "1" ]; then
+		echo "$mirrors $rel"
+	else
+		echo "$rel $mirrors"
+	fi
+}
 
-chmod 755 /etc/uci-defaults/30_luci-theme-lucent
-chmod 755 /usr/libexec/rpcd/luci.lucent
-mkdir -p /www/luci-static/lucent/media/image
-mkdir -p /www/luci-static/lucent/media/video
-mkdir -p /www/luci-static/lucent/media/icon
-mkdir -p /www/luci-static/lucent/media/wallpaper
+# 尝试从多个地址下载某个文件
+try_download() {
+	fname="$1"; dest="$2"
 
-( cd /etc/uci-defaults && . ./30_luci-theme-lucent ) || true
-rm -f /etc/uci-defaults/30_luci-theme-lucent
+	if [ -n "$LUCENT_BASE_URL" ]; then
+		log "  下载 $LUCENT_BASE_URL/$fname"
+		fetch "$LUCENT_BASE_URL/$fname" "$dest" && return 0
+		return 1
+	fi
 
-/etc/init.d/rpcd reload >/dev/null 2>&1 || true
-rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/
+	for base in $(rel_bases); do
+		log "  尝试 $base/$fname"
+		if fetch "$base/$fname" "$dest"; then
+			return 0
+		fi
+	done
+	return 1
+}
 
-echo "Done. Reload the router page and choose Lucent under System → System → Language and Style."
+# ---- 临时目录 --------------------------------------------------------------
+TMP=""
+cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+trap cleanup EXIT INT TERM
+
+new_tmp() {
+	TMP=$(mktemp -d /tmp/lucent.XXXXXX) || exit 1
+}
+
+# ---- 确保 LuCI 存在 --------------------------------------------------------
+ensure_luci() {
+	[ -d /usr/share/ucode/luci ] && return 0
+	log "→ 未检测到 OpenWrt LuCI，尝试安装 luci 界面…"
+	if have apk; then
+		if apk add luci >"$TMP/luci.log" 2>&1 || apk add luci-base >>"$TMP/luci.log" 2>&1; then
+			[ -d /usr/share/ucode/luci ] && { log "  LuCI: 完成"; return 0; }
+		fi
+	elif have opkg; then
+		opkg update >/dev/null 2>&1 || true
+		if opkg install luci >"$TMP/luci.log" 2>&1 || opkg install luci-base >>"$TMP/luci.log" 2>&1; then
+			[ -d /usr/share/ucode/luci ] && { log "  LuCI: 完成"; return 0; }
+		fi
+	fi
+	[ -s "$TMP/luci.log" ] && cat "$TMP/luci.log"
+	log "无法自动安装 LuCI，请确认路由器可联网访问软件源。" >&2
+	return 1
+}
+
+# ---- 激活主题 --------------------------------------------------------------
+activate_theme() {
+	uci -q get luci.themes.Lucent >/dev/null 2>&1 || \
+		uci -q set luci.themes.Lucent=/luci-static/lucent
+	case "$(uci -q get luci.main.mediaurlbase)" in
+		''|/luci-static/bootstrap|/luci-static/bootstrap-dark|/luci-static/bootstrap-light)
+			uci -q set luci.main.mediaurlbase=/luci-static/lucent ;;
+	esac
+	uci -q get luci.languages.zh_cn >/dev/null 2>&1 || \
+		uci -q set luci.languages.zh_cn='简体中文 (Simplified Chinese)'
+	uci -q commit luci
+}
+
+# ---- 安装 ------------------------------------------------------------------
+do_install() {
+	[ "$(id -u)" = "0" ] || { log "请用 root 运行。" >&2; exit 1; }
+	[ -f /etc/openwrt_release ] || { log "这不是 OpenWrt 系统。" >&2; exit 1; }
+	[ -d /usr/share/ucode/luci ] || have apk || have opkg || {
+		log "既没有 LuCI 也没有包管理器，无法在线安装。" >&2; exit 1; }
+
+	new_tmp
+	ensure_luci || exit 1
+
+	log "→ 从 GitHub / 镜像在线下载 Lucent…"
+
+	# 根据包管理器选择要下载的安装包
+	if have apk; then
+		PKGFILE="$PKG_NAME-$VER.apk"
+	elif have opkg; then
+		PKGFILE="${PKG_NAME}_${VER}_all.ipk"
+	else
+		PKGFILE="lucent-$VER_NO_R.tar.gz"
+	fi
+
+	if ! try_download "$PKGFILE" "$TMP/$PKGFILE"; then
+		log ""
+		log "所有地址都无法下载 $PKGFILE。" >&2
+		log "国内网络可尝试：  LUCENT_CN=1 sh install.sh" >&2
+		log "或指定镜像：      LUCENT_BASE_URL=https://你的镜像 sh install.sh" >&2
+		log "HTTPS 失败时先装证书：  apk add ca-bundle ca-certificates  (或 opkg install ca-bundle)" >&2
+		exit 1
+	fi
+
+	INSTALLED=0
+	if have apk; then
+		log "→ 使用 apk 安装…"
+		if apk add --allow-untrusted --no-network "$TMP/$PKGFILE" >"$TMP/pkg.log" 2>&1; then
+			INSTALLED=1; log "  apk: 完成"
+		else
+			cat "$TMP/pkg.log"
+		fi
+	elif have opkg; then
+		log "→ 使用 opkg 安装…"
+		if opkg install "$TMP/$PKGFILE" >"$TMP/pkg.log" 2>&1; then
+			INSTALLED=1; log "  opkg: 完成"
+		else
+			cat "$TMP/pkg.log"
+		fi
+	else
+		# 无包管理器：解压 tar.gz 并用其中的离线安装脚本
+		log "→ 未找到包管理器，使用文件方式安装…"
+		tar -xzf "$TMP/$PKGFILE" -C "$TMP" || { log "安装包损坏。" >&2; exit 1; }
+		DIR=$(find "$TMP" -maxdepth 1 -type d -name 'luci-theme-lucent-*' | head -n1)
+		[ -n "$DIR" ] && sh "$DIR/install.sh" && INSTALLED=1
+	fi
+
+	[ "$INSTALLED" = "1" ] || { log "安装失败。" >&2; exit 1; }
+
+	activate_theme
+	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/ /tmp/lucent-upload
+	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+
+	log ""
+	log "完成。打开 http://$(uci -q get network.lan.ipaddr | cut -d/ -f1) 并登录。"
+	log "浏览器为中文时自动显示中文；强制中文：uci set luci.main.lang=zh_cn && uci commit luci"
+	log "卸载：sh install.sh uninstall"
+}
+
+# ---- 卸载（无需联网）------------------------------------------------------
+do_uninstall() {
+	[ "$(id -u)" = "0" ] || { log "请用 root 运行。" >&2; exit 1; }
+	[ -f /etc/openwrt_release ] || { log "这不是 OpenWrt 系统。" >&2; exit 1; }
+	new_tmp
+	log "→ 卸载 Lucent…"
+
+	if have apk; then
+		apk info -e "$PKG_NAME" >/dev/null 2>&1 && \
+			{ apk del "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"; }
+	elif have opkg; then
+		opkg remove "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+	fi
+
+	rm -rf /www/luci-static/lucent /www/luci-static/resources/lucent \
+		/www/luci-static/resources/view/lucent /usr/share/ucode/luci/template/themes/lucent
+	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json \
+		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
+		/usr/libexec/rpcd/luci.lucent \
+		/usr/lib/lua/luci/i18n/lucent.zh-cn.lmo \
+		/usr/lib/lua/luci/i18n/lucent-zh-*.zh-cn.lmo \
+		/etc/uci-defaults/30_luci-theme-lucent
+	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
+
+	uci -q delete luci.themes.Lucent || true
+	[ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ] && \
+		uci -q set luci.main.mediaurlbase=/luci-static/bootstrap
+	ls /usr/lib/lua/luci/i18n/*.zh-cn.lmo >/dev/null 2>&1 || \
+		uci -q delete luci.languages.zh_cn || true
+	uci -q delete lucent || true
+	uci -q commit luci || true
+	rm -f /etc/config/lucent
+
+	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+	log "卸载完成，LuCI 已恢复 Bootstrap。"
+}
+
+# ---- 状态 ------------------------------------------------------------------
+do_status() {
+	new_tmp
+	PKG_STATE="未安装"
+	if have apk; then
+		apk info -e "$PKG_NAME" >/dev/null 2>&1 && \
+			PKG_STATE="$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 || echo '已安装')"
+	elif have opkg; then
+		V="$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p')"
+		[ -n "$V" ] && PKG_STATE="$PKG_NAME $V"
+	fi
+	echo "软件包：$PKG_STATE"
+	echo "当前主题：$(uci -q get luci.main.mediaurlbase || echo '未设置')"
+	echo "Lucent 注册路径：$(uci -q get luci.themes.Lucent || echo '未注册')"
+	echo "中文语言项：$(uci -q get luci.languages.zh_cn || echo '未注册')"
+	echo "中文目录文件：$(ls /usr/lib/lua/luci/i18n/lucent*.lmo 2>/dev/null | wc -l) 个"
+}
+
+case "$ACTION" in
+	install) do_install ;;
+	uninstall) do_uninstall ;;
+	status) do_status ;;
+esac

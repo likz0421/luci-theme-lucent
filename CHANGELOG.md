@@ -3,6 +3,27 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.3.0 — 2026-11-01
+
+### Changed
+
+- **The one-key script now pulls online from GitHub.** `install.sh` (also
+  published as `lucent-install.sh`) downloads the matching `.apk` / `.ipk`
+  from GitHub Releases at install time instead of embedding the whole
+  package, so a single `wget … | sh` line is enough.
+- **China mirror support built in.** If the direct GitHub download fails (or
+  when `LUCENT_CN=1` is set), the script automatically retries through
+  GitHub proxies (`ghfast.top`, `gh-proxy.com`, `mirror.ghproxy.com`,
+  `github.moeyy.xyz`). The script itself can be fetched via jsDelivr.
+- `LUCENT_BASE_URL` lets you point the installer at a private/intranet
+  mirror; `LUCENT_VERSION` / `LUCENT_TAG` override the release coordinates.
+
+### Added
+
+- `scripts/offline-install.sh` keeps the previous no-network file-copy
+  installer, and `lucent-offline-install.sh` (self-contained, embeds the
+  packages) is still produced for routers without internet access.
+
 ## 3.2.0 — 2026-11-01
 
 ### Added
