@@ -144,6 +144,12 @@ return view.extend({
 				this.applyLive(d);
 			}, this));
 		}, this), 10);
+
+		/* Prime a second sample shortly after load so the traffic rate appears
+		   within a few seconds instead of waiting for the first full poll. */
+		setTimeout(L.bind(function () {
+			util.load().then(L.bind(this.applyLive, this)).catch(function () {});
+		}, this), 3000);
 	},
 
 	/* Pull a daily line from the network; cache per day in localStorage.
@@ -225,7 +231,9 @@ return view.extend({
 		set('[data-live=devices]', String(clients.length));
 		set('[data-live=devices-sub]', _('%d active').format(online));
 
-		var stats = wan && wan.statistics;
+		var devName = wan && (wan['l3_device'] || wan['l3-device'] || wan.device);
+		var dev = devName && data.devices && data.devices[devName];
+		var stats = (wan && wan.statistics) || (dev && (dev.stats || dev.statistics));
 		if (stats) {
 			var now = Date.now();
 			if (this._lastStats) {
@@ -233,7 +241,7 @@ return view.extend({
 				var rx = Math.max(0, (Number(stats.rx_bytes) - this._lastStats.rx) / dt);
 				var tx = Math.max(0, (Number(stats.tx_bytes) - this._lastStats.tx) / dt);
 				set('[data-live=traffic]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
-				set('[data-live=traffic-sub]', wan.device || wan.proto || '');
+				set('[data-live=traffic-sub]', devName || wan.proto || '');
 			}
 			this._lastStats = { t: now, rx: Number(stats.rx_bytes) || 0, tx: Number(stats.tx_bytes) || 0 };
 		}

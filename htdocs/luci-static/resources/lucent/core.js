@@ -52,6 +52,21 @@ return baseclass.extend({
 				mq.addListener(follow);
 		}
 
+		/* Accordion sidebar: a group header toggles its own submenu open/closed
+		   instead of navigating away. Delegation so it works once the menu is
+		   populated asynchronously by LuCI's core. */
+		body.addEventListener('click', function (ev) {
+			var a = ev.target.closest && ev.target.closest('.ltc-nav a.menu');
+			if (!a)
+				return;
+			var li = a.parentElement;
+			if (li && li.querySelector(':scope > ul.dropdown-menu')) {
+				ev.preventDefault();
+				ev.stopPropagation();
+				li.classList.toggle('open');
+			}
+		}, true);
+
 		this.markActive();
 		this.observeMenu();
 		this.initSearch();
@@ -260,6 +275,8 @@ return baseclass.extend({
 			var topLink = top && top.querySelector(':scope > a');
 			if (topLink)
 				topLink.classList.add('ltc-parent');
+			if (top)
+				top.classList.add('open');
 		}
 
 		var dock = location.pathname;

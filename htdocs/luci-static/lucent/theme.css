@@ -142,11 +142,13 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 .ltc-nav a:hover{background:var(--tint);color:var(--text)}
 .ltc-nav a.on{background:var(--accent);color:var(--on-accent);box-shadow:0 8px 18px -14px var(--accent)}
 .ltc-nav a.ltc-parent{color:var(--accent-2)}
-.ltc-nav ul.dropdown-menu{display:block;margin:0 0 4px 12px;padding-left:9px;border-left:1px solid var(--line)}
+.ltc-nav ul.dropdown-menu{display:none;margin:0 0 4px 12px;padding-left:9px;border-left:1px solid var(--line)}
+.ltc-nav li.open>ul.dropdown-menu{display:block}
 .ltc-nav ul.dropdown-menu a{min-height:31px;padding:5px 9px;font-size:12.5px;color:var(--text-3)}
 .ltc-nav ul.dropdown-menu a:hover{color:var(--text)}
 .ltc-nav ul.dropdown-menu a.on{background:var(--tint);color:var(--text);box-shadow:none}
-.ltc-nav a.menu::after{content:"›";margin-left:auto;color:var(--text-3);font-size:15px;line-height:1;transform:rotate(90deg)}
+.ltc-nav a.menu::after{content:"›";margin-left:auto;color:var(--text-3);font-size:15px;line-height:1;transform:rotate(0);transition:transform .15s ease}
+.ltc-nav li.open>a.menu::after{transform:rotate(90deg)}
 .ltc-nav ul.dropdown-menu a.menu::after{content:""}
 .ltc-side-foot{display:flex;align-items:center;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
 .ltc-modes{display:flex;flex:1;gap:4px;list-style:none;margin:0;padding:0;min-width:0}

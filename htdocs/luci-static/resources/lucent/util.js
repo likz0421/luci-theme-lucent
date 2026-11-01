@@ -16,6 +16,7 @@ var callIfaces = rpc.declare({ object: 'network.interface', method: 'dump' });
 var callHosts = rpc.declare({ object: 'luci-rpc', method: 'getHostHints' });
 var callLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases' });
 var callWifi = rpc.declare({ object: 'luci-rpc', method: 'getWirelessDevices' });
+var callDevices = rpc.declare({ object: 'luci-rpc', method: 'getNetworkDevices' });
 var callStorage = rpc.declare({ object: 'luci.lucent', method: 'storage' });
 var callThemeCheck = rpc.declare({ object: 'luci.lucent', method: 'theme_check' });
 var callThemeUpdate = rpc.declare({ object: 'luci.lucent', method: 'theme_update' });
@@ -337,7 +338,8 @@ return baseclass.extend({
 			L.resolveDefault(callHosts(), {}),
 			L.resolveDefault(callLeases(), {}),
 			L.resolveDefault(callWifi(), {}),
-			L.resolveDefault(callStorage(), {})
+			L.resolveDefault(callStorage(), {}),
+			L.resolveDefault(callDevices(), {})
 		]).then(function (r) {
 			return {
 				board: r[0] || {},
@@ -346,7 +348,8 @@ return baseclass.extend({
 				hints: r[3] || {},
 				leases: r[4] || {},
 				wifi: r[5] || {},
-				storage: r[6] || {}
+				storage: r[6] || {},
+				devices: r[7] || {}
 			};
 		});
 	},

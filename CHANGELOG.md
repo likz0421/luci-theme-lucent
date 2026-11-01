@@ -3,6 +3,18 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.1 — 2026-11-01
+
+### Fixed
+
+- **Sidebar submenus were all expanded at once.** Groups are now collapsed by
+  default; only the group containing the current page is auto-expanded, and a
+  group header toggles its own submenu open/closed (accordion behaviour).
+- **Real-time traffic on the dashboard always showed "–".** The interface
+  `dump` does not carry byte counters on this build, so throughput is now
+  computed from `luci-rpc.getNetworkDevices` device statistics (the interface's
+  L3 device), and updates every poll.
+
 ## 3.6.0 — 2026-11-01
 
 ### Added
