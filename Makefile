@@ -40,6 +40,17 @@ define Package/luci-theme-lucent/postrm
 }
 endef
 
+# luci.mk 只打包 luasrc/ucode/htdocs/root/src 五个目录;仓库根的 install.sh 与
+# i18n/*.lmo 不在其中。借 Build/Prepare/<pkgname> 钩子(root 拷贝之后执行)把它们
+# 塞进 root 树,这样 SDK/feed 源码构建出的包也带在线更新助手的完整功能。
+define Build/Prepare/luci-theme-lucent
+	mkdir -p $(PKG_BUILD_DIR)/root/usr/share/lucent $(PKG_BUILD_DIR)/root/usr/lib/lua/luci/i18n
+	$(CP) ./install.sh $(PKG_BUILD_DIR)/root/usr/share/lucent/install.sh
+	chmod 0755 $(PKG_BUILD_DIR)/root/usr/share/lucent/install.sh
+	printf '$(PKG_VERSION)-r$(PKG_RELEASE)\n' > $(PKG_BUILD_DIR)/root/usr/share/lucent/version
+	$(CP) ./i18n/*.lmo $(PKG_BUILD_DIR)/root/usr/lib/lua/luci/i18n/
+endef
+
 include $(TOPDIR)/feeds/luci/luci.mk
 
 # OpenWrt 的 include/scan.mk 只有在「包自己的 Makefile 文本」里 grep 到

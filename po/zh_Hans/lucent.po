@@ -784,3 +784,24 @@ msgstr "你已经是最新版本（%s）。"
 
 msgid "not installed"
 msgstr "未安装"
+
+msgid "Checking for updates automatically…"
+msgstr "正在自动检查更新…"
+
+msgid "Total traffic"
+msgstr "累计流量"
+
+msgid "CPU cores"
+msgstr "CPU 核心数"
+
+msgid "CPU temperature"
+msgstr "CPU 温度"
+
+msgid "Processes"
+msgstr "进程数"
+
+msgid "Active connections"
+msgstr "并发连接数"
+
+msgid "available"
+msgstr "可用内存"

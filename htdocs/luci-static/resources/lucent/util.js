@@ -18,6 +18,7 @@ var callLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases' });
 var callWifi = rpc.declare({ object: 'luci-rpc', method: 'getWirelessDevices' });
 var callDevices = rpc.declare({ object: 'luci-rpc', method: 'getNetworkDevices' });
 var callStorage = rpc.declare({ object: 'luci.lucent', method: 'storage' });
+var callOverview = rpc.declare({ object: 'luci.lucent', method: 'overview' });
 var callThemeCheck = rpc.declare({ object: 'luci.lucent', method: 'theme_check' });
 var callThemeUpdate = rpc.declare({ object: 'luci.lucent', method: 'theme_update' });
 var callThemeStatus = rpc.declare({ object: 'luci.lucent', method: 'theme_status' });
@@ -44,9 +45,7 @@ function ip6(iface) {
 }
 
 function hasDefaultRoute(iface) {
-	return arr(iface && iface.route).some(function (route) {
-		return route && (route.target === '0.0.0.0' || route.target === '::');
-	});
+	return arr(iface && iface.route).some(isDefaultRoute);
 }
 
 function findWan(ifaces) {
@@ -68,16 +67,61 @@ function findLan(ifaces, wan) {
 		null;
 }
 
-function gatewayOf(iface) {
-	var routes = arr(iface && iface.route);
-	var v4 = routes.filter(function (r) { return r && r.target === '0.0.0.0'; })[0];
-	var v6 = routes.filter(function (r) { return r && r.target === '::'; })[0];
-	return (v4 && v4.gateway) || (v6 && v6.gateway) || '';
+/* netifd >= 22.03 dumps routes as { target, mask:int, nexthop }; older
+   builds used { target, mask:"0.0.0.0", gateway }. Normalise both shapes. */
+function routeTarget(r) {
+	return String((r && r.target) || '').split('/')[0];
 }
 
+function isDefaultRoute(r) {
+	if (!r)
+		return false;
+
+	var t = routeTarget(r);
+	if (t !== '0.0.0.0' && t !== '::')
+		return false;
+
+	if (r.mask == null)
+		return true;
+	if (typeof r.mask === 'string')
+		return r.mask === '0.0.0.0' || r.mask === '::' || Number(r.mask) === 0;
+	return Number(r.mask) === 0;
+}
+
+function routeGateway(r) {
+	return (r && (r.gateway || r.nexthop)) || '';
+}
+
+function gatewayOf(iface) {
+	var routes = arr(iface && iface.route);
+	var v4 = routes.filter(function (r) {
+		return isDefaultRoute(r) && routeTarget(r) === '0.0.0.0' && routeGateway(r);
+	})[0];
+	var v6 = routes.filter(function (r) {
+		return isDefaultRoute(r) && routeTarget(r) === '::' && routeGateway(r);
+	})[0];
+	return routeGateway(v4) || routeGateway(v6) || '';
+}
+
+/* Current netifd exports the list under "dns-server"; "dns-dnsservers" holds
+   objects in some builds, older ones used "dnsserver". Accept all shapes. */
 function dnsOf(iface) {
-	var servers = arr(iface && (iface['dns-servers'] || iface['dnsserver'] || iface.dns));
-	return servers.filter(function (s) { return typeof s === 'string' && s; });
+	var out = [];
+	var lists = [
+		iface && iface['dns-server'],
+		iface && iface['dns-dnsservers'],
+		iface && iface['dns-servers'],
+		iface && iface['dnsserver'],
+		iface && iface.dns
+	];
+
+	lists.forEach(function (list) {
+		arr(list).forEach(function (s) {
+			pushUnique(out, typeof s === 'string' ? s : (s && (s.address || s.server)));
+		});
+	});
+
+	return out;
 }
 
 function storageOf(storage) {
@@ -339,7 +383,8 @@ return baseclass.extend({
 			L.resolveDefault(callLeases(), {}),
 			L.resolveDefault(callWifi(), {}),
 			L.resolveDefault(callStorage(), {}),
-			L.resolveDefault(callDevices(), {})
+			L.resolveDefault(callDevices(), {}),
+			L.resolveDefault(callOverview(), {})
 		]).then(function (r) {
 			return {
 				board: r[0] || {},
@@ -349,7 +394,8 @@ return baseclass.extend({
 				leases: r[4] || {},
 				wifi: r[5] || {},
 				storage: r[6] || {},
-				devices: r[7] || {}
+				devices: r[7] || {},
+				net: r[8] || {}
 			};
 		});
 	},

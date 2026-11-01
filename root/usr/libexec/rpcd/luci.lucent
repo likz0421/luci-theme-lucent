@@ -17,6 +17,9 @@ UPLOG="$RUN/lucent-update.log"
 UPCODE="$RUN/lucent-update.code"
 UPPID="$RUN/lucent-update.pid"
 UPJOB="$RUN/lucent-update.job.sh"
+CHECKCACHE="/tmp/lucent-check.json"
+CHECKPID="$RUN/lucent-check.pid"
+CHECKJOB="$RUN/lucent-check.job.sh"
 INSTALLER="/usr/share/lucent/install.sh"
 
 mkdir -p "$TMPDIR" 2>/dev/null || true
@@ -375,27 +378,125 @@ storage() {
 	json_cleanup
 }
 
+theme_current() {
+	local v=""
+	if command -v apk >/dev/null 2>&1; then
+		v=$(apk info -e -v luci-theme-lucent 2>/dev/null | head -n1 | sed 's/^luci-theme-lucent-//')
+	elif command -v opkg >/dev/null 2>&1; then
+		v=$(opkg status luci-theme-lucent 2>/dev/null | sed -n 's/^Version: //p' | head -n1)
+	fi
+	[ -n "$v" ] || v=$(cat /usr/share/lucent/version 2>/dev/null)
+	printf '%s' "$v"
+}
+
+# ------------------------------------------------------------------ overview
+overview() {
+	local ver cores l1 l5 l15 pids running total ct ctmax v best f
+	ver=$(theme_current)
+	cores=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+	case "$cores" in ''|*[!0-9]*) cores=0 ;; esac
+	pids=""
+	[ -r /proc/loadavg ] && read -r l1 l5 l15 pids _x < /proc/loadavg
+	running=""; total=""
+	case "$pids" in
+		*/*) running="${pids%%/*}"; total="${pids##*/}" ;;
+	esac
+	ct=$(cat /proc/sys/net/netfilter/nf_conntrack_count 2>/dev/null)
+	ctmax=$(cat /proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null)
+
+	best=""
+	for f in /sys/class/thermal/thermal_zone*/temp; do
+		[ -f "$f" ] || continue
+		v=$(cat "$f" 2>/dev/null)
+		case "$v" in ''|*[!0-9]*) continue ;; esac
+		[ "$v" -gt 0 ] && [ "$v" -lt 120 ] || continue
+		{ [ -z "$best" ] || [ "$v" -lt "$best" ]; } && best=$v
+	done
+	if [ -z "$best" ]; then
+		for f in /sys/class/hwmon/hwmon*/temp*_input; do
+			[ -f "$f" ] || continue
+			v=$(cat "$f" 2>/dev/null)
+			case "$v" in ''|*[!0-9]*) continue ;; esac
+			[ "$v" -ge 1000 ] && [ "$v" -le 120000 ] || continue
+			v=$((v / 1000))
+			{ [ -z "$best" ] || [ "$v" -lt "$best" ]; } && best=$v
+		done
+	fi
+
+	json_init
+	json_add_string version "$ver"
+	json_add_int cores "$cores"
+	[ -n "$l1" ] && json_add_string load1 "$l1"
+	[ -n "$l5" ] && json_add_string load5 "$l5"
+	[ -n "$l15" ] && json_add_string load15 "$l15"
+	[ -n "$running" ] && json_add_int processes_running "$running"
+	[ -n "$total" ] && json_add_int processes_total "$total"
+	[ -n "$ct" ] && json_add_int conntrack "$ct"
+	[ -n "$ctmax" ] && json_add_int conntrack_max "$ctmax"
+	[ -n "$best" ] && json_add_int temp_c "$best"
+	json_dump
+	json_cleanup
+}
+
 # ------------------------------------------------------------------ updates
 # All download/mirror/install logic lives in the bundled install.sh; the
 # browser only ever triggers a fixed action, never supplies a URL or version.
-update_env() {
-	# Optional mirror override, settable only by root via uci:
-	#   uci set lucent.main.update_url=http://host/dir
-	#   uci set lucent.main.update_cn=1
-	local base cn
-	base=$(uci -q get lucent.main.update_url 2>/dev/null)
-	cn=$(uci -q get lucent.main.update_cn 2>/dev/null)
-	[ "$cn" = "1" ] && export LUCENT_CN=1
-	[ -n "$base" ] && export LUCENT_BASE_URL="$base"
-}
 
+# Cached + detached: install.sh check may take tens of seconds across mirrors,
+# which would block the rpcd worker. The first call starts a background job and
+# answers {"checking":1}; later calls replay the cache until it goes stale.
 theme_check() {
+	local now ts body ttl cur
 	[ -f "$INSTALLER" ] || err "The update helper is missing"
-	out=$(update_env; sh "$INSTALLER" check 2>/dev/null)
-	case "$out" in
-		'{'*) printf '%s\n' "$out" ;;
-		*) err "Unable to read the version information" ;;
-	esac
+
+	now=$(date +%s 2>/dev/null); case "$now" in ''|*[!0-9]*) now=0 ;; esac
+	if [ -f "$CHECKCACHE" ]; then
+		ts=$(sed -n '1p' "$CHECKCACHE" 2>/dev/null)
+		body=$(sed -n '2p' "$CHECKCACHE" 2>/dev/null)
+		case "$ts" in ''|*[!0-9]*) ts=0 ;; esac
+		ttl=900
+		case "$body" in *'"latest":""'*) ttl=60 ;; esac
+		case "$body" in
+			'{'*) [ $(( now - ts )) -lt "$ttl" ] && { printf '%s\n' "$body"; exit 0; } ;;
+		esac
+	fi
+
+	if [ -f "$CHECKPID" ] && kill -0 "$(cat "$CHECKPID" 2>/dev/null)" 2>/dev/null; then
+		cur=$(theme_current)
+		json_init
+		json_add_string current "$cur"
+		json_add_int checking 1
+		json_dump
+		json_cleanup
+		exit 0
+	fi
+
+	rm -f "$CHECKPID"
+	cat > "$CHECKJOB" <<EOF
+#!/bin/sh
+b=\$(uci -q get lucent.main.update_url)
+c=\$(uci -q get lucent.main.update_cn)
+[ "\$c" = 1 ] && export LUCENT_CN=1
+[ -n "\$b" ] && export LUCENT_BASE_URL="\$b"
+out=\$(sh '$INSTALLER' check 2>/dev/null)
+case "\$out" in
+'{'*) printf '%s\\n%s\\n' "\$(date +%s)" "\$out" >'$CHECKCACHE.tmp' && mv -f '$CHECKCACHE.tmp' '$CHECKCACHE' ;;
+esac
+EOF
+	chmod 755 "$CHECKJOB"
+
+	if command -v start-stop-daemon >/dev/null 2>&1; then
+		start-stop-daemon -S -b -m -p "$CHECKPID" -x /bin/sh -- "$CHECKJOB"
+	else
+		setsid sh "$CHECKJOB" </dev/null >/dev/null 2>&1 &
+	fi
+
+	cur=$(theme_current)
+	json_init
+	json_add_string current "$cur"
+	json_add_int checking 1
+	json_dump
+	json_cleanup
 }
 
 theme_update() {
@@ -403,7 +504,7 @@ theme_update() {
 	[ -f "$UPPID" ] && kill -0 "$(cat "$UPPID" 2>/dev/null)" 2>/dev/null && \
 		err "An update is already running"
 
-	rm -f "$UPCODE" "$UPLOG" "$UPPID"
+	rm -f "$UPCODE" "$UPLOG" "$UPPID" "$CHECKCACHE"
 
 	# Write a self-contained job script. All paths are baked-in constants and the
 	# mirror config is read fresh from uci inside the job, so nothing user-supplied
@@ -476,6 +577,7 @@ list)
 	json_close_object
 	json_add_object "plugin_status"; json_close_object
 	json_add_object "storage"; json_close_object
+	json_add_object "overview"; json_close_object
 	json_add_object "theme_check"; json_close_object
 	json_add_object "theme_update"; json_close_object
 	json_add_object "theme_status"; json_close_object
@@ -492,6 +594,7 @@ call)
 		plugin_install) plugin_install ;;
 		plugin_status) plugin_status ;;
 		storage) storage ;;
+		overview) overview ;;
 		theme_check) theme_check ;;
 		theme_update) theme_update ;;
 		theme_status) theme_status ;;

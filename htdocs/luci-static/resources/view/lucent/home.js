@@ -87,12 +87,15 @@ function dailyFallback() {
 function memoryOf(info) {
 	var mem = info.memory || {};
 	var swap = info.swap || {};
-	var used = (mem.total || 0) - (mem.free || 0);
+	var cache = (Number(mem.buffered || mem.buffers) || 0) + (Number(mem.cache) || 0);
+	var avail = mem.available != null ? Number(mem.available) : (mem.free || 0) + cache;
+	var used = Math.max(0, (mem.total || 0) - Math.min(mem.total || 0, avail));
 	var swapUsed = (swap.total || 0) - (swap.free || 0);
 
 	return {
 		total: mem.total || 0,
 		used: Math.max(0, used),
+		avail: Math.min(mem.total || 0, avail),
 		percent: util.pct(used, mem.total),
 		swapTotal: swap.total || 0,
 		swapUsed: Math.max(0, swapUsed),
@@ -112,17 +115,17 @@ function wifiState(wifi) {
 		var w = wifi[k] || {};
 		return w.up === true || w.up === 1 || (w.config && w.config.up);
 	});
-	var ssid = '';
+	var ssids = [];
 
 	keys.forEach(function (k) {
 		util.arr((wifi[k] || {}).interfaces).forEach(function (iface) {
 			var cfg = (iface && iface.config) || {};
-			if (!ssid && cfg.ssid)
-				ssid = cfg.ssid;
+			if (cfg.ssid && ssids.indexOf(cfg.ssid) === -1)
+				ssids.push(cfg.ssid);
 		});
 	});
 
-	return { total: keys.length, up: up.length, ssid: ssid };
+	return { total: keys.length, up: up.length, ssids: ssids };
 }
 
 function clientsOf(data) {
@@ -231,6 +234,25 @@ return view.extend({
 		set('[data-live=devices]', String(clients.length));
 		set('[data-live=devices-sub]', _('%d active').format(online));
 
+		var gwv = wan ? util.gateway(wan) : '';
+		var dnsv = wan ? util.dns(wan) : [];
+		var storage = util.storage(data.storage);
+		set('[data-live=gateway]', gwv || '–');
+		set('[data-live=dns]', dnsv.length ? dnsv.slice(0, 2).join('  ') : '–');
+		set('[data-live=storage]', storage ? storage.percent + '%' : '–');
+		set('[data-live=storage-sub]', storage
+			? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–');
+
+		var net = data.net || {};
+		if (net.cores != null)
+			set('[data-live=cores]', String(net.cores));
+		if (net.temp_c != null)
+			set('[data-live=temp]', '%s °C'.format(net.temp_c));
+		if (net.conntrack != null)
+			set('[data-live=conns]', net.conntrack + (net.conntrack_max ? ' / ' + net.conntrack_max : ''));
+		if (net.processes_total != null)
+			set('[data-live=procs]', net.processes_running + ' / ' + net.processes_total);
+
 		var devName = wan && (wan['l3_device'] || wan['l3-device'] || wan.device);
 		var dev = devName && data.devices && data.devices[devName];
 		var stats = (wan && wan.statistics) || (dev && (dev.stats || dev.statistics));
@@ -243,6 +265,8 @@ return view.extend({
 				set('[data-live=traffic]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
 				set('[data-live=traffic-sub]', devName || wan.proto || '');
 			}
+			set('[data-live=traffic-total]', '↓ ' + util.fmtBytes(Number(stats.rx_bytes) || 0) +
+				'  ↑ ' + util.fmtBytes(Number(stats.tx_bytes) || 0));
 			this._lastStats = { t: now, rx: Number(stats.rx_bytes) || 0, tx: Number(stats.tx_bytes) || 0 };
 		}
 		set('[data-live=ring-mem]', mem.percent + '%');
@@ -261,11 +285,12 @@ return view.extend({
 			lanNode.textContent = lan ? util.ip4(lan) : '–';
 	},
 
-	updateCard: function () {
+	updateCard: function (data) {
 		var self = this;
-		var verLabel = E('b', {}, '—');
+		var net = (data && data.net) || {};
+		var verLabel = E('b', {}, net.version || '—');
 		var status = E('div', { 'class': 'ltc-help' },
-			_('Press "Check for updates" to look for a new version online.'));
+			_('Checking for updates automatically…'));
 		var checkBtn = E('button', { 'type': 'button', 'class': 'ltc-btn sm' }, _('Check for updates'));
 		var updBtn = E('button', { 'type': 'button', 'class': 'ltc-btn sm primary', 'style': 'display:none' }, _('Update'));
 
@@ -278,16 +303,29 @@ return view.extend({
 			status.textContent = text;
 		}
 
-		function doCheck() {
+		/* The server-side check runs detached across mirrors and answers
+		   {"checking":1} until a fresh result is cached; poll a few seconds. */
+		function doCheck(attempt) {
 			setBusy(true);
+			if (attempt == null) {
+				self._checkDeadline = Date.now() + 90000;
+				attempt = 0;
+			}
 			note(_('Checking…'));
 			return util.checkUpdate().then(function (res) {
+				if (res && res.current)
+					verLabel.textContent = res.current;
+				if (res && res.checking && Date.now() < self._checkDeadline) {
+					setTimeout(function () { doCheck(attempt + 1); }, 2500);
+					return;
+				}
 				setBusy(false);
-				if (!res || res.error || !res.latest) {
+				if (!res || res.checking || res.error || !res.latest) {
 					note(_('Unable to reach the update source. Check the network, or set a mirror in Appearance.'));
 					return;
 				}
-				verLabel.textContent = res.current || _('not installed');
+				if (!res.current)
+					verLabel.textContent = _('not installed');
 				if (!res.available) {
 					note(_('You are on the latest version (%s).').format(res.latest));
 					updBtn.style.display = 'none';
@@ -350,8 +388,12 @@ return view.extend({
 			});
 		}
 
-		checkBtn.addEventListener('click', doCheck);
+		checkBtn.addEventListener('click', function () { doCheck(); });
 		updBtn.addEventListener('click', doUpdate);
+
+		/* Auto-check shortly after the page settles; cached server-side,
+		   so this is cheap on repeat visits. */
+		setTimeout(function () { doCheck(); }, 800);
 
 		return card(_('Updates'), null, E('div', { 'class': 'ltc-update' }, [
 			E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Installed version')), verLabel]),
@@ -382,6 +424,17 @@ return view.extend({
 		var dnsStr = dns.length ? dns.slice(0, 2).join('  ') : '–';
 		var storage = util.storage(data.storage);
 		var storageStr = storage ? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–';
+		var devName = wan && (wan['l3_device'] || wan['l3-device'] || wan.device);
+		var dev = devName && data.devices && data.devices[devName];
+		var stats0 = (wan && wan.statistics) || (dev && (dev.stats || dev.statistics));
+		var totalStr = stats0
+			? '↓ %s  ↑ %s'.format(util.fmtBytes(Number(stats0.rx_bytes) || 0), util.fmtBytes(Number(stats0.tx_bytes) || 0))
+			: '–';
+		var leaseCount = util.arr((data.leases && (data.leases.dhcp_leases || data.leases.leases)) || []).length;
+		var net = data.net || {};
+		var wifiStr = wifi.ssids.length
+			? wifi.ssids.slice(0, 2).join(', ') + (wifi.ssids.length > 2 ? ' +' + (wifi.ssids.length - 2) : '')
+			: '%d / %d %s'.format(wifi.up, wifi.total, _('radios'));
 		var localTime = info.localtime ? new Date(info.localtime * 1000).toLocaleString() : '–';
 		var upIfaces = data.ifaces.filter(function (i) { return i && i.up && i.interface !== 'loopback'; }).length;
 		var greetingOn = document.documentElement.dataset.greeting !== '0';
@@ -445,11 +498,13 @@ return view.extend({
 			fact(_('Kernel'), board.kernel || '–'),
 			fact(_('Architecture'), board.system || '–'),
 			fact(_('LAN address'), lanIp || '–'),
-			fact(_('WiFi'), wifi.ssid || (wifi.up + ' / ' + wifi.total + ' ' + _('radios'))),
+			fact(_('WiFi'), wifiStr),
 			fact(_('WAN protocol'), wan ? (wan.proto || '–') : '–'),
-			fact(_('Gateway'), gw || '–'),
-			fact(_('DNS'), dnsStr),
+			fact(_('Gateway'), gw || '–', 'gateway'),
+			fact(_('DNS'), dnsStr, 'dns'),
 			fact(_('WAN IPv6'), wan6 || '–'),
+			fact(_('Total traffic'), totalStr, 'traffic-total'),
+			fact(_('DHCP leases'), String(leaseCount)),
 			fact(_('Load average'), loads.length ? '%.2f  %.2f  %.2f'.format(loads[0] || 0, loads[1] || 0, loads[2] || 0) : '–')
 		]);
 
@@ -466,6 +521,7 @@ return view.extend({
 			health,
 			E('div', { 'class': 'ltc-tags' }, [
 				E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.used)), ' / ', util.fmtBytes(mem.total), ' ', _('memory')]),
+				E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.avail)), ' ', _('available')]),
 				mem.swapTotal ? E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.swapUsed)), ' / ', util.fmtBytes(mem.swapTotal), ' swap']) : '',
 				storage ? E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(storage.used)), ' / ', util.fmtBytes(storage.total), ' ', _('storage')]) : '',
 				E('span', { 'class': 'ltc-tag' }, [E('b', {}, String(wifi.up)), ' / ', String(wifi.total), ' ', _('radios')])
@@ -508,6 +564,10 @@ return view.extend({
 			fact(_('Firmware'), release),
 			fact(_('Local time'), localTime, 'sys-time'),
 			fact(_('Active interfaces'), String(upIfaces)),
+			fact(_('CPU cores'), net.cores != null && net.cores > 0 ? String(net.cores) : '–', 'cores'),
+			fact(_('CPU temperature'), net.temp_c != null ? '%s °C'.format(net.temp_c) : '–', 'temp'),
+			fact(_('Processes'), net.processes_total != null ? '%d / %d'.format(net.processes_running, net.processes_total) : '–', 'procs'),
+			fact(_('Active connections'), net.conntrack != null ? '%d%s'.format(net.conntrack, net.conntrack_max ? ' / ' + net.conntrack_max : '') : '–', 'conns'),
 			fact(_('Memory'), '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total))),
 			fact(_('Swap'), mem.swapTotal ? '%s / %s'.format(util.fmtBytes(mem.swapUsed), util.fmtBytes(mem.swapTotal)) : _('None')),
 			fact(_('Storage'), storageStr),
@@ -525,7 +585,7 @@ return view.extend({
 			kpis,
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
 			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
-			E('div', { 'class': 'ltc-grid' }, [systemCard, this.updateCard()])
+			E('div', { 'class': 'ltc-grid' }, [systemCard, this.updateCard(data)])
 		]);
 	},
 
