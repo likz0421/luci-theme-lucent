@@ -79,7 +79,7 @@
 		<aside class="ltc-side" id="ltc-side">
 			<a class="ltc-brand" href="{{ dispatcher.build_url('admin/home') }}">
 				{% if (logo): %}
-				<img class="ltc-brand-img" src="{{ entityencode(logo, true) }}" alt="">
+				<img class="ltc-brand-img" src="{{ entityencode(logo, true) }}" alt="" onerror="if (this.dataset.fb) { this.remove(); } else { this.dataset.fb = '1'; this.src = '{{ entityencode(media, true) }}/logo.svg'; }">
 				{% else %}
 				<span class="ltc-mark" aria-hidden="true">
 					<svg viewBox="0 0 40 40"><rect width="40" height="40" rx="13"/><path d="M11 25a9 9 0 0 1 18 0M15.4 25a4.6 4.6 0 0 1 9.2 0"/><circle cx="20" cy="28.2" r="1.9"/></svg>

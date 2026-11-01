@@ -3,6 +3,17 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.4 — 2026-11-02
+
+### Fixed
+
+- **Sidebar brand logo could vanish entirely.** When `lucent.main.logo_image`
+  points at a media file that no longer exists (deleted from the media library,
+  or lost after a firmware/overlay reset), the brand `<img>` rendered as a
+  broken image with no fallback, leaving the sidebar header blank. The image
+  now falls back to the bundled `logo.svg` on load errors, and removes itself
+  if even that fails, so the default brand mark area is never a dead gap.
+
 ## 3.6.3 — 2026-11-02
 
 ### Fixed
