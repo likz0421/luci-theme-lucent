@@ -1,0 +1,24 @@
+{
+	"luci-theme-lucent": {
+		"description": "Lucent theme dashboard, appearance and media library",
+		"read": {
+			"ubus": {
+				"luci.lucent": [ "*" ],
+				"system": [ "board", "info" ],
+				"network.interface": [ "dump" ],
+				"luci-rpc": [ "getHostHints", "getDHCPLeases", "getNetworkDevices", "getWirelessDevices", "getBoardJSON" ],
+				"dhcp": [ "ipv4leases", "ipv6leases" ]
+			},
+			"uci": [ "lucent", "luci" ],
+			"file": { "/etc/config/lucent": [ "read" ] }
+		},
+		"write": {
+			"ubus": { "luci.lucent": [ "*" ] },
+			"uci": [ "lucent" ],
+			"file": {
+				"/tmp/lucent-upload/*": [ "write" ],
+				"/www/luci-static/lucent/media/*": [ "write" ]
+			}
+		}
+	}
+}

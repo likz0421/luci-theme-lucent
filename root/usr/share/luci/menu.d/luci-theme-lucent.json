@@ -1,0 +1,20 @@
+{
+	"admin/home": {
+		"title": "Home",
+		"order": 1,
+		"action": { "type": "view", "path": "lucent/home" },
+		"depends": { "acl": [ "luci-theme-lucent" ] }
+	},
+	"admin/clients": {
+		"title": "Devices",
+		"order": 2,
+		"action": { "type": "view", "path": "lucent/clients" },
+		"depends": { "acl": [ "luci-theme-lucent" ] }
+	},
+	"admin/system/appearance": {
+		"title": "Appearance",
+		"order": 5,
+		"action": { "type": "view", "path": "lucent/settings" },
+		"depends": { "acl": [ "luci-theme-lucent" ] }
+	}
+}

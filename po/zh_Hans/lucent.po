@@ -1,0 +1,663 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-theme-lucent 3.2.0\n"
+"PO-Revision-Date: 2026-10-31 00:00+0800\n"
+"Last-Translator: itsmaiGe\n"
+"Language-Team: Simplified Chinese\n"
+"Language: zh_Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "%d active"
+msgstr "%d 台在线"
+
+msgid "%s (%s) will be downloaded from the package feeds configured on this router and installed."
+msgstr "%s（%s）将从本路由器已配置的软件源下载并安装。"
+
+msgid "%s installed successfully."
+msgstr "%s 安装成功。"
+
+msgid "%s since boot"
+msgstr "已运行 %s"
+
+msgid "%s will be removed from the router."
+msgstr "%s 将从路由器中移除。"
+
+msgid "A small PNG, WebP, ICO or SVG served by the router replaces the default mark."
+msgstr "由路由器提供的小尺寸 PNG、WebP、ICO 或 SVG 图片可替换默认图标。"
+
+msgid "A still image or a short looping video."
+msgstr "静态图片或短循环视频。"
+
+msgid "Active"
+msgstr "活跃"
+
+msgid "Active leases"
+msgstr "活跃租约"
+
+msgid "All devices"
+msgstr "全部设备"
+
+msgid "Allow-listed LuCI applications, installed through the configured feeds."
+msgstr "通过已配置软件源安装的白名单 LuCI 应用。"
+
+msgid "Another installation is still running"
+msgstr "另一个安装仍在进行中"
+
+msgid "API key"
+msgstr "API 密钥"
+
+msgid "Appearance"
+msgstr "外观"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Architecture"
+msgstr "架构"
+
+msgid "Auto"
+msgstr "自动"
+
+msgid "Auto follows the phone or desktop preference."
+msgstr "自动跟随手机或桌面的偏好设置。"
+
+msgid "Back to home"
+msgstr "返回首页"
+
+msgid "Backend"
+msgstr "后端"
+
+msgid "Background and logo"
+msgstr "背景与图标"
+
+msgid "Background dimming"
+msgstr "背景压暗"
+
+msgid "Background updated"
+msgstr "背景已更新"
+
+msgid "Background URL"
+msgstr "背景地址"
+
+msgid "Bing daily image"
+msgstr "Bing 每日图片"
+
+msgid "Bing returned no image"
+msgstr "Bing 未返回图片"
+
+msgid "Blur"
+msgstr "模糊"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Cannot create the media directory"
+msgstr "无法创建媒体目录"
+
+msgid "Cannot create the wallpaper directory"
+msgstr "无法创建壁纸目录"
+
+msgid "Cannot download the image"
+msgstr "无法下载图片"
+
+msgid "Cannot reach Bing"
+msgstr "无法连接 Bing"
+
+msgid "Cannot reach Unsplash"
+msgstr "无法连接 Unsplash"
+
+msgid "Cannot reach Wallhaven"
+msgstr "无法连接 Wallhaven"
+
+msgid "Cannot read the selected file"
+msgstr "无法读取所选文件"
+
+msgid "Cannot remove the file"
+msgstr "无法删除文件"
+
+msgid "Cannot save the upload"
+msgstr "无法保存上传文件"
+
+msgid "Cannot save the wallpaper"
+msgstr "无法保存壁纸"
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Colour mode"
+msgstr "颜色模式"
+
+msgid "Colour, glass, wallpapers and optional add-ons. Changes are saved to /etc/config/lucent immediately."
+msgstr "颜色、玻璃效果、壁纸和可选插件。更改会立即保存到 /etc/config/lucent。"
+
+msgid "Compact"
+msgstr "紧凑"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Contacting the wallpaper source…"
+msgstr "正在连接壁纸来源…"
+
+msgid "Cozy"
+msgstr "舒适"
+
+msgid "Dark"
+msgstr "深色"
+
+msgid "Defaults restored"
+msgstr "已恢复默认设置"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete this file?"
+msgstr "删除此文件？"
+
+msgid "Density"
+msgstr "密度"
+
+msgid "Device"
+msgstr "设备"
+
+msgid "Devices"
+msgstr "设备"
+
+msgid "DHCP leases"
+msgstr "DHCP 租约"
+
+msgid "Down"
+msgstr "断开"
+
+msgid "Download a fresh image directly to the router."
+msgstr "直接从路由器下载一张新图片。"
+
+msgid "Downloaded %s"
+msgstr "已下载 %s"
+
+msgid "Every host known to DHCP, ARP and the local neighbour table."
+msgstr "所有通过 DHCP、ARP 和本地邻居表发现的主机。"
+
+msgid "Everything important about this router on one page — uplink, memory, devices and shortcuts."
+msgstr "一页掌握这台路由器的重要信息：上行链路、内存、设备和快捷入口。"
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "Fetch wallpaper"
+msgstr "获取壁纸"
+
+msgid "File deleted"
+msgstr "文件已删除"
+
+msgid "File not found"
+msgstr "文件不存在"
+
+msgid "Files live under /www/luci-static/lucent/media. They are removed when this package is uninstalled."
+msgstr "文件位于 /www/luci-static/lucent/media。卸载此软件包时会被删除。"
+
+msgid "Filter by name, IP or MAC address"
+msgstr "按名称、IP 或 MAC 地址筛选"
+
+msgid "Firewall"
+msgstr "防火墙"
+
+msgid "Firmware"
+msgstr "固件"
+
+msgid "Five quiet colour families, each with light and dark readings."
+msgstr "五组低饱和度配色，均适配浅色与深色模式。"
+
+msgid "Glass"
+msgstr "玻璃效果"
+
+msgid "Glass effect"
+msgstr "玻璃效果"
+
+msgid "Good afternoon"
+msgstr "下午好"
+
+msgid "Good evening"
+msgstr "晚上好"
+
+msgid "Good morning"
+msgstr "早上好"
+
+msgid "Good night"
+msgstr "夜深了"
+
+msgid "Home"
+msgstr "首页"
+
+msgid "Images, videos, or a URL served by the router itself."
+msgstr "图片、视频，或由路由器自身提供的 URL。"
+
+msgid "Install"
+msgstr "安装"
+
+msgid "Install %s?"
+msgstr "安装 %s？"
+
+msgid "Installation failed"
+msgstr "安装失败"
+
+msgid "Installation failed with code %d."
+msgstr "安装失败，代码 %d。"
+
+msgid "Installation finished"
+msgstr "安装完成"
+
+msgid "Installation is taking unusually long. Check the system log."
+msgstr "安装耗时异常，请检查系统日志。"
+
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Installing…"
+msgstr "正在安装…"
+
+msgid "Internet"
+msgstr "互联网"
+
+msgid "Invalid API key"
+msgstr "API 密钥无效"
+
+msgid "Invalid file name"
+msgstr "文件名无效"
+
+msgid "Invalid username and/or password."
+msgstr "用户名或密码错误。"
+
+msgid "IPv4 address"
+msgstr "IPv4 地址"
+
+msgid "IPv6 address"
+msgstr "IPv6 地址"
+
+msgid "IPv6 capable"
+msgstr "支持 IPv6"
+
+msgid "JavaScript required!"
+msgstr "需要启用 JavaScript！"
+
+msgid "Kernel"
+msgstr "内核"
+
+msgid "Known"
+msgstr "已知"
+
+msgid "Known devices"
+msgstr "已知设备"
+
+msgid "LAN"
+msgstr "LAN"
+
+msgid "LAN address"
+msgstr "LAN 地址"
+
+msgid "Light"
+msgstr "浅色"
+
+msgid "Load"
+msgstr "负载"
+
+msgid "Load average"
+msgstr "平均负载"
+
+msgid "Log in"
+msgstr "登录"
+
+msgid "Logo"
+msgstr "图标"
+
+msgid "Logo updated — reload to see it in the sidebar"
+msgstr "图标已更新，刷新后可在侧边栏看到"
+
+msgid "Logo URL"
+msgstr "图标地址"
+
+msgid "Logs"
+msgstr "日志"
+
+msgid "MAC address"
+msgstr "MAC 地址"
+
+msgid "Maintenance"
+msgstr "维护"
+
+msgid "Manage"
+msgstr "管理"
+
+msgid "Media library"
+msgstr "媒体库"
+
+msgid "memory"
+msgstr "内存"
+
+msgid "Memory"
+msgstr "内存"
+
+msgid "Menu"
+msgstr "菜单"
+
+msgid "Mode and density"
+msgstr "模式与密度"
+
+msgid "Model"
+msgstr "型号"
+
+msgid "Named hosts"
+msgstr "已命名主机"
+
+msgid "Navigation"
+msgstr "导航"
+
+msgid "Network"
+msgstr "网络"
+
+msgid "No background selected"
+msgstr "未选择背景"
+
+msgid "No changes to settings will be stored and are lost after rebooting."
+msgstr "设置的更改不会被保存，重启后会丢失。"
+
+msgid "No default route"
+msgstr "无默认路由"
+
+msgid "No devices have been seen yet."
+msgstr "尚未发现任何设备。"
+
+msgid "No devices have been seen yet. Connect a device or check the DHCP leases."
+msgstr "尚未发现任何设备。请连接设备或检查 DHCP 租约。"
+
+msgid "No matching menu item"
+msgstr "没有匹配的菜单项"
+
+msgid "No media yet. Upload a file or fetch a wallpaper above."
+msgstr "媒体库为空。请在上方上传文件或获取壁纸。"
+
+msgid "No password set!"
+msgstr "未设置密码！"
+
+msgid "Not installed"
+msgstr "未安装"
+
+msgid "Off"
+msgstr "关闭"
+
+msgid "On"
+msgstr "开启"
+
+msgid "Online wallpapers"
+msgstr "在线壁纸"
+
+msgid "Only the packages listed above can be installed. They are downloaded from the package feeds already configured on this router; no third-party URL is accepted."
+msgstr "只能安装上方列出的软件包。它们从本路由器已配置的软件源下载，不接受任何第三方 URL。"
+
+msgid "OpenWrt"
+msgstr "OpenWrt"
+
+msgid "Optional add-ons"
+msgstr "可选插件"
+
+msgid "Optional search words, e.g. mountains"
+msgstr "可选搜索词，例如 mountains"
+
+msgid "Palette"
+msgstr "配色"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Protected by your router password."
+msgstr "由路由器密码保护。"
+
+msgid "Quick actions"
+msgstr "快捷操作"
+
+msgid "Quick navigation"
+msgstr "快捷导航"
+
+msgid "radios"
+msgstr "个射频"
+
+msgid "Reboot"
+msgstr "重启"
+
+msgid "Recovery mode"
+msgstr "恢复模式"
+
+msgid "Reload page"
+msgstr "刷新页面"
+
+msgid "Restore"
+msgstr "恢复"
+
+msgid "Restore defaults"
+msgstr "恢复默认"
+
+msgid "Restore defaults?"
+msgstr "恢复默认设置？"
+
+msgid "Restore the default palette, glass values and background. Media files and installed packages are not removed."
+msgstr "恢复默认配色、玻璃参数和背景。媒体文件和已安装的软件包不会被删除。"
+
+msgid "Retry"
+msgstr "重试"
+
+msgid "Router"
+msgstr "路由器"
+
+msgid "Router media library"
+msgstr "路由器媒体库"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Search menu…"
+msgstr "搜索菜单…"
+
+msgid "Search words"
+msgstr "搜索词"
+
+msgid "Set password"
+msgstr "设置密码"
+
+msgid "Show password"
+msgstr "显示密码"
+
+msgid "Sign in to manage this router."
+msgstr "登录以管理这台路由器。"
+
+msgid "Software"
+msgstr "软件"
+
+msgid "Source"
+msgstr "来源"
+
+msgid "Starting installation of %s…"
+msgstr "开始安装 %s…"
+
+msgid "Static leases"
+msgstr "静态租约"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Storage"
+msgstr "存储"
+
+msgid "Style"
+msgstr "外观"
+
+msgid "Surface opacity"
+msgstr "表面不透明度"
+
+msgid "Swap"
+msgstr "交换分区"
+
+msgid "System health"
+msgstr "系统状态"
+
+msgid "System status"
+msgstr "系统状态"
+
+msgid "The file could not be removed"
+msgstr "无法删除文件"
+
+msgid "The file is empty"
+msgstr "文件为空"
+
+msgid "The file is larger than the limit"
+msgstr "文件超过大小限制"
+
+msgid "The installation could not be started"
+msgstr "无法启动安装"
+
+msgid "The installer stopped without reporting a result."
+msgstr "安装程序已停止，未报告结果。"
+
+msgid "The palette, mode, glass values, density, background and logo will be reset. Media files and packages are kept."
+msgstr "配色、模式、玻璃参数、密度、背景和图标都将重置。媒体文件和软件包会保留。"
+
+msgid "The router needs internet access and enough free space. Do not power it off during installation."
+msgstr "路由器需要联网并有足够的可用空间。安装期间请勿断电。"
+
+msgid "The router refused the upload (code %d)"
+msgstr "路由器拒绝了上传（代码 %d）"
+
+msgid "The sidebar logo and the page background update after a reload. The preview above changes immediately."
+msgstr "侧边栏图标和页面背景在刷新后生效。上方预览会立即变化。"
+
+msgid "The source did not return an image"
+msgstr "来源未返回图片"
+
+msgid "The upload could not be committed"
+msgstr "无法提交上传"
+
+msgid "The wallpaper could not be fetched"
+msgstr "无法获取壁纸"
+
+msgid "Theme"
+msgstr "主题"
+
+msgid "There is no password set on this router. Please configure a root password to protect the web interface."
+msgstr "此路由器尚未设置密码。请先配置 root 密码以保护 Web 界面。"
+
+msgid "This file is larger than the %s limit"
+msgstr "此文件超过 %s 限制"
+
+msgid "This format is not allowed for this type"
+msgstr "此类型不允许该格式"
+
+msgid "This package is not allow-listed"
+msgstr "此软件包不在白名单中"
+
+msgid "Toggle appearance"
+msgstr "切换外观"
+
+msgid "Traffic"
+msgstr "实时流量"
+
+msgid "Tune blur, surface opacity and how much the wallpaper is dimmed."
+msgstr "调整模糊、表面不透明度以及背景压暗程度。"
+
+msgid "Unable to restore defaults: %s"
+msgstr "无法恢复默认设置：%s"
+
+msgid "Unable to save: %s"
+msgstr "无法保存：%s"
+
+msgid "Unknown media type"
+msgstr "未知媒体类型"
+
+msgid "Unknown method"
+msgstr "未知方法"
+
+msgid "Unknown wallpaper source"
+msgstr "未知壁纸来源"
+
+msgid "Unsplash API key (only for Unsplash)"
+msgstr "Unsplash API 密钥（仅 Unsplash 需要）"
+
+msgid "Unsplash needs an API key"
+msgstr "Unsplash 需要 API 密钥"
+
+msgid "Unsplash requires a free API key. Bing and Wallhaven do not."
+msgstr "Unsplash 需要免费的 API 密钥，Bing 和 Wallhaven 不需要。"
+
+msgid "Unsplash returned no image"
+msgstr "Unsplash 未返回图片"
+
+msgid "Unsupported file format"
+msgstr "不支持的文件格式"
+
+msgid "Unsupported request"
+msgstr "不支持的请求"
+
+msgid "Up to 8 MB images, 32 MB videos and 1 MB icons. Files are validated by their magic bytes on the router."
+msgstr "图片最大 8 MB，视频最大 32 MB，图标最大 1 MB。文件会在路由器上通过文件头校验。"
+
+msgid "Upload media"
+msgstr "上传媒体"
+
+msgid "Upload not found"
+msgstr "未找到上传文件"
+
+msgid "Uploaded %s"
+msgstr "已上传 %s"
+
+msgid "Uploaded images, videos and icons, plus fetched wallpapers."
+msgstr "已上传的图片、视频和图标，以及获取的壁纸。"
+
+msgid "Uploading… %d%%"
+msgstr "正在上传… %d%%"
+
+msgid "Uploading… 0%"
+msgstr "正在上传… 0%"
+
+msgid "Uptime"
+msgstr "运行时间"
+
+msgid "Use"
+msgstr "使用"
+
+msgid "Use an http(s) URL or a path under /luci-static/"
+msgstr "使用 http(s) URL 或 /luci-static/ 下的路径"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "View devices"
+msgstr "查看设备"
+
+msgid "Wallhaven returned no image"
+msgstr "Wallhaven 未返回图片"
+
+msgid "WAN"
+msgstr "WAN"
+
+msgid "WAN address"
+msgstr "WAN 地址"
+
+msgid "WAN protocol"
+msgstr "WAN 协议"
+
+msgid "WAN throughput"
+msgstr "WAN 吞吐"
+
+msgid "Welcome back"
+msgstr "欢迎回来"
+
+msgid "WiFi"
+msgstr "WiFi"
+
+msgid "Wireless"
+msgstr "无线"
+
+msgid "You must enable JavaScript in your browser or LuCI will not work properly."
+msgstr "必须启用 JavaScript，否则 LuCI 无法正常工作。"
+

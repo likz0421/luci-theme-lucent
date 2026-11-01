@@ -1,0 +1,21 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+
+uci -q get luci.themes.Lucent >/dev/null 2>&1 || \
+	uci -q set luci.themes.Lucent=/luci-static/lucent
+
+# Make Simplified Chinese selectable and discoverable to auto-detection.
+uci -q get luci.languages.zh_cn >/dev/null 2>&1 || \
+	uci -q set luci.languages.zh_cn='简体中文 (Simplified Chinese)'
+
+# Activate Lucent unless another non-Bootstrap theme is already selected.
+case "$(uci -q get luci.main.mediaurlbase)" in
+	''|/luci-static/bootstrap|/luci-static/bootstrap-dark|/luci-static/bootstrap-light)
+		uci -q set luci.main.mediaurlbase=/luci-static/lucent
+		;;
+esac
+
+uci -q commit luci
+
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/
+exit 0

@@ -1,0 +1,387 @@
+#!/bin/sh
+# Lucent 3 helper: media library, online wallpapers and allow-listed packages.
+# The browser never supplies a shell command or an arbitrary path.
+
+. /usr/share/libubox/jshn.sh
+
+ROOT="/www/luci-static/lucent/media"
+URL="/luci-static/lucent/media"
+TMPDIR="/tmp/lucent-upload"
+TMP="$TMPDIR/file.bin"
+RUN="/var/run"
+LOG="$RUN/lucent-install.log"
+CODE="$RUN/lucent-install.code"
+PID="$RUN/lucent-install.pid"
+
+mkdir -p "$TMPDIR" 2>/dev/null || true
+
+err() {
+	json_init
+	json_add_int ok 0
+	json_add_string error "$1"
+	json_dump
+	json_cleanup
+	exit 0
+}
+
+ok() {
+	json_init
+	json_add_int ok 1
+	json_dump
+	json_cleanup
+	exit 0
+}
+
+magic() {
+	local hex
+	if command -v hexdump >/dev/null 2>&1; then
+		hex=$(hexdump -v -n 12 -e '1/1 "%02x"' "$1" 2>/dev/null)
+	elif command -v od >/dev/null 2>&1; then
+		hex=$(od -An -tx1 -N12 "$1" 2>/dev/null | tr -d ' \n')
+	else
+		return 1
+	fi
+	case "$hex" in
+		ffd8ff*) echo jpg ;;
+		89504e470d0a1a0a*) echo png ;;
+		47494638*) echo gif ;;
+		52494646????????57454250) echo webp ;;
+		00000100*) echo ico ;;
+		????????66747970) echo mp4 ;;
+		????????66747970*) echo mp4 ;;
+		1a45dfa3*) echo webm ;;
+	esac
+}
+
+download() {
+	local url="$1" out="$2"
+	rm -f "$out"
+	if command -v uclient-fetch >/dev/null 2>&1; then
+		uclient-fetch -q -T 30 -O "$out" "$url" >/dev/null 2>&1
+	elif command -v wget >/dev/null 2>&1; then
+		wget -q -T 30 -O "$out" "$url" >/dev/null 2>&1
+	else
+		return 1
+	fi
+	[ -s "$out" ]
+}
+
+safe_name() {
+	printf '%s' "$1" | sed 's/\.[^.]*$//; s/[^A-Za-z0-9._-]/-/g; s/^-*//; s/-*$//' | cut -c1-48
+}
+
+media_url() {
+	echo "$URL/$1/$2"
+}
+
+# ------------------------------------------------------------------ methods
+media_list() {
+	local kind f name size
+	json_init
+	json_add_array "items"
+	for kind in image video icon wallpaper; do
+		[ -d "$ROOT/$kind" ] || continue
+		for f in "$ROOT/$kind"/*; do
+			[ -f "$f" ] && [ ! -L "$f" ] || continue
+			name=${f##*/}
+			case "$name" in .*) continue ;; esac
+			size=$(wc -c < "$f" 2>/dev/null)
+			json_add_object
+			json_add_string kind "$kind"
+			json_add_string name "$name"
+			json_add_string url "$(media_url "$kind" "$name")"
+			json_add_int size "${size:-0}"
+			json_close_object
+		done
+	done
+	json_close_array
+	json_dump
+	json_cleanup
+}
+
+media_commit() {
+	local kind name size max ext base out n
+	read -r input
+	json_load "$input"
+	json_get_var kind kind
+	json_get_var name name
+	json_cleanup
+
+	case "$kind" in image|video|icon) ;; *) err "Unknown media type" ;; esac
+	[ -f "$TMP" ] && [ ! -L "$TMP" ] || err "Upload not found"
+
+	size=$(wc -c < "$TMP" 2>/dev/null)
+	size=${size:-0}
+	[ "$size" -gt 0 ] || err "The file is empty"
+
+	case "$kind" in
+		image) max=8388608 ;;
+		video) max=33554432 ;;
+		icon) max=1048576 ;;
+	esac
+	[ "$size" -le "$max" ] || err "The file is larger than the limit"
+
+	ext=$(magic "$TMP")
+	[ -n "$ext" ] || err "Unsupported file format"
+	case "$kind:$ext" in
+		image:jpg|image:png|image:gif|image:webp|video:mp4|video:webm|icon:png|icon:webp|icon:ico) ;;
+		*) err "This format is not allowed for this type" ;;
+	esac
+
+	base=$(safe_name "$name")
+	[ -n "$base" ] || base="$kind"
+	mkdir -p "$ROOT/$kind" || err "Cannot create the media directory"
+	chmod 755 "$ROOT" "$ROOT/$kind" 2>/dev/null
+	out="$ROOT/$kind/${base}-$(date +%s).$ext"
+	n=1
+	while [ -e "$out" ]; do
+		out="$ROOT/$kind/${base}-$(date +%s)-$n.$ext"
+		n=$((n + 1))
+	done
+
+	mv -f "$TMP" "$out" || err "Cannot save the upload"
+	chmod 644 "$out" 2>/dev/null
+	chown root:root "$out" 2>/dev/null
+
+	json_init
+	json_add_int ok 1
+	json_add_string kind "$kind"
+	json_add_string name "${out##*/}"
+	json_add_string url "$(media_url "$kind" "${out##*/}")"
+	json_add_int size "$size"
+	json_dump
+	json_cleanup
+}
+
+media_remove() {
+	local kind name f
+	read -r input
+	json_load "$input"
+	json_get_var kind kind
+	json_get_var name name
+	json_cleanup
+
+	case "$kind" in image|video|icon|wallpaper) ;; *) err "Unknown media type" ;; esac
+	case "$name" in ''|.*|*/*|*\\*) err "Invalid file name" ;; esac
+	f="$ROOT/$kind/$name"
+	[ -f "$f" ] && [ ! -L "$f" ] || err "File not found"
+	rm -f "$f" || err "Cannot remove the file"
+	ok
+}
+
+wallpaper_fetch() {
+	local provider query key tmp url file ext base out n
+	read -r input
+	json_load "$input"
+	json_get_var provider provider
+	json_get_var query query
+	json_get_var key key
+	json_cleanup
+
+	case "$provider" in bing|unsplash|wallhaven) ;; *) err "Unknown wallpaper source" ;; esac
+	case "$key" in *[!A-Za-z0-9_-]*) err "Invalid API key" ;; esac
+	query=$(printf '%s' "$query" | tr -cd 'A-Za-z0-9 _-' | cut -c1-60)
+	query=$(printf '%s' "$query" | sed 's/ /%20/g')
+
+	tmp="/tmp/lucent-wallpaper.json"
+	case "$provider" in
+		bing)
+			url="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN"
+			download "$url" "$tmp" || err "Cannot reach Bing"
+			url=$(jsonfilter -i "$tmp" -e '@.images[0].url' 2>/dev/null)
+			[ -n "$url" ] || err "Bing returned no image"
+			case "$url" in http*) ;; *) url="https://www.bing.com$url" ;; esac
+			;;
+		unsplash)
+			[ -n "$key" ] || err "Unsplash needs an API key"
+			url="https://api.unsplash.com/photos/random?orientation=landscape&client_id=$key"
+			[ -n "$query" ] && url="$url&query=$query"
+			download "$url" "$tmp" || err "Cannot reach Unsplash"
+			url=$(jsonfilter -i "$tmp" -e '@.urls.full' 2>/dev/null)
+			[ -n "$url" ] || err "Unsplash returned no image"
+			;;
+		wallhaven)
+			url="https://wallhaven.cc/api/v1/search?sorting=random&atleast=1920x1080&categories=111&purity=100"
+			[ -n "$query" ] && url="$url&q=$query"
+			download "$url" "$tmp" || err "Cannot reach Wallhaven"
+			url=$(jsonfilter -i "$tmp" -e '@.data[0].path' 2>/dev/null)
+			[ -n "$url" ] || err "Wallhaven returned no image"
+			;;
+	esac
+
+	file="/tmp/lucent-wallpaper.img"
+	download "$url" "$file" || err "Cannot download the image"
+	ext=$(magic "$file")
+	case "$ext" in jpg|png|webp) ;; *) rm -f "$file"; err "The source did not return an image" ;; esac
+
+	mkdir -p "$ROOT/wallpaper" || err "Cannot create the wallpaper directory"
+	chmod 755 "$ROOT" "$ROOT/wallpaper" 2>/dev/null
+	base=$(safe_name "$provider")
+	out="$ROOT/wallpaper/${base}-$(date +%s).$ext"
+	n=1
+	while [ -e "$out" ]; do
+		out="$ROOT/wallpaper/${base}-$(date +%s)-$n.$ext"
+		n=$((n + 1))
+	done
+	mv -f "$file" "$out" || err "Cannot save the wallpaper"
+	chmod 644 "$out" 2>/dev/null
+
+	json_init
+	json_add_int ok 1
+	json_add_string name "${out##*/}"
+	json_add_string url "$(media_url wallpaper "${out##*/}")"
+	json_dump
+	json_cleanup
+}
+
+plugin_installed() {
+	local pkg="$1"
+	if command -v apk >/dev/null 2>&1; then
+		apk info -e "$pkg" >/dev/null 2>&1
+	elif command -v opkg >/dev/null 2>&1; then
+		opkg list-installed 2>/dev/null | grep -q "^$pkg "
+	else
+		return 1
+	fi
+}
+
+plugin_check() {
+	local name pkg
+	json_init
+	json_add_array "items"
+	for name in openclash passwall passwall2 ssrplus mosdns adguardhome dockerman smartdns; do
+		case "$name" in
+			openclash) pkg="luci-app-openclash" ;;
+			passwall) pkg="luci-app-passwall" ;;
+			passwall2) pkg="luci-app-passwall2" ;;
+			ssrplus) pkg="luci-app-ssr-plus" ;;
+			mosdns) pkg="luci-app-mosdns" ;;
+			adguardhome) pkg="luci-app-adguardhome" ;;
+			dockerman) pkg="luci-app-dockerman" ;;
+			smartdns) pkg="luci-app-smartdns" ;;
+		esac
+		json_add_object
+		json_add_string name "$name"
+		json_add_string pkg "$pkg"
+		json_add_int installed "$(plugin_installed "$pkg" && echo 1 || echo 0)"
+		json_close_object
+	done
+	json_close_array
+	json_dump
+	json_cleanup
+}
+
+plugin_install() {
+	local name pkg job
+	read -r input
+	json_load "$input"
+	json_get_var name name
+	json_cleanup
+
+	case "$name" in
+		openclash) pkg="luci-app-openclash" ;;
+		passwall) pkg="luci-app-passwall" ;;
+		passwall2) pkg="luci-app-passwall2" ;;
+		ssrplus) pkg="luci-app-ssr-plus" ;;
+		mosdns) pkg="luci-app-mosdns" ;;
+		adguardhome) pkg="luci-app-adguardhome" ;;
+		dockerman) pkg="luci-app-dockerman" ;;
+		smartdns) pkg="luci-app-smartdns" ;;
+		*) err "This package is not allow-listed" ;;
+	esac
+
+	if plugin_installed "$pkg"; then
+		json_init
+		json_add_int ok 1
+		json_add_int installed 1
+		json_add_string message "Already installed"
+		json_dump
+		json_cleanup
+		exit 0
+	fi
+
+	[ -f "$PID" ] && kill -0 "$(cat "$PID" 2>/dev/null)" 2>/dev/null && \
+		err "Another installation is still running"
+
+	rm -f "$CODE" "$LOG"
+	if command -v apk >/dev/null 2>&1; then
+		job="apk add '$pkg' >'$LOG' 2>&1; echo \$? >'$CODE'"
+	else
+		job="opkg update >'$LOG' 2>&1; opkg install '$pkg' >>'$LOG' 2>&1; echo \$? >'$CODE'"
+	fi
+
+	job="echo \$\$ >'$PID'; $job"
+	if command -v setsid >/dev/null 2>&1; then
+		setsid sh -c "$job" </dev/null >/dev/null 2>&1 &
+	else
+		sh -c "$job" </dev/null >/dev/null 2>&1 &
+	fi
+
+	json_init
+	json_add_int ok 1
+	json_add_int started 1
+	json_add_string pkg "$pkg"
+	json_dump
+	json_cleanup
+}
+
+plugin_status() {
+	local pid code running=0
+	pid=$(cat "$PID" 2>/dev/null)
+	code=$(cat "$CODE" 2>/dev/null)
+	[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && running=1
+	[ "$running" = 0 ] && rm -f "$PID"
+
+	json_init
+	json_add_int running "$running"
+	if [ -n "$code" ]; then
+		json_add_int code "$code"
+	else
+		json_add_int code -1
+	fi
+	json_add_string log "$(tail -c 1200 "$LOG" 2>/dev/null)"
+	json_dump
+	json_cleanup
+}
+
+case "$1" in
+list)
+	json_init
+	json_add_object "media_list"; json_close_object
+	json_add_object "media_commit"
+		json_add_string "kind" "str"
+		json_add_string "name" "str"
+	json_close_object
+	json_add_object "media_remove"
+		json_add_string "kind" "str"
+		json_add_string "name" "str"
+	json_close_object
+	json_add_object "wallpaper_fetch"
+		json_add_string "provider" "str"
+		json_add_string "query" "str"
+		json_add_string "key" "str"
+	json_close_object
+	json_add_object "plugin_check"; json_close_object
+	json_add_object "plugin_install"
+		json_add_string "name" "str"
+	json_close_object
+	json_add_object "plugin_status"; json_close_object
+	json_dump
+	json_cleanup
+	;;
+call)
+	case "$2" in
+		media_list) media_list ;;
+		media_commit) media_commit ;;
+		media_remove) media_remove ;;
+		wallpaper_fetch) wallpaper_fetch ;;
+		plugin_check) plugin_check ;;
+		plugin_install) plugin_install ;;
+		plugin_status) plugin_status ;;
+		*) err "Unknown method" ;;
+	esac
+	;;
+*)
+	err "Unsupported request"
+	;;
+esac

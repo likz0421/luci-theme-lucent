@@ -1,0 +1,4 @@
+dist/
+*.orig
+*.rej
+.DS_Store

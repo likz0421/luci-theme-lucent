@@ -1,0 +1,63 @@
+	{% if (!blank_page): %}
+				<footer class="ltc-foot">
+					<span>Lucent 3.2 · {{ version.luciname }} {{ version.luciversion }}</span>
+					<span>{{ version.distname }} {{ version.distversion }}</span>
+				</footer>
+			</main>
+		</div>
+	</div>
+
+	<nav class="ltc-dock" aria-label="{{ _('Quick navigation') }}">
+		<a href="{{ dispatcher.build_url('admin/home') }}" data-dock="home">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5 12 3.8l8.5 6.7V19a1.5 1.5 0 0 1-1.5 1.5h-4.4v-5.7H9.4v5.7H5A1.5 1.5 0 0 1 3.5 19z"/></svg>
+			<b>{{ _('Home') }}</b>
+		</a>
+		<a href="{{ dispatcher.build_url('admin/clients') }}" data-dock="clients">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13.5" height="10" rx="1.6"/><path d="M1.5 18.5h16"/><rect x="18" y="8.5" width="4.5" height="10" rx="1.2"/></svg>
+			<b>{{ _('Devices') }}</b>
+		</a>
+		<a href="{{ dispatcher.build_url('admin/network/network') }}" data-dock="network">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.3 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.3-3.6-8.5S9.6 5.9 12 3.5z"/></svg>
+			<b>{{ _('Network') }}</b>
+		</a>
+		<a href="{{ dispatcher.build_url('admin/system/appearance') }}" data-dock="appearance">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg>
+			<b>{{ _('Style') }}</b>
+		</a>
+	</nav>
+
+	<script>L.require('menu-bootstrap')</script>
+	<script>L.require('lucent.core').then(function (core) { core.init(); })</script>
+	{% else %}
+	<script>
+		(function () {
+			var eye = document.querySelector('[data-ltc-eye]');
+			var pass = document.querySelector('#luci_password');
+			var form = document.querySelector('#ltc-login-form');
+
+			if (eye && pass) {
+				eye.addEventListener('click', function () {
+					var show = pass.type === 'password';
+					pass.type = show ? 'text' : 'password';
+					eye.classList.toggle('on', show);
+					pass.focus();
+				});
+			}
+			if (pass) {
+				pass.focus();
+				pass.select();
+			}
+			if (form) {
+				form.addEventListener('submit', function () {
+					var btn = form.querySelector('button[type=submit]');
+					if (btn) {
+						btn.disabled = true;
+						btn.textContent = btn.dataset.busy || '…';
+					}
+				});
+			}
+		})();
+	</script>
+	{% endif %}
+</body>
+</html>
