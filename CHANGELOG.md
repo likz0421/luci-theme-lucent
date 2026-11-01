@@ -3,6 +3,36 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.4.0 — 2026-11-01
+
+### Fixed
+
+- **Home "Software" quick action returned 404.** It now links to the real
+  `admin/system/package-manager` route instead of the non-existent
+  `admin/system/software`.
+- **Loading animation rotated its own label.** The `.spinning` indicator now
+  draws the ring as a `::before` pseudo-element, so "Loading view…" (and busy
+  buttons / directory loaders) keep their text upright while only the dot
+  spins.
+- **Home network topology clipped at tablet widths.** The Internet → WAN →
+  Router → LAN → WiFi row now shares the card width (`flex:1 1 0`) with a
+  fluid icon size, so the WiFi node is no longer cut off around 768 px.
+- **Native tooltips were always visible and overlapping.** Interfaces and
+  other CBI pages showed the `Type / Device / Connected / MAC / RX / TX`
+  badges inline, cluttering the network diagram. `.cbi-tooltip` is now a
+  proper hover popup (hidden by default, revealed on `.cbi-tooltip-container`
+  hover), which also fixes the global `data-tooltip` popups.
+- **Header indicators were unstyled.** `#indicators` now targets the real
+  `span[data-indicator]` markup, with an active spinner, muted inactive state
+  and clickable hover.
+
+### Changed
+
+- Quick actions are now resilient: the Wireless shortcut is only shown when
+  the device reports at least one radio, so wired-only routers no longer get
+  a dead link.
+- Node label sizing no longer depends on an undefined container query unit.
+
 ## 3.3.0 — 2026-11-01
 
 ### Changed

@@ -295,15 +295,17 @@ return view.extend({
 
 		var clientsCard = card(_('Devices'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/clients') }, _('All devices') + ' →'), clientList);
 
+		var acts = [];
+		if (wifi.total > 0)
+			acts.push(action(L.url('admin/network/wireless'), 'wifi', _('Wireless')));
+		acts.push(action(L.url('admin/network/firewall'), 'shield', _('Firewall')));
+		acts.push(action(L.url('admin/network/dhcp'), 'devices', _('DHCP leases')));
+		acts.push(action(L.url('admin/system/package-manager'), 'download', _('Software')));
+		acts.push(action(L.url('admin/status/logs'), 'info', _('Logs')));
+		acts.push(action(L.url('admin/system/reboot'), 'refresh', _('Reboot')));
+
 		var actionsCard = card(_('Quick actions'), null,
-			E('div', { 'class': 'ltc-acts' }, [
-				action(L.url('admin/network/wireless'), 'wifi', _('Wireless')),
-				action(L.url('admin/network/firewall'), 'shield', _('Firewall')),
-				action(L.url('admin/network/dhcp'), 'devices', _('DHCP leases')),
-				action(L.url('admin/system/software'), 'download', _('Software')),
-				action(L.url('admin/status/logs'), 'info', _('Logs')),
-				action(L.url('admin/system/reboot'), 'refresh', _('Reboot'))
-			]));
+			E('div', { 'class': 'ltc-acts' }, acts));
 
 		this.startPoll();
 
