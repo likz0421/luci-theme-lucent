@@ -17,6 +17,9 @@ var callHosts = rpc.declare({ object: 'luci-rpc', method: 'getHostHints' });
 var callLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases' });
 var callWifi = rpc.declare({ object: 'luci-rpc', method: 'getWirelessDevices' });
 var callStorage = rpc.declare({ object: 'luci.lucent', method: 'storage' });
+var callThemeCheck = rpc.declare({ object: 'luci.lucent', method: 'theme_check' });
+var callThemeUpdate = rpc.declare({ object: 'luci.lucent', method: 'theme_update' });
+var callThemeStatus = rpc.declare({ object: 'luci.lucent', method: 'theme_status' });
 
 function arr(v) {
 	if (v == null)
@@ -354,6 +357,9 @@ return baseclass.extend({
 	gateway: gatewayOf,
 	dns: dnsOf,
 	storage: storageOf,
+	checkUpdate: function () { return callThemeCheck(); },
+	startUpdate: function () { return callThemeUpdate(); },
+	updateStatus: function () { return callThemeStatus(); },
 	ip4: ip4,
 	ip6: ip6,
 	hasDefaultRoute: hasDefaultRoute,

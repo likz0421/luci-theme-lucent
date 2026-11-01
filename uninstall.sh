@@ -9,6 +9,7 @@ rm -rf /www/luci-static/lucent
 rm -rf /www/luci-static/resources/lucent
 rm -rf /www/luci-static/resources/view/lucent
 rm -rf /usr/share/ucode/luci/template/themes/lucent
+rm -rf /usr/share/lucent
 rm -f /usr/share/luci/menu.d/luci-theme-lucent.json
 rm -f /usr/share/rpcd/acl.d/luci-theme-lucent.json
 rm -f /usr/libexec/rpcd/luci.lucent

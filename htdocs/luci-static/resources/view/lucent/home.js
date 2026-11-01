@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require poll';
+'require lucent.core as core';
 'require lucent.util as util';
 
 function line(label, value) {
@@ -252,6 +253,105 @@ return view.extend({
 			lanNode.textContent = lan ? util.ip4(lan) : '–';
 	},
 
+	updateCard: function () {
+		var self = this;
+		var verLabel = E('b', {}, '—');
+		var status = E('div', { 'class': 'ltc-help' },
+			_('Press "Check for updates" to look for a new version online.'));
+		var checkBtn = E('button', { 'type': 'button', 'class': 'ltc-btn sm' }, _('Check for updates'));
+		var updBtn = E('button', { 'type': 'button', 'class': 'ltc-btn sm primary', 'style': 'display:none' }, _('Update'));
+
+		function setBusy(b) {
+			checkBtn.disabled = b;
+			updBtn.disabled = b;
+		}
+		function note(text, cls) {
+			status.className = 'ltc-help';
+			status.textContent = text;
+		}
+
+		function doCheck() {
+			setBusy(true);
+			note(_('Checking…'));
+			return util.checkUpdate().then(function (res) {
+				setBusy(false);
+				if (!res || res.error || !res.latest) {
+					note(_('Unable to reach the update source. Check the network, or set a mirror in Appearance.'));
+					return;
+				}
+				verLabel.textContent = res.current || _('not installed');
+				if (!res.available) {
+					note(_('You are on the latest version (%s).').format(res.latest));
+					updBtn.style.display = 'none';
+				}
+				else {
+					note(_('A new version %s is available (current %s).').format(res.latest, res.current || '—'));
+					updBtn.textContent = _('Update to %s').format(res.latest);
+					updBtn.style.display = '';
+				}
+			}).catch(function () {
+				setBusy(false);
+				note(_('The update check failed.'));
+			});
+		}
+
+		function pollStatus() {
+			if (self._upTimer)
+				clearInterval(self._upTimer);
+			self._upSeen = false;
+			self._upTimer = setInterval(function () {
+				util.updateStatus().then(function (st) {
+					if (!st)
+						return;
+					if (st.running) {
+						self._upSeen = true;
+						note((st.log || _('Updating…')).slice(-220));
+						return;
+					}
+					/* The detached job may not have registered yet; keep polling
+					 * until we either see it running or get a real exit code. */
+					if (!self._upSeen && (st.code == null || st.code < 0))
+						return;
+					clearInterval(self._upTimer);
+					self._upTimer = null;
+					if (st.code === 0) {
+						note(_('Update finished. Reloading…'));
+						core.toast(_('Theme updated. Reloading…'), 'ok');
+						setTimeout(function () { location.href = L.url('admin/home'); }, 1200);
+					}
+					else {
+						note(_('Update failed. %s').format(st.log ? String(st.log).slice(-200) : ''));
+						setBusy(false);
+					}
+				}).catch(function () {
+					/* uhttpd may be restarting after the update; keep polling. */
+				});
+			}, 2000);
+		}
+
+		function doUpdate() {
+			setBusy(true);
+			note(_('Starting the update…'));
+			return util.startUpdate().then(function (res) {
+				if (!res || !res.ok)
+					throw new Error((res && res.error) || _('The update could not be started'));
+				pollStatus();
+			}).catch(function (err) {
+				setBusy(false);
+				note(_('Update error: %s').format(err && err.message || String(err)));
+			});
+		}
+
+		checkBtn.addEventListener('click', doCheck);
+		updBtn.addEventListener('click', doUpdate);
+
+		return card(_('Updates'), null, E('div', { 'class': 'ltc-update' }, [
+			E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Installed version')), verLabel]),
+			status,
+			E('div', { 'class': 'ltc-row', 'style': 'gap:8px;margin-top:10px;flex-wrap:wrap' }, [checkBtn, updBtn])
+		]));
+	},
+
 	render: function (data) {
 		var board = data.board || {};
 		var info = data.info || {};
@@ -417,7 +517,7 @@ return view.extend({
 			kpis,
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
 			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
-			systemCard
+			E('div', { 'class': 'ltc-grid' }, [systemCard, this.updateCard()])
 		]);
 	},
 

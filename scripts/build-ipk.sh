@@ -20,11 +20,14 @@ cp -R htdocs/. "$D/www/"
 cp -R ucode/. "$D/usr/share/ucode/luci/"
 cp -R root/. "$D/"
 cp i18n/*.lmo "$D/usr/lib/lua/luci/i18n/"
+mkdir -p "$D/usr/share/lucent"
+cp install.sh "$D/usr/share/lucent/install.sh"
 find "$D" -name .DS_Store -delete
 find "$D" -type d -exec chmod 755 {} +
 find "$D" -type f -exec chmod 644 {} +
 chmod 755 "$D"/etc/uci-defaults/*
 chmod 755 "$D"/usr/libexec/rpcd/luci.lucent
+chmod 755 "$D"/usr/share/lucent/install.sh
 SIZE=$(find "$D" -type f -printf '%s\n' | awk '{ s += $1 } END { print s + 0 }')
 
 C=$TMP/control

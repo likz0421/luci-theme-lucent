@@ -3,6 +3,23 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.0 — 2026-11-01
+
+### Added
+
+- **In-page online update.** The dashboard now has an **Updates** card: press
+  *Check for updates* to compare the installed version against the latest
+  release on GitHub (with the same China-mirror fallback as the installer),
+  and *Update to vX* to download and install it in the background with live
+  progress. On success the page reloads automatically.
+- The installer gains `check` (prints JSON) and `update` actions, and ships
+  inside the package at `/usr/share/lucent/install.sh` so the button can call
+  it. The browser only ever triggers a fixed action — it never supplies a URL,
+  version or command.
+- Optional mirror override for the updater, settable only by root:
+  `uci set lucent.main.update_url=http://host/dir` and
+  `uci set lucent.main.update_cn=1` (prefer mirrors).
+
 ## 3.5.0 — 2026-11-01
 
 ### Fixed

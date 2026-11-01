@@ -228,7 +228,7 @@ return view.extend({
 				])
 			]),
 			E('div', { 'class': 'ltc-hero-side' }, [
-				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Theme')), E('b', {}, 'Lucent 3.5')]),
+				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Theme')), E('b', {}, 'Lucent 3.6')]),
 				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Storage')), E('b', {}, _('Router media library'))]),
 				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Backend')), E('b', {}, 'rpcd · luci.lucent')])
 			])

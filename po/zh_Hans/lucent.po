@@ -727,3 +727,60 @@ msgstr "存储"
 
 msgid "When on, the home page fetches one line of the day from v1.hitokoto.cn and caches it for that date. Without internet it falls back to a built-in line."
 msgstr "开启后，首页会从 v1.hitokoto.cn 获取一句每日箴言并按日期缓存。无网络连接时自动回退到内置语句。"
+
+msgid "A new version %s is available (current %s)."
+msgstr "发现新版本 %s（当前 %s）。"
+
+msgid "Check for updates"
+msgstr "检查更新"
+
+msgid "Checking…"
+msgstr "正在检查…"
+
+msgid "Installed version"
+msgstr "已安装版本"
+
+msgid "Press \"Check for updates\" to look for a new version online."
+msgstr "点击“检查更新”在线查找新版本。"
+
+msgid "Starting the update…"
+msgstr "正在开始更新…"
+
+msgid "The update check failed."
+msgstr "检查更新失败。"
+
+msgid "The update could not be started"
+msgstr "无法启动更新"
+
+msgid "Theme updated. Reloading…"
+msgstr "主题已更新，正在重新加载…"
+
+msgid "Unable to reach the update source. Check the network, or set a mirror in Appearance."
+msgstr "无法连接更新源。请检查网络，或在“外观”中设置镜像地址。"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Update error: %s"
+msgstr "更新错误：%s"
+
+msgid "Update failed. %s"
+msgstr "更新失败。%s"
+
+msgid "Update finished. Reloading…"
+msgstr "更新完成，正在重新加载…"
+
+msgid "Update to %s"
+msgstr "更新到 %s"
+
+msgid "Updates"
+msgstr "更新"
+
+msgid "Updating…"
+msgstr "正在更新…"
+
+msgid "You are on the latest version (%s)."
+msgstr "你已经是最新版本（%s）。"
+
+msgid "not installed"
+msgstr "未安装"

@@ -13,6 +13,10 @@ export COPYFILE_DISABLE=1
 DIR=luci-theme-lucent-${VER}
 mkdir -p "$TMP/$DIR"
 cp -R htdocs ucode root i18n "$TMP/$DIR/"
+# Ship the online installer inside the package tree so the in-page "update"
+# button works for file-copy installs too (offline-install.sh copies root/*).
+mkdir -p "$TMP/$DIR/root/usr/share/lucent"
+cp install.sh "$TMP/$DIR/root/usr/share/lucent/install.sh"
 cp LICENSE README.md CHANGELOG.md uninstall.sh "$TMP/$DIR/" 2>/dev/null || true
 # The archive is the offline option: ship the file-copy installer as install.sh.
 cp scripts/offline-install.sh "$TMP/$DIR/install.sh"

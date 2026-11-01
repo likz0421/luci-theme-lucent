@@ -27,8 +27,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.5.0-r1"
-LUCENT_TAG_DEFAULT="v3.5.0"
+LUCENT_VERSION_DEFAULT="3.6.0-r1"
+LUCENT_TAG_DEFAULT="v3.6.0"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -37,13 +37,15 @@ TAG="${LUCENT_TAG:-$LUCENT_TAG_DEFAULT}"
 VER_NO_R="${VER%%-r*}"
 PKG_NAME="luci-theme-lucent"
 
-log() { echo "$@"; }
+log() { [ "$QUIET" = "1" ] || echo "$@"; }
 
 usage() {
 	cat <<EOF
 Lucent 3 在线一键脚本  (版本 $VER)
 
   sh install.sh install     在线下载并安装 / 升级（默认）
+  sh install.sh check       检查是否有新版本（输出 JSON）
+  sh install.sh update      检测到新版本时在线升级
   sh install.sh uninstall   卸载并恢复 Bootstrap
   sh install.sh status      查看安装状态
 
@@ -55,7 +57,7 @@ EOF
 
 ACTION="${1:-install}"
 case "$ACTION" in
-	install|uninstall|status) ;;
+	install|check|update|uninstall|status) ;;
 	-h|--help|help) usage; exit 0 ;;
 	*) log "未知操作：$ACTION"; usage; exit 1 ;;
 esac
@@ -66,12 +68,13 @@ have() { command -v "$1" >/dev/null 2>&1; }
 fetch() {
 	# fetch <url> <outfile>
 	url="$1"; out="$2"
+	tmo="${LUCENT_FETCH_TIMEOUT:-20}"
 	rm -f "$out"
 	if have wget; then
 		# OpenWrt's wget is uclient-fetch: supports -q/-T/-O but NOT -t.
-		wget -q -T 20 -O "$out" "$url" 2>/dev/null
+		wget -q -T "$tmo" -O "$out" "$url" 2>/dev/null
 	elif have curl; then
-		curl -fsSL --connect-timeout 10 --max-time 90 -o "$out" "$url" 2>/dev/null
+		curl -fsSL --connect-timeout "$tmo" --max-time $((tmo * 4)) -o "$out" "$url" 2>/dev/null
 	else
 		return 1
 	fi
@@ -105,6 +108,33 @@ try_download() {
 			return 0
 		fi
 	done
+	return 1
+}
+
+# ---- 版本比较与在线检查 ----------------------------------------------------
+# 只保留版本号里合法的字符，避免把外部内容原样拼进 JSON。
+sanitize() { printf '%s' "$1" | tr -cd 'A-Za-z0-9._-'; }
+
+# 3.6.0-r1 -> 0003.0006.0000.0001（定宽，便于字符串比较）
+vkey() {
+	printf '%s' "$1" | sed 's/[-.rR]/ /g' | awk '{printf "%06d.%06d.%06d.%06d", $1+0, $2+0, $3+0, $4+0}'
+}
+
+get_current() {
+	if have apk; then
+		apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//"
+	elif have opkg; then
+		opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1
+	fi
+}
+
+get_latest() {
+	local f
+	if have apk; then f="latest-apk.txt"; else f="latest.txt"; fi
+	if try_download "$f" "$TMP/latest"; then
+		sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
+		return 0
+	fi
 	return 1
 }
 
@@ -230,7 +260,8 @@ do_uninstall() {
 	fi
 
 	rm -rf /www/luci-static/lucent /www/luci-static/resources/lucent \
-		/www/luci-static/resources/view/lucent /usr/share/ucode/luci/template/themes/lucent
+		/www/luci-static/resources/view/lucent /usr/share/ucode/luci/template/themes/lucent \
+		/usr/share/lucent
 	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json \
 		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
 		/usr/libexec/rpcd/luci.lucent \
@@ -271,8 +302,53 @@ do_status() {
 	echo "中文目录文件：$(ls /usr/lib/lua/luci/i18n/lucent*.lmo 2>/dev/null | wc -l) 个"
 }
 
+# ---- 在线检查更新 ----------------------------------------------------------
+do_check() {
+	[ "$(id -u)" = "0" ] || { log "请用 root 运行。" >&2; exit 1; }
+	new_tmp
+	export LUCENT_FETCH_TIMEOUT=8
+	QUIET=1
+	CURRENT=$(sanitize "$(get_current 2>/dev/null)")
+	LATEST=$(sanitize "$(get_latest 2>/dev/null)")
+	QUIET=0
+	AVAIL=false
+	[ -n "$LATEST" ] || { printf '{"current":"%s","latest":"","available":false,"error":"no-source"}\n' "$CURRENT"; exit 0; }
+	if [ -z "$CURRENT" ]; then
+		AVAIL=true
+	elif [ "$(vkey "$LATEST")" != "$(vkey "$CURRENT")" ]; then
+		AVAIL=true
+	fi
+	printf '{"current":"%s","latest":"%s","available":%s}\n' "$CURRENT" "$LATEST" "$AVAIL"
+}
+
+# ---- 在线升级 --------------------------------------------------------------
+do_update() {
+	[ "$(id -u)" = "0" ] || { log "请用 root 运行。" >&2; exit 1; }
+	new_tmp
+	QUIET=1
+	CURRENT=$(sanitize "$(get_current 2>/dev/null)")
+	LATEST=$(sanitize "$(get_latest 2>/dev/null)")
+	QUIET=0
+	if [ -z "$LATEST" ]; then
+		log "无法连接更新源，请检查网络或改用镜像：LUCENT_CN=1 sh install.sh update" >&2
+		exit 1
+	fi
+	if [ -n "$CURRENT" ] && [ "$(vkey "$LATEST")" = "$(vkey "$CURRENT")" ]; then
+		log "已是最新版本 $LATEST。"
+		exit 0
+	fi
+	log "→ 发现新版本 $LATEST（当前 ${CURRENT:-未安装}），开始在线升级…"
+	# 重新导出全局版本变量，确保 do_install 下载的是新版本而不是默认值。
+	LUCENT_VERSION="$LATEST"; LUCENT_TAG="v${LATEST%%-r*}"
+	VER="$LATEST"; TAG="$LUCENT_TAG"; VER_NO_R="${LATEST%%-r*}"
+	do_install
+	log "升级完成。"
+}
+
 case "$ACTION" in
 	install) do_install ;;
+	check) do_check ;;
+	update) do_update ;;
 	uninstall) do_uninstall ;;
 	status) do_status ;;
 esac

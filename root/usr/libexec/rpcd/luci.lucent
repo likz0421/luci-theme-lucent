@@ -12,6 +12,12 @@ RUN="/var/run"
 LOG="$RUN/lucent-install.log"
 CODE="$RUN/lucent-install.code"
 PID="$RUN/lucent-install.pid"
+IJOB="$RUN/lucent-install.job.sh"
+UPLOG="$RUN/lucent-update.log"
+UPCODE="$RUN/lucent-update.code"
+UPPID="$RUN/lucent-update.pid"
+UPJOB="$RUN/lucent-update.job.sh"
+INSTALLER="/usr/share/lucent/install.sh"
 
 mkdir -p "$TMPDIR" 2>/dev/null || true
 
@@ -303,18 +309,27 @@ plugin_install() {
 	[ -f "$PID" ] && kill -0 "$(cat "$PID" 2>/dev/null)" 2>/dev/null && \
 		err "Another installation is still running"
 
-	rm -f "$CODE" "$LOG"
+	rm -f "$CODE" "$LOG" "$PID"
 	if command -v apk >/dev/null 2>&1; then
-		job="apk add '$pkg' >'$LOG' 2>&1; echo \$? >'$CODE'"
+		cat > "$IJOB" <<EOF
+#!/bin/sh
+apk add '$pkg' >'$LOG' 2>&1
+echo \$? >'$CODE'
+EOF
 	else
-		job="opkg update >'$LOG' 2>&1; opkg install '$pkg' >>'$LOG' 2>&1; echo \$? >'$CODE'"
+		cat > "$IJOB" <<EOF
+#!/bin/sh
+opkg update >'$LOG' 2>&1
+opkg install '$pkg' >>'$LOG' 2>&1
+echo \$? >'$CODE'
+EOF
 	fi
+	chmod 755 "$IJOB"
 
-	job="echo \$\$ >'$PID'; $job"
-	if command -v setsid >/dev/null 2>&1; then
-		setsid sh -c "$job" </dev/null >/dev/null 2>&1 &
+	if command -v start-stop-daemon >/dev/null 2>&1; then
+		start-stop-daemon -S -b -m -p "$PID" -x /bin/sh -- "$IJOB"
 	else
-		sh -c "$job" </dev/null >/dev/null 2>&1 &
+		setsid sh "$IJOB" </dev/null >/dev/null 2>&1 &
 	fi
 
 	json_init
@@ -360,6 +375,84 @@ storage() {
 	json_cleanup
 }
 
+# ------------------------------------------------------------------ updates
+# All download/mirror/install logic lives in the bundled install.sh; the
+# browser only ever triggers a fixed action, never supplies a URL or version.
+update_env() {
+	# Optional mirror override, settable only by root via uci:
+	#   uci set lucent.main.update_url=http://host/dir
+	#   uci set lucent.main.update_cn=1
+	local base cn
+	base=$(uci -q get lucent.main.update_url 2>/dev/null)
+	cn=$(uci -q get lucent.main.update_cn 2>/dev/null)
+	[ "$cn" = "1" ] && export LUCENT_CN=1
+	[ -n "$base" ] && export LUCENT_BASE_URL="$base"
+}
+
+theme_check() {
+	[ -f "$INSTALLER" ] || err "The update helper is missing"
+	out=$(update_env; sh "$INSTALLER" check 2>/dev/null)
+	case "$out" in
+		'{'*) printf '%s\n' "$out" ;;
+		*) err "Unable to read the version information" ;;
+	esac
+}
+
+theme_update() {
+	[ -f "$INSTALLER" ] || err "The update helper is missing"
+	[ -f "$UPPID" ] && kill -0 "$(cat "$UPPID" 2>/dev/null)" 2>/dev/null && \
+		err "An update is already running"
+
+	rm -f "$UPCODE" "$UPLOG" "$UPPID"
+
+	# Write a self-contained job script. All paths are baked-in constants and the
+	# mirror config is read fresh from uci inside the job, so nothing user-supplied
+	# is ever interpolated into a shell command.
+	cat > "$UPJOB" <<EOF
+#!/bin/sh
+b=\$(uci -q get lucent.main.update_url)
+c=\$(uci -q get lucent.main.update_cn)
+[ "\$c" = 1 ] && export LUCENT_CN=1
+[ -n "\$b" ] && export LUCENT_BASE_URL="\$b"
+sh '$INSTALLER' update >'$UPLOG' 2>&1
+echo \$? >'$UPCODE'
+EOF
+	chmod 755 "$UPJOB"
+
+	# start-stop-daemon fully daemonises (double-fork + new session) and reparents
+	# to init, so rpcd's process-group cleanup on method return cannot reap it.
+	if command -v start-stop-daemon >/dev/null 2>&1; then
+		start-stop-daemon -S -b -m -p "$UPPID" -x /bin/sh -- "$UPJOB"
+	else
+		setsid sh "$UPJOB" </dev/null >/dev/null 2>&1 &
+	fi
+
+	json_init
+	json_add_int ok 1
+	json_add_int started 1
+	json_dump
+	json_cleanup
+}
+
+theme_status() {
+	local pid code running=0
+	pid=$(cat "$UPPID" 2>/dev/null)
+	code=$(cat "$UPCODE" 2>/dev/null)
+	[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && running=1
+	[ "$running" = 0 ] && rm -f "$UPPID"
+
+	json_init
+	json_add_int running "$running"
+	if [ -n "$code" ]; then
+		json_add_int code "$code"
+	else
+		json_add_int code -1
+	fi
+	json_add_string log "$(tail -c 1200 "$UPLOG" 2>/dev/null)"
+	json_dump
+	json_cleanup
+}
+
 case "$1" in
 list)
 	json_init
@@ -383,6 +476,9 @@ list)
 	json_close_object
 	json_add_object "plugin_status"; json_close_object
 	json_add_object "storage"; json_close_object
+	json_add_object "theme_check"; json_close_object
+	json_add_object "theme_update"; json_close_object
+	json_add_object "theme_status"; json_close_object
 	json_dump
 	json_cleanup
 	;;
@@ -396,6 +492,9 @@ call)
 		plugin_install) plugin_install ;;
 		plugin_status) plugin_status ;;
 		storage) storage ;;
+		theme_check) theme_check ;;
+		theme_update) theme_update ;;
+		theme_status) theme_status ;;
 		*) err "Unknown method" ;;
 	esac
 	;;
