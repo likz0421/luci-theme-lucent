@@ -41,3 +41,10 @@ define Package/luci-theme-lucent/postrm
 endef
 
 include $(TOPDIR)/feeds/luci/luci.mk
+
+# OpenWrt 的 include/scan.mk 只有在「包自己的 Makefile 文本」里 grep 到
+#   call (BuildPackage|KernelPackage|BuildContainer|BuildCompose|Build/DefaultTargets)
+# 才会把该目录交给 dump 流程；真正那句 $(eval $(call BuildPackage,...)) 是 luci.mk 里
+# 发的，那层 grep 看不见 —— 缺下面这行时本主题会被扫描器整体跳过，
+# 不报错、不进 tmp/.packageinfo，于是选不上也编不出来。
+# call BuildPackage: feed scanner marker (required by include/scan.mk)
