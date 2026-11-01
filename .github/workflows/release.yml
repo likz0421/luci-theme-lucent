@@ -32,8 +32,9 @@ jobs:
 
       - name: Build artifacts (Alpine container)
         run: |
-          docker run --rm -v "$GITHUB_WORKSPACE":/w -w /w alpine:3.22 \
-            sh -c 'apk add --no-cache bash coreutils findutils tar python3 zip &&
+          docker run --rm -v "$GITHUB_WORKSPACE":/w -w /w alpine:3.23 \
+            sh -c 'apk add --no-cache bash coreutils findutils tar python3 zip apk-tools-static &&
+                   export APK_BIN=/sbin/apk.static &&
                    bash scripts/build-ipk.sh &&
                    bash scripts/build-apk.sh &&
                    bash scripts/build-onekey.sh &&
