@@ -3,6 +3,40 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.5.0 — 2026-11-01
+
+### Fixed
+
+- **Saving Appearance settings raised "RPC call to uci/commit failed with
+  error -32002: Access denied".** The theme's rpcd ACL granted the `lucent`
+  config but not the `uci` *methods*, so `uci/commit` (and the `uci/get` used
+  to read the panel) were denied. The ACL now grants `commit`/`set`/`options`
+  on write and `get`/`order`/`changes`/`revert` on read, so theme settings
+  persist without a modal.
+- **Appearance reloaded to defaults instead of the saved values.** With the
+  read ACL fixed, reopening the panel now shows the stored palette, mode and
+  toggles rather than resetting them.
+- **"Save & Apply" label was invisible until hover.** The ComboButton
+  (`div.cbi-dropdown.cbi-button-apply`) inherited the light card background
+  while keeping white accent text. It now keeps the accent fill with
+  `--on-accent` text, and plain dropdowns pin `color:var(--text)` so no
+  control renders white-on-white text.
+
+### Added
+
+- **A much richer dashboard.** New Storage KPI, a full-width System card
+  (hostname, model, architecture, kernel, firmware, live local time, active
+  interfaces, memory, swap, storage, load), plus Gateway, DNS and WAN IPv6
+  facts on the network card.
+- **Daily greeting line.** The hero shows a line of the day fetched from
+  `v1.hitokoto.cn`, cached per date in `localStorage` and rendered with
+  `textContent` (remote strings can never inject markup). With no internet it
+  falls back to a built-in, day-indexed line. Toggle it in
+  Appearance → Home page.
+- **`storage` method on the `luci.lucent` helper.** This LuCI build does not
+  expose `luci-rpc.getStorageJSON`, so the theme now reports root/overlay
+  free and total space itself.
+
 ## 3.4.0 — 2026-11-01
 
 ### Fixed

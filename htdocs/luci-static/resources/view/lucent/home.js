@@ -40,10 +40,10 @@ function wire(down) {
 	return E('div', { 'class': 'ltc-wire' + (down ? ' down' : '') }, [E('i')]);
 }
 
-function fact(label, value) {
+function fact(label, value, key) {
 	return E('div', {}, [
 		E('small', {}, label),
-		E('b', {}, value || '–')
+		E('b', key ? { 'data-live': key } : {}, value || '–')
 	]);
 }
 
@@ -62,6 +62,25 @@ function card(title, extra, body, cls) {
 		]),
 		body
 	]);
+}
+
+/* Offline fallback greetings, chosen by day-of-year so the line is stable for the day. */
+var QUOTES = [
+	_('May every ping come back, and every packet find its way.'),
+	_('A steady router makes a calm home network.'),
+	_('Keep it cool, keep it connected.'),
+	_('Good signals make good days.'),
+	_('Small device, whole household online.'),
+	_('Reboot not required today — that is a good omen.'),
+	_('Bandwidth is a gift; use it kindly.'),
+	_('Firmware up to date, worries out of date.')
+];
+
+function dailyFallback() {
+	var now = new Date();
+	var start = new Date(now.getFullYear(), 0, 0);
+	var day = Math.floor((now - start) / 86400000);
+	return QUOTES[((day % QUOTES.length) + QUOTES.length) % QUOTES.length];
 }
 
 function memoryOf(info) {
@@ -126,6 +145,54 @@ return view.extend({
 		}, this), 10);
 	},
 
+	/* Pull a daily line from the network; cache per day in localStorage.
+	   Rendered with textContent so remote strings can never inject markup. */
+	fetchGreeting: function () {
+		var el = document.querySelector('[data-quote]');
+		if (!el)
+			return;
+
+		var now = new Date();
+		var key = 'lucent.quote.' + [now.getFullYear(), now.getMonth() + 1, now.getDate()].join('-');
+		var cached = null;
+		try {
+			cached = localStorage.getItem(key);
+		} catch (e) {
+			cached = null;
+		}
+
+		if (cached) {
+			el.textContent = cached;
+			return;
+		}
+
+		var req = new XMLHttpRequest();
+		req.open('GET', 'https://v1.hitokoto.cn/?c=i&c=d&c=k&encode=json', true);
+		req.timeout = 6000;
+		req.onload = function () {
+			var line = '';
+			if (req.status >= 200 && req.status < 400) {
+				try {
+					var json = JSON.parse(req.responseText);
+					if (json && typeof json.hitokoto === 'string')
+						line = json.hitokoto + (json.from ? (' — ' + json.from) : '');
+				} catch (e) {
+					line = '';
+				}
+			}
+			if (!line)
+				line = dailyFallback();
+			el.textContent = line;
+			try {
+				localStorage.setItem(key, line);
+			} catch (e) {}
+		};
+		req.onerror = req.ontimeout = function () {
+			el.textContent = dailyFallback();
+		};
+		req.send();
+	},
+
 	applyLive: function (data) {
 		var mem = memoryOf(data.info);
 		var loads = loadsOf(data.info);
@@ -148,6 +215,8 @@ return view.extend({
 
 		set('[data-live=uptime]', util.fmtDuration(data.info.uptime));
 		set('[data-live=uptime-sub]', _('%s since boot').format(util.fmtDuration(data.info.uptime)));
+		if (data.info.localtime)
+			set('[data-live=sys-time]', new Date(data.info.localtime * 1000).toLocaleString());
 		set('[data-live=memory]', mem.percent + '%');
 		set('[data-live=memory-sub]', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)));
 		set('[data-live=wan]', wan ? (util.ip4(wan) || _('Connected')) : _('Down'));
@@ -198,6 +267,16 @@ return view.extend({
 		var uptime = util.fmtDuration(info.uptime);
 		var wanIp = wan ? (util.ip4(wan) || _('Connected')) : _('Down');
 		var lanIp = lan ? util.ip4(lan) : '';
+		var wan6 = wan ? util.ip6(wan) : '';
+		var lan6 = lan ? util.ip6(lan) : '';
+		var gw = wan ? util.gateway(wan) : '';
+		var dns = wan ? util.dns(wan) : [];
+		var dnsStr = dns.length ? dns.slice(0, 2).join('  ') : '–';
+		var storage = util.storage(data.storage);
+		var storageStr = storage ? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–';
+		var localTime = info.localtime ? new Date(info.localtime * 1000).toLocaleString() : '–';
+		var upIfaces = data.ifaces.filter(function (i) { return i && i.up && i.interface !== 'loopback'; }).length;
+		var greetingOn = document.documentElement.dataset.greeting !== '0';
 
 		var hour = new Date().getHours();
 		var greeting = hour < 5 ? _('Good night') : hour < 12 ? _('Good morning') : hour < 18 ? _('Good afternoon') : _('Good evening');
@@ -214,6 +293,7 @@ return view.extend({
 				E('h1', {}, greeting + ', ' + hostname),
 				E('p', { 'class': 'ltc-hero-sub' },
 					_('Everything important about this router on one page — uplink, memory, devices and shortcuts.')),
+				greetingOn ? E('p', { 'class': 'ltc-hero-quote', 'data-quote': '' }, dailyFallback()) : '',
 				E('div', { 'class': 'ltc-hero-actions' }, [
 					E('a', { 'class': 'ltc-btn primary', 'href': L.url('admin/clients') }, _('View devices')),
 					E('a', { 'class': 'ltc-btn', 'href': L.url('admin/system/appearance') }, _('Appearance')),
@@ -236,7 +316,8 @@ return view.extend({
 			kpi(_('Devices'), String(clients.length), _('%d active').format(online), 'devices'),
 			kpi(_('Traffic'), '↓ –', _('WAN throughput'), 'traffic'),
 			kpi(_('Uptime'), uptime, _('%s since boot').format(uptime), 'uptime'),
-			kpi(_('Memory'), mem.percent + '%', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)), 'memory')
+			kpi(_('Memory'), mem.percent + '%', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)), 'memory'),
+			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage')
 		]);
 
 		var topo = E('div', { 'class': 'ltc-topo' }, [
@@ -258,6 +339,9 @@ return view.extend({
 			fact(_('LAN address'), lanIp || '–'),
 			fact(_('WiFi'), wifi.ssid || (wifi.up + ' / ' + wifi.total + ' ' + _('radios'))),
 			fact(_('WAN protocol'), wan ? (wan.proto || '–') : '–'),
+			fact(_('Gateway'), gw || '–'),
+			fact(_('DNS'), dnsStr),
+			fact(_('WAN IPv6'), wan6 || '–'),
 			fact(_('Load average'), loads.length ? '%.2f  %.2f  %.2f'.format(loads[0] || 0, loads[1] || 0, loads[2] || 0) : '–')
 		]);
 
@@ -275,6 +359,7 @@ return view.extend({
 			E('div', { 'class': 'ltc-tags' }, [
 				E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.used)), ' / ', util.fmtBytes(mem.total), ' ', _('memory')]),
 				mem.swapTotal ? E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.swapUsed)), ' / ', util.fmtBytes(mem.swapTotal), ' swap']) : '',
+				storage ? E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(storage.used)), ' / ', util.fmtBytes(storage.total), ' ', _('storage')]) : '',
 				E('span', { 'class': 'ltc-tag' }, [E('b', {}, String(wifi.up)), ' / ', String(wifi.total), ' ', _('radios')])
 			])
 		]));
@@ -307,13 +392,32 @@ return view.extend({
 		var actionsCard = card(_('Quick actions'), null,
 			E('div', { 'class': 'ltc-acts' }, acts));
 
+		var systemFacts = E('div', { 'class': 'ltc-facts' }, [
+			fact(_('Hostname'), hostname),
+			fact(_('Model'), board.model || board.system || '–'),
+			fact(_('Architecture'), board.system || '–'),
+			fact(_('Kernel'), board.kernel || '–'),
+			fact(_('Firmware'), release),
+			fact(_('Local time'), localTime, 'sys-time'),
+			fact(_('Active interfaces'), String(upIfaces)),
+			fact(_('Memory'), '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total))),
+			fact(_('Swap'), mem.swapTotal ? '%s / %s'.format(util.fmtBytes(mem.swapUsed), util.fmtBytes(mem.swapTotal)) : _('None')),
+			fact(_('Storage'), storageStr),
+			fact(_('Load average'), loads.length ? '%.2f  %.2f  %.2f'.format(loads[0] || 0, loads[1] || 0, loads[2] || 0) : '–')
+		]);
+
+		var systemCard = card(_('System'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/status/overview') }, _('Details') + ' →'), systemFacts);
+
 		this.startPoll();
+		if (greetingOn)
+			Promise.resolve().then(L.bind(this.fetchGreeting, this));
 
 		return E('div', { 'class': 'ltc-stack' }, [
 			hero,
 			kpis,
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
-			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard])
+			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
+			systemCard
 		]);
 	},
 

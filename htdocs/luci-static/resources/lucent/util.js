@@ -16,6 +16,7 @@ var callIfaces = rpc.declare({ object: 'network.interface', method: 'dump' });
 var callHosts = rpc.declare({ object: 'luci-rpc', method: 'getHostHints' });
 var callLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases' });
 var callWifi = rpc.declare({ object: 'luci-rpc', method: 'getWirelessDevices' });
+var callStorage = rpc.declare({ object: 'luci.lucent', method: 'storage' });
 
 function arr(v) {
 	if (v == null)
@@ -61,6 +62,29 @@ function findLan(ifaces, wan) {
 	return list.filter(function (i) { return i.interface === 'lan'; })[0] ||
 		list.filter(function (i) { return i !== wan && i.up && ip4(i); })[0] ||
 		null;
+}
+
+function gatewayOf(iface) {
+	var routes = arr(iface && iface.route);
+	var v4 = routes.filter(function (r) { return r && r.target === '0.0.0.0'; })[0];
+	var v6 = routes.filter(function (r) { return r && r.target === '::'; })[0];
+	return (v4 && v4.gateway) || (v6 && v6.gateway) || '';
+}
+
+function dnsOf(iface) {
+	var servers = arr(iface && (iface['dns-servers'] || iface['dnsserver'] || iface.dns));
+	return servers.filter(function (s) { return typeof s === 'string' && s; });
+}
+
+function storageOf(storage) {
+	var root = storage && (storage.overlay || storage['/']);
+	if (!root)
+		root = Object.keys(storage || {}).map(function (k) { return storage[k]; })
+			.filter(function (v) { return v && v.total != null; })[0];
+	if (!root)
+		return null;
+	var total = Number(root.total) || 0, free = Number(root.free) || 0;
+	return { total: total, free: free, used: Math.max(0, total - free), percent: pct(total - free, total) };
 }
 
 function fmtBytes(n) {
@@ -309,7 +333,8 @@ return baseclass.extend({
 			L.resolveDefault(callIfaces(), { interface: [] }),
 			L.resolveDefault(callHosts(), {}),
 			L.resolveDefault(callLeases(), {}),
-			L.resolveDefault(callWifi(), {})
+			L.resolveDefault(callWifi(), {}),
+			L.resolveDefault(callStorage(), {})
 		]).then(function (r) {
 			return {
 				board: r[0] || {},
@@ -317,7 +342,8 @@ return baseclass.extend({
 				ifaces: arr(r[2] && r[2]['interface']),
 				hints: r[3] || {},
 				leases: r[4] || {},
-				wifi: r[5] || {}
+				wifi: r[5] || {},
+				storage: r[6] || {}
 			};
 		});
 	},
@@ -325,6 +351,9 @@ return baseclass.extend({
 	hosts: function (hints, leases) { return hostsFrom(hints, leases); },
 	wan: function (ifaces) { return findWan(ifaces); },
 	lan: function (ifaces, wan) { return findLan(ifaces, wan); },
+	gateway: gatewayOf,
+	dns: dnsOf,
+	storage: storageOf,
 	ip4: ip4,
 	ip6: ip6,
 	hasDefaultRoute: hasDefaultRoute,

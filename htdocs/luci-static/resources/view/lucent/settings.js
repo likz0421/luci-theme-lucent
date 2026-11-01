@@ -47,6 +47,7 @@ var DEFAULTS = {
 	glass_alpha: '62',
 	bg_dim: '0',
 	density: 'cozy',
+	greeting: '1',
 	background: '',
 	logo_image: ''
 };
@@ -227,7 +228,7 @@ return view.extend({
 				])
 			]),
 			E('div', { 'class': 'ltc-hero-side' }, [
-				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Theme')), E('b', {}, 'Lucent 3.4')]),
+				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Theme')), E('b', {}, 'Lucent 3.5')]),
 				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Storage')), E('b', {}, _('Router media library'))]),
 				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Backend')), E('b', {}, 'rpcd · luci.lucent')])
 			])
@@ -413,6 +414,17 @@ return view.extend({
 			E('div', { 'class': 'ltc-row', 'style': 'margin-top:12px;flex-wrap:wrap' }, [fetchButton, fetchStatus])
 		]);
 
+		var homeBody = E([
+			field(_('Daily greeting line'), segmented([
+				{ value: '1', label: _('On') },
+				{ value: '0', label: _('Off') }
+			], self.cfg.greeting, function (greeting) {
+				self.cfg.greeting = greeting;
+				document.documentElement.dataset.greeting = greeting;
+				save('greeting', greeting);
+			}), _('When on, the home page fetches one line of the day from v1.hitokoto.cn and caches it for that date. Without internet it falls back to a built-in line.'))
+		]);
+
 		this.pluginBox = E('div', { 'class': 'ltc-plugins' });
 		this.pluginStatus = E('div', { 'class': 'ltc-status' });
 		this.renderPlugins();
@@ -437,6 +449,7 @@ return view.extend({
 				card(_('Mode and density'), _('Auto follows the phone or desktop preference.'), modeBody)
 			]),
 			card(_('Glass'), _('Tune blur, surface opacity and how much the wallpaper is dimmed.'), glassBody),
+			card(_('Home page'), _('Choose what the overview shows when you sign in.'), homeBody),
 			card(_('Background and logo'), _('A still image or a short looping video.'), wallBody),
 			card(_('Media library'), _('Uploaded images, videos and icons, plus fetched wallpapers.'), mediaBody),
 			card(_('Online wallpapers'), _('Download a fresh image directly to the router.'), onlineBody),

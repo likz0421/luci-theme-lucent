@@ -661,3 +661,69 @@ msgstr "无线"
 msgid "You must enable JavaScript in your browser or LuCI will not work properly."
 msgstr "必须启用 JavaScript，否则 LuCI 无法正常工作。"
 
+
+msgid "May every ping come back, and every packet find its way."
+msgstr "愿每一次 ping 都有回应，每一个数据包都能找到归途。"
+
+msgid "A steady router makes a calm home network."
+msgstr "路由器稳，家中网络才安稳。"
+
+msgid "Keep it cool, keep it connected."
+msgstr "保持清凉，保持在线。"
+
+msgid "Good signals make good days."
+msgstr "信号好，日子就好。"
+
+msgid "Small device, whole household online."
+msgstr "设备虽小，却连着全家。"
+
+msgid "Reboot not required today — that is a good omen."
+msgstr "今天无需重启，是个好兆头。"
+
+msgid "Bandwidth is a gift; use it kindly."
+msgstr "带宽是一份礼物，请善待它。"
+
+msgid "Firmware up to date, worries out of date."
+msgstr "固件常更新，烦恼常清零。"
+
+msgid "Active interfaces"
+msgstr "活动接口"
+
+msgid "Choose what the overview shows when you sign in."
+msgstr "选择登录后查看概览时展示的内容。"
+
+msgid "DNS"
+msgstr "DNS"
+
+msgid "Daily greeting line"
+msgstr "每日问候语"
+
+msgid "Details"
+msgstr "详情"
+
+msgid "Gateway"
+msgstr "网关"
+
+msgid "Home page"
+msgstr "首页"
+
+msgid "Hostname"
+msgstr "主机名"
+
+msgid "Local time"
+msgstr "本地时间"
+
+msgid "None"
+msgstr "无"
+
+msgid "System"
+msgstr "系统"
+
+msgid "WAN IPv6"
+msgstr "WAN IPv6"
+
+msgid "storage"
+msgstr "存储"
+
+msgid "When on, the home page fetches one line of the day from v1.hitokoto.cn and caches it for that date. Without internet it falls back to a built-in line."
+msgstr "开启后，首页会从 v1.hitokoto.cn 获取一句每日箴言并按日期缓存。无网络连接时自动回退到内置语句。"

@@ -1,6 +1,6 @@
 	{% if (!blank_page): %}
 				<footer class="ltc-foot">
-					<span>Lucent 3.4 · {{ version.luciname }} {{ version.luciversion }}</span>
+					<span>Lucent 3.5 · {{ version.luciname }} {{ version.luciversion }}</span>
 					<span>{{ version.distname }} {{ version.distversion }}</span>
 				</footer>
 			</main>

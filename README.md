@@ -6,7 +6,7 @@ surfaces, a device list and an appearance panel — but shares no templates,
 stylesheets, scripts or package metadata with them.
 
 - Target: OpenWrt 25.12.x, LuCI 26.x (ucode)
-- Package: `luci-theme-lucent` 3.4.0
+- Package: `luci-theme-lucent` 3.5.0
 - Licence: Apache-2.0
 
 ## Screenshots
@@ -151,27 +151,27 @@ ssh root@192.168.1.1 'sh /tmp/lucent-offline-install.sh install'
 
 | 固件 | 文件 |
 | --- | --- |
-| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.4.0-r1.apk` |
-| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.4.0-r1_all.ipk` |
-| 任意（无包管理器） | `lucent-3.4.0.tar.gz`（解压后 `./install.sh`） |
+| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.5.0-r1.apk` |
+| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.5.0-r1_all.ipk` |
+| 任意（无包管理器） | `lucent-3.5.0.tar.gz`（解压后 `./install.sh`） |
 
 apk:
 
 ```sh
-apk add --allow-untrusted ./luci-theme-lucent-3.4.0-r1.apk
+apk add --allow-untrusted ./luci-theme-lucent-3.5.0-r1.apk
 ```
 
 opkg:
 
 ```sh
-opkg install ./luci-theme-lucent_3.4.0-r1_all.ipk
+opkg install ./luci-theme-lucent_3.5.0-r1_all.ipk
 ```
 
 Manual:
 
 ```sh
-tar -xzf lucent-3.4.0.tar.gz -C /tmp
-cd /tmp/luci-theme-lucent-3.4.0 && ./install.sh
+tar -xzf lucent-3.5.0.tar.gz -C /tmp
+cd /tmp/luci-theme-lucent-3.5.0 && ./install.sh
 ```
 
 The package registers itself as `Lucent` in `/etc/config/luci` and selects

@@ -344,6 +344,22 @@ plugin_status() {
 	json_cleanup
 }
 
+storage() {
+	local mp size avail
+	json_init
+	for mp in / /overlay; do
+		size=$(df -kP "$mp" 2>/dev/null | awk 'NR==2{print $2}')
+		avail=$(df -kP "$mp" 2>/dev/null | awk 'NR==2{print $4}')
+		[ -n "$size" ] || continue
+		json_add_object "$mp"
+		json_add_int total "$(( size * 1024 ))"
+		json_add_int free "$(( avail * 1024 ))"
+		json_close_object
+	done
+	json_dump
+	json_cleanup
+}
+
 case "$1" in
 list)
 	json_init
@@ -366,6 +382,7 @@ list)
 		json_add_string "name" "str"
 	json_close_object
 	json_add_object "plugin_status"; json_close_object
+	json_add_object "storage"; json_close_object
 	json_dump
 	json_cleanup
 	;;
@@ -378,6 +395,7 @@ call)
 		plugin_check) plugin_check ;;
 		plugin_install) plugin_install ;;
 		plugin_status) plugin_status ;;
+		storage) storage ;;
 		*) err "Unknown method" ;;
 	esac
 	;;

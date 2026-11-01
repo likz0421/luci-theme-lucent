@@ -19,6 +19,7 @@
 	const alpha = cfg.glass_alpha ?? '62';
 	const dim = cfg.bg_dim ?? '0';
 	const density = cfg.density ?? 'cozy';
+	const greeting = cfg.greeting ?? '1';
 	const logo = cfg.logo_image ?? '';
 	const bg = cfg.background ?? '';
 	const lbg = lc(bg);
@@ -37,6 +38,7 @@
       data-blur="{{ entityencode(blur, true) }}"
       data-alpha="{{ entityencode(alpha, true) }}"
       data-dim="{{ entityencode(dim, true) }}"
+      data-greeting="{{ entityencode(greeting, true) }}"
       style="--glass-blur:{{ entityencode(blur, true) }}px;--glass-alpha:{{ entityencode(alpha, true) }}%;--bg-dim:{{ entityencode(dim, true) }}">
 <head>
 	<meta charset="utf-8">
@@ -51,7 +53,7 @@
 			root.dataset.theme = dark ? 'dark' : 'light';
 		})();
 	</script>
-	<link rel="stylesheet" href="{{ media }}/theme.css?v=3.4.0">
+	<link rel="stylesheet" href="{{ media }}/theme.css?v=3.5.0">
 	<link rel="icon" href="{{ media }}/logo.svg" sizes="any">
 	{% if (node?.css): %}
 	<link rel="stylesheet" href="{{ resource }}/{{ node.css }}">
