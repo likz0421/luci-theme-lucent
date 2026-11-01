@@ -3,6 +3,41 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.3 — 2026-11-02
+
+### Fixed
+
+- **Gateway and DNS cards were always empty on OpenWrt 22.03+.** netifd dumps
+  the default route's next hop as `route[].nexthop` (not `gateway`) and lists
+  resolver addresses under `dns-server` (not `dns-servers`/`dnsserver`). Both
+  shapes are now normalised, so gateway, DNS and the live 10s refresh work on
+  old and new releases alike.
+- **The update check could hang the dashboard.** `theme_check` used to run
+  `install.sh check` synchronously inside rpcd — up to four mirrors × 8s each,
+  blocking every other RPC. The probe now runs detached with a cached result
+  (15 min on success, 60 s on failure) and answers `{current, checking}`
+  instantly; the dashboard polls until a fresh verdict lands.
+- **SDK / feed builds shipped without the updater helper.** luci.mk only packs
+  luasrc/ucode/htdocs/root/src, so `install.sh`, the version marker and the
+  bundled `.lmo` catalogs were missing from source-built packages. A
+  `Build/Prepare/luci-theme-lucent` hook now injects all three.
+- **Dashboard rows were ragged on desktop.** Cards in the same row now stretch
+  to equal height, health rings centre, tags/lists/buttons pin to the card
+  bottom, KPI captions align, and wide screens (≥1280px) give the content
+  column a 1.55:1 share so the right-hand cards stop trailing large blanks.
+
+### Added
+
+- The dashboard now auto-checks for updates shortly after load and shows the
+  installed version immediately from the local package database — no button
+  press needed; the manual "Check for updates" button remains.
+- New live metrics: cumulative WAN traffic, DHCP lease count, multi-SSID WiFi
+  summary, available memory (buffer/cache aware), CPU cores, CPU temperature
+  (thermal_zone/hwmon), running/total processes and conntrack usage.
+- `scripts/po2lmo.js`: a Node port of upstream po2lmo used to regenerate the
+  Simplified Chinese catalog byte-for-byte (validated against the shipped
+  file); new UI strings are translated.
+
 ## 3.6.2 — 2026-11-01
 
 ### Fixed

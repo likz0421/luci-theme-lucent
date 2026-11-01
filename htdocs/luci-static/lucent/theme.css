@@ -306,7 +306,7 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 	border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);
 	backdrop-filter:blur(var(--glass-blur)) saturate(1.15);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.15);
 }
-.ltc-card{padding:18px}
+.ltc-card{padding:18px;display:flex;flex-direction:column}
 .cbi-section{padding:16px;margin-bottom:16px}
 .cbi-section-node{padding:0}
 .cbi-section > h3,.cbi-section > .cbi-section-node > h3,.cbi-title h3{
@@ -319,14 +319,16 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .cbi-section-node-tabbed>[data-tab][data-tab-active=true]{display:block}
 .cbi-tab-descr{margin:0 0 14px}
 
-.ltc-card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.ltc-card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;flex:none}
 .ltc-card-h .ltc-row{flex-wrap:wrap}
 .ltc-card-h h3{font-size:17px}
 .ltc-card-h .ltc-muted,.ltc-muted{color:var(--text-3);font-size:12px}
 .ltc-link{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--text-3);white-space:nowrap}
 .ltc-link:hover{color:var(--accent-2)}
 
-.ltc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px;align-items:start}
+.ltc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px;align-items:stretch}
+/* 宽屏下左右卡片按 1.55:1 分宽:内容多的左卡更宽,右卡变窄后留白明显减少 */
+@media (min-width:1280px){.ltc-grid{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
 .ltc-span-2{grid-column:span 2}
 .ltc-stack{display:flex;flex-direction:column;gap:16px}
 .ltc-row{display:flex;align-items:center;gap:10px;min-width:0}
@@ -350,7 +352,8 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-hero .ltc-hero-sub{color:var(--text-2);font-size:13.5px;margin:0;max-width:52ch}
 .ltc-hero-quote{display:flex;align-items:center;gap:8px;margin:10px 0 0;max-width:56ch;font-size:13px;font-style:italic;color:var(--text-2);line-height:1.5}
 .ltc-hero-quote::before{content:"“";font-style:normal;font-weight:700;font-size:20px;line-height:1;color:var(--accent);opacity:.7;flex:none}
-.ltc-update{display:flex;flex-direction:column;gap:8px}
+.ltc-update{display:flex;flex-direction:column;gap:8px;flex:1}
+.ltc-update .ltc-row{margin-top:auto}
 .ltc-update .ltc-help{min-height:2.6em}
 .ltc-update b{font-weight:600;color:var(--text)}
 .ltc-hero-side{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:0}
@@ -360,10 +363,10 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 
 .ltc-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-.ltc-kpi{padding:14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0}
+.ltc-kpi{padding:14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0;display:flex;flex-direction:column}
 .ltc-kpi small{display:block;color:var(--text-3);font-size:11.5px;margin-bottom:4px}
 .ltc-kpi b{display:block;font:600 22px/1.2 var(--serif);overflow-wrap:anywhere}
-.ltc-kpi span{display:block;color:var(--text-3);font-size:11.5px;margin-top:3px;overflow-wrap:anywhere}
+.ltc-kpi span{display:block;color:var(--text-3);font-size:11.5px;margin-top:auto;padding-top:3px;overflow-wrap:anywhere}
 
 .ltc-topo{display:flex;align-items:flex-start;gap:2px;margin:6px 0 14px;min-width:0}
 .ltc-node{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
@@ -379,12 +382,13 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-wire.down i{background:repeating-linear-gradient(90deg,var(--bad) 0 5px,transparent 5px 10px);opacity:.65}
 .ltc-wire em{font-size:10px;color:var(--text-3);font-style:normal;margin-top:7px;white-space:nowrap}
 
-.ltc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:13px 10px;padding-top:14px;border-top:1px solid var(--line-2)}
+.ltc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:13px 10px;padding-top:14px;border-top:1px solid var(--line-2);margin-top:auto}
+.ltc-facts:only-child{margin-top:0;flex:1;align-content:space-evenly}
 .ltc-facts div{min-width:0}
 .ltc-facts small{display:block;color:var(--text-3);font-size:11px;margin-bottom:2px}
 .ltc-facts b{display:block;font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
 
-.ltc-rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0 8px}
+.ltc-rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0 8px;flex:1;align-content:center}
 .ltc-ring{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
 .ltc-ring .dial{
 	--val:0;width:78px;height:78px;border-radius:50%;display:grid;place-items:center;position:relative;
@@ -393,7 +397,7 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-ring .dial::before{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--card)}
 .ltc-ring .dial b{position:relative;font:600 16px/1 var(--serif)}
 .ltc-ring small{color:var(--text-3);font-size:11.5px;text-align:center}
-.ltc-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.ltc-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto;padding-top:8px}
 .ltc-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;background:var(--card-2);color:var(--text-2);font-size:11px;max-width:100%}
 .ltc-tag b{font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ltc-tag:empty{display:none}
@@ -408,7 +412,7 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-dot.off{background:var(--text-3);box-shadow:none}
 .ltc-empty{padding:18px 10px;text-align:center;color:var(--text-3);font-size:12.5px}
 
-.ltc-acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ltc-acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:1;align-content:space-evenly}
 .ltc-act{display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)!important;font:500 12.5px var(--sans);text-align:left;cursor:pointer;min-width:0;text-decoration:none!important}
 .ltc-act:hover{background:var(--tint)}
 .ltc-act svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
