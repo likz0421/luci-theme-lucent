@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$(sed -n 's/^PKG_VERSION:=//p' Makefile)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build artifacts (Alpine container)
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE":/w -w /w alpine:3.22 \
+            sh -c 'apk add --no-cache bash coreutils findutils gnu-tar python3 zip &&
+                   bash scripts/build-ipk.sh &&
+                   bash scripts/build-apk.sh &&
+                   bash scripts/build-onekey.sh &&
+                   bash scripts/build-tar.sh &&
+                   bash scripts/build-src.sh &&
+                   bash scripts/checksums.sh'
+
+      - name: Compose release notes
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          VER="${TAG#v}"
+          {
+            echo "## Lucent $VER"
+            echo
+            awk -v v="$VER" '
+              $0 ~ "^## " v {inb=1; next}
+              inb && /^## / {inb=0}
+              inb {print}
+            ' CHANGELOG.md
+            echo
+            echo '### 安装 / 升级'
+            echo '```sh'
+            echo '# 一键在线安装(国内网络可改用 jsDelivr 镜像)'
+            echo "wget -qO- https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | sh"
+            echo "wget -qO- https://cdn.jsdelivr.net/gh/$GITHUB_REPOSITORY@main/install.sh | sh"
+            echo '```'
+            echo
+            echo '已安装 Lucent 的用户可直接在主题首页的「更新」卡片一键升级。'
+          } > notes.md
+          cat notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "Lucent ${TAG#v}" \
+            --notes-file notes.md \
+            --latest
+
+      - name: Sync latest pointers to main
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          VER="${TAG#v}"
+          git fetch --no-tags origin "$DEFAULT_BRANCH"
+          git worktree add /tmp/main "origin/$DEFAULT_BRANCH"
+          cp dist/latest.txt dist/latest-apk.txt dist/latest-onekey.txt /tmp/main/
+          REL=$(sed -n 's/^PKG_RELEASE:=//p' /tmp/main/Makefile)
+          sed -i \
+            -e "s|^LUCENT_VERSION_DEFAULT=.*|LUCENT_VERSION_DEFAULT=\"${VER}-r${REL}\"|" \
+            -e "s|^LUCENT_TAG_DEFAULT=.*|LUCENT_TAG_DEFAULT=\"${TAG}\"|" \
+            /tmp/main/install.sh
+          cd /tmp/main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.txt latest-apk.txt latest-onekey.txt install.sh
+          if git diff --cached --quiet; then
+            echo "pointers already current"
+          else
+            git commit -m "release: point latest files to ${TAG}"
+            git push origin "HEAD:$DEFAULT_BRANCH"
+          fi
