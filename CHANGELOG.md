@@ -3,6 +3,16 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.8 — 2026-11-02
+
+### Added
+
+- **Home network card now mirrors the status-page uplink details.** Three more
+  fields, all read from the existing `network.interface` dump at no extra
+  cost: WAN device (e.g. `pppoe-wan`), WAN connected time (`uptime`) and DHCP
+  lease remaining (`ipv4-address[].valid`); the last two refresh with the
+  10-second poll.
+
 ## 3.6.7 — 2026-11-02
 
 ### Fixed

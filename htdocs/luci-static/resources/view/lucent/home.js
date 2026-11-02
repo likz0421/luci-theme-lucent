@@ -239,6 +239,11 @@ return view.extend({
 		var storage = util.storage(data.storage);
 		set('[data-live=gateway]', gwv || '–');
 		set('[data-live=dns]', dnsv.length ? dnsv.slice(0, 2).join('  ') : '–');
+		if (wan && wan.uptime != null)
+			set('[data-live=wan-up]', util.fmtDuration(wan.uptime));
+		var liveAddr = util.arr(wan && wan['ipv4-address'])[0];
+		if (liveAddr && liveAddr.valid != null)
+			set('[data-live=lease]', util.fmtDuration(liveAddr.valid));
 		set('[data-live=storage]', storage ? storage.percent + '%' : '–');
 		set('[data-live=storage-sub]', storage
 			? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–');
@@ -493,6 +498,12 @@ return view.extend({
 			node('wifi', _('WiFi'), wifi.up ? 'ok' : '')
 		]);
 
+		var leaseRem = '–';
+		var addr4 = util.arr(wan && wan['ipv4-address'])[0];
+		if (addr4 && addr4.valid != null)
+			leaseRem = util.fmtDuration(addr4.valid);
+		var wanUp = (wan && wan.uptime != null) ? util.fmtDuration(wan.uptime) : '–';
+
 		var facts = E('div', { 'class': 'ltc-facts' }, [
 			fact(_('Firmware'), release),
 			fact(_('Kernel'), board.kernel || '–'),
@@ -500,9 +511,12 @@ return view.extend({
 			fact(_('LAN address'), lanIp || '–'),
 			fact(_('WiFi'), wifiStr),
 			fact(_('WAN protocol'), wan ? (wan.proto || '–') : '–'),
+			fact(_('WAN device'), devName || '–'),
 			fact(_('Gateway'), gw || '–', 'gateway'),
 			fact(_('DNS'), dnsStr, 'dns'),
 			fact(_('WAN IPv6'), wan6 || '–'),
+			fact(_('WAN uptime'), wanUp, 'wan-up'),
+			fact(_('Lease remaining'), leaseRem, 'lease'),
 			fact(_('Total traffic'), totalStr, 'traffic-total'),
 			fact(_('DHCP leases'), String(leaseCount)),
 			fact(_('Load average'), loads.length ? '%.2f  %.2f  %.2f'.format(loads[0] || 0, loads[1] || 0, loads[2] || 0) : '–')
