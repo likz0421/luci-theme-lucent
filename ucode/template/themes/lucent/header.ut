@@ -54,8 +54,9 @@
 			var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 			root.dataset.theme = dark ? 'dark' : 'light';
 			try {
+				var w = innerWidth;
 				var rail = localStorage.getItem('lucent.rail');
-				if (rail === '1' || (!rail && innerWidth < 1200))
+				if (w >= 981 && (rail === '1' || (!rail && w < 1200)))
 					root.dataset.rail = '1';
 			} catch (e) {}
 		})();

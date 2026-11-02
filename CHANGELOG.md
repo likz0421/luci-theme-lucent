@@ -3,6 +3,18 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.4 — 2026-11-02
+
+### Fixed
+
+- **Mobile layout was wrecked by the icon rail (regression from 3.6.9).**
+  The "auto-collapse below 1200px" rule also fired on phones: `font-size:0`
+  hid menu labels, the grid was forced to 64px + content, submenu flyouts
+  covered the page, and the sidebar collapsed into a sliver. Rail mode is
+  now hard-gated to viewports ≥981px in both the CSS (all `[data-rail]`
+  rules wrapped in a media query) and the bootstrap script, so phones always
+  get the drawer layout. Verified at 500px with rail forced on.
+
 ## 3.7.3 — 2026-11-02
 
 ### Fixed
