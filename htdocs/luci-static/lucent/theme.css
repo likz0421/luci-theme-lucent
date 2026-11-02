@@ -192,7 +192,11 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 [data-rail="1"] .ltc-nav a{justify-content:center;gap:0;padding:8px;font-size:0}
 [data-rail="1"] .ltc-nav a svg.ltc-nav-ic{width:18px;height:18px}
 [data-rail="1"] .ltc-nav a.menu::after{display:none}
-[data-rail="1"] .ltc-nav ul.dropdown-menu{display:none!important}
+[data-rail="1"] .ltc-nav{overflow:visible}
+[data-rail="1"] .ltc-nav>ul>li{position:relative}
+[data-rail="1"] .ltc-nav ul.dropdown-menu{display:none;position:absolute;left:calc(100% - 2px);top:-4px;z-index:40;min-width:190px;margin:0;padding:8px 9px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:var(--shadow)}
+[data-rail="1"] .ltc-nav>ul>li:hover ul.dropdown-menu,[data-rail="1"] .ltc-nav>ul>li:focus-within ul.dropdown-menu{display:block}
+[data-rail="1"] .ltc-nav ul.dropdown-menu a{justify-content:flex-start;gap:7px;padding:6px 9px;font-size:12.5px}
 [data-rail="1"] .ltc-modes{display:none}
 [data-rail="1"] .ltc-side-foot{justify-content:center}
 [data-rail="1"] .ltc-rail-btn svg{transform:rotate(180deg)}

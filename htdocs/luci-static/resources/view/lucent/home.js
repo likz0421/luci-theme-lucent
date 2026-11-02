@@ -242,8 +242,17 @@ return view.extend({
 		if (wan && wan.uptime != null)
 			set('[data-live=wan-up]', util.fmtDuration(wan.uptime));
 		var liveAddr = util.arr(wan && wan['ipv4-address'])[0];
-		if (liveAddr && liveAddr.valid != null)
+		if (liveAddr && liveAddr.valid != null) {
 			set('[data-live=lease]', util.fmtDuration(liveAddr.valid));
+		}
+		else {
+			var live6 = data.ifaces.filter(function (i) { return i && i.interface === 'wan6'; })[0];
+			var la6 = util.arr(live6 && live6['ipv6-address'])[0];
+			var lp6 = util.arr(live6 && live6['ipv6-prefix-assignment'])[0];
+			var lv6 = (la6 && la6.valid != null) ? la6.valid : (lp6 && lp6.valid != null ? lp6.valid : null);
+			if (lv6 != null)
+				set('[data-live=lease]', util.fmtDuration(lv6) + ' (v6)');
+		}
 		set('[data-live=storage]', storage ? storage.percent + '%' : '–');
 		set('[data-live=storage-sub]', storage
 			? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–');
@@ -502,6 +511,15 @@ return view.extend({
 		var addr4 = util.arr(wan && wan['ipv4-address'])[0];
 		if (addr4 && addr4.valid != null)
 			leaseRem = util.fmtDuration(addr4.valid);
+		else {
+			/* PPPoE has no v4 lease; fall back to the DHCPv6 upstream. */
+			var wan6i = data.ifaces.filter(function (i) { return i && i.interface === 'wan6'; })[0];
+			var a6 = util.arr(wan6i && wan6i['ipv6-address'])[0];
+			var p6 = util.arr(wan6i && wan6i['ipv6-prefix-assignment'])[0];
+			var v6 = (a6 && a6.valid != null) ? a6.valid : (p6 && p6.valid != null ? p6.valid : null);
+			if (v6 != null)
+				leaseRem = util.fmtDuration(v6) + ' (v6)';
+		}
 		var wanUp = (wan && wan.uptime != null) ? util.fmtDuration(wan.uptime) : '–';
 
 		var facts = E('div', { 'class': 'ltc-facts' }, [

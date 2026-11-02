@@ -3,6 +3,21 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.9 — 2026-11-02
+
+### Fixed / Added
+
+- **Lease remaining was "–" for PPPoE uplinks.** PPPoE assigns its IPv4
+  address without a DHCP lease, so there was nothing to count down. The
+  field now falls back to the DHCPv6 upstream (`wan6` address or prefix
+  validity, shown with a `(v6)` suffix), matching what the native status
+  page displays as 剩余有效期.
+- **Sidebar now auto-collapses.** On load, widths below 1200px start in the
+  icon rail unless the user has toggled it manually (that choice still wins
+  and persists).
+- **Rail mode is usable.** Group submenus now fly out beside the collapsed
+  rail on hover/focus instead of being hidden entirely.
+
 ## 3.6.8 — 2026-11-02
 
 ### Added
