@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Lucent runtime harness</title>
+<link rel="stylesheet" href="../htdocs/luci-static/lucent/theme.css">
+<style>
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Microsoft YaHei",sans-serif;font-size:14px}
+main{max-width:1560px;margin:0 auto;padding:20px}
+</style>
+</head>
+<body>
+<main id="root"><div style="padding:40px">loading…</div></main>
+<script>
+/* Minimal LuCI shim so the real view modules can run outside OpenWrt. */
+var SVG_TAGS = ['svg','path','circle','rect','g','defs','lineargradient','stop','line','polyline','polygon','text','tspan','use','filter','clippath'];
+function E(tag, attrs, children) {
+	if (Array.isArray(tag)) {
+		var frag = document.createDocumentFragment();
+		tag.forEach(function (k) {
+			if (k == null || k === false || k === '')
+				return;
+			frag.appendChild(k instanceof Node ? k : E(k));
+		});
+		return frag;
+	}
+
+	var el = SVG_TAGS.indexOf(String(tag).toLowerCase()) >= 0
+		? document.createElementNS('http://www.w3.org/2000/svg', tag)
+		: document.createElement(tag);
+
+	function add(kids) {
+		(kids == null ? [] : (Array.isArray(kids) ? kids : [kids])).forEach(function (k) {
+			if (k == null || k === false || k === '')
+				return;
+			if (typeof k === 'number')
+				k = String(k);
+			if (Array.isArray(k))
+				return add(k);
+			if (k instanceof Node)
+				el.appendChild(k);
+			else
+				el.appendChild(document.createTextNode(String(k)));
+		});
+	}
+
+	if (attrs && typeof attrs === 'object' && !(attrs instanceof Node) && !Array.isArray(attrs)) {
+		Object.keys(attrs).forEach(function (k) {
+			var v = attrs[k];
+			if (typeof v === 'function')
+				el.addEventListener(k.replace(/^on/, ''), v);
+			else if (v === true)
+				el.setAttribute(k, '');
+			else if (v != null && v !== false)
+				el.setAttribute(k, v);
+		});
+		add(children);
+	}
+	else {
+		add(attrs);
+	}
+	return el;
+}
+window.E = E;
+window._ = function (s) { return s; };
+if (!String.prototype.format) {
+	String.prototype.format = function () {
+		var args = Array.prototype.slice.call(arguments), i = 0;
+		return String(this).replace(/%(\d*\.?\d*)?([sdfj%])/g, function (m, num, type) {
+			if (type === '%')
+				return '%';
+			var a = args[i++];
+			switch (type) {
+				case 'd': return String(parseInt(a, 10));
+				case 'f': return num && num.indexOf('.') >= 0 ? Number(a).toFixed(parseInt(num.split('.')[1], 10)) : String(Number(a));
+				case 'j': return JSON.stringify(a);
+				default: return a == null ? '' : String(a);
+			}
+		});
+	};
+}
+window.L = {
+	url: function () { return '#'; },
+	bind: function (f, c) { return f.bind(c); },
+	resolveDefault: function (p, d) { return Promise.resolve(p).catch(function () { return d; }); },
+	env: {}
+};
+
+var NOW = Math.floor(Date.now() / 1000);
+var MOCK = {
+	'system.board': { boardname: 'OpenWrt', hostname: 'OpenWrt', model: 'Test Router', kernel: '6.12.112', system: 'test arch', release: { description: 'OpenWrt 25.12.6', revision: 'r33311' } },
+	'system.info': { uptime: 46213, localtime: NOW, memory: { total: 506507264, free: 120586240, buffered: 33554432, cache: 67108864 }, load: [16384, 8192, 4096] },
+	'network.interface.dump': { 'interface': [
+		{ interface: 'loopback', up: true },
+		{ interface: 'wan', up: true, proto: 'pppoe', device: 'pppoe-wan', l3_device: 'pppoe-wan', uptime: 3600,
+			'ipv4-address': [{ address: '100.64.1.2' }],
+			route: [{ target: '0.0.0.0', mask: 0, nexthop: '100.64.0.1' }],
+			'dns-server': ['119.8.8.8', '114.114.114.114'] },
+		{ interface: 'wan6', up: true, proto: 'dhcpv6',
+			'ipv6-address': [{ address: '2408:8266::2', valid: 2490 }],
+			route: [{ target: '::', mask: 0, nexthop: 'fe80::1' }] },
+		{ interface: 'lan', up: true, proto: 'static', l3_device: 'br-lan',
+			'ipv4-address': [{ address: '192.168.1.1' }] }
+	] },
+	'luci-rpc.getHostHints': { 'aa:bb:cc:00:00:01': { name: 'phone', mac: 'aa:bb:cc:00:00:01', ipaddrs: ['192.168.1.30'] } },
+	'luci-rpc.getDHCPLeases': { dhcp_leases: [
+		{ macaddr: 'aa:bb:cc:00:00:01', hostname: 'phone', ipaddr: '192.168.1.30', expires: NOW + 7200 },
+		{ macaddr: 'aa:bb:cc:00:00:02', hostname: 'laptop', ipaddr: '192.168.1.31', expires: NOW + 86400 }
+	] },
+	'luci-rpc.getWirelessDevices': { radio0: { up: true, interfaces: [{ config: { ssid: 'MyHome-2.4G' } }] }, radio1: { up: true, interfaces: [{ config: { ssid: 'MyHome-5G' } }] } },
+	'luci-rpc.getNetworkDevices': { 'pppoe-wan': { statistics: { rx_bytes: 1258291200, tx_bytes: 356515840 } }, 'br-lan': { statistics: { rx_bytes: 999, tx_bytes: 888 } } },
+	'luci.lucent.storage': { '/': { total: 103079215, free: 76545000 } },
+	'luci.lucent.overview': { version: '3.7.2-r1', cores: 2, load1: '0.25', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
+	'luci.lucent.theme_check': { current: '3.7.2-r1', latest: '3.7.3', available: true },
+	'luci.lucent.theme_status': { running: 0, code: -1, log: '' },
+	'luci.lucent.pkg_updates': { count: 4 }
+};
+
+var rpc = { declare: function (spec) {
+	return function () {
+		var key = spec.object + '.' + spec.method;
+		return Promise.resolve(MOCK[key] !== undefined ? MOCK[key] : {});
+	};
+} };
+var baseclass = {
+	extend: function (o) {
+		var res = Object.create(baseclass);
+		Object.keys(o).forEach(function (k) { res[k] = o[k]; });
+		return res;
+	}
+};
+var uci = { load: function () { return Promise.resolve(); }, get: function () { return null; }, set: function () {}, save: function () { return Promise.resolve(); } };
+var poll = { add: function () {} };
+var view = baseclass;
+
+async function mod(path, name) {
+	var src = await (await fetch(path)).text();
+	var fn = new Function('L', 'rpc', 'baseclass', 'uci', 'poll', 'view', 'E', '_', 'core', 'util', src);
+	return fn(L, rpc, baseclass, uci, poll, view, E, window._, registry.core, registry.util);
+}
+
+var registry = { core: null, util: null };
+var base = '../htdocs/luci-static/resources/';
+
+(async function () {
+	registry.util = await mod(base + 'lucent/util.js');
+	registry.core = await mod(base + 'lucent/core.js');
+	var home = await mod(base + 'view/lucent/home.js');
+	var clients = await mod(base + 'view/lucent/clients.js');
+
+	var v = Object.create(home);
+	v.load().then(function (d) {
+		var el = v.render(d);
+		document.getElementById('root').textContent = '';
+		document.getElementById('root').appendChild(el);
+		window.__home = v;
+		return new Promise(function (r) { setTimeout(r, 1500); }).then(function () {
+			var c = Object.create(clients);
+			return c.load().then(function (cd) {
+				document.getElementById('root').appendChild(c.render(cd));
+				document.title = 'HARNESS_READY';
+			});
+		});
+	}).catch(function (err) {
+		document.getElementById('root').textContent = 'RUNTIME ERROR: ' + (err && err.stack || err);
+		document.title = 'HARNESS_ERROR';
+	});
+})();
+</script>
+</body>
+</html>

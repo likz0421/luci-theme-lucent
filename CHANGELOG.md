@@ -3,6 +3,22 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.3 — 2026-11-02
+
+### Fixed
+
+- **Lone card left a 40% gap on wide screens.** The ≥1280px two-column grid
+  rule also applied to rows holding a single card (the system card, now that
+  updates moved to the top banner); lone cards span the full row again.
+
+### Verified
+
+- Release checked with an end-to-end runtime harness (real home.js,
+  clients.js, core.js, util.js and theme.css rendered against mocked ubus
+  data in a browser at mobile and desktop widths): update banner, lease
+  countdown `(v6)` fallback, gateway/DNS/WAN fields, rings, devices table and
+  clients auto-refresh all render without errors.
+
 ## 3.7.2 — 2026-11-02
 
 ### Fixed

@@ -357,6 +357,7 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px;align-items:stretch}
 /* 宽屏下左右卡片按 1.55:1 分宽:内容多的左卡更宽,右卡变窄后留白明显减少 */
 @media (min-width:1280px){.ltc-grid{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+.ltc-grid>section:only-child{grid-column:1/-1}
 .ltc-span-2{grid-column:span 2}
 .ltc-stack{display:flex;flex-direction:column;gap:16px}
 .ltc-row{display:flex;align-items:center;gap:10px;min-width:0}
