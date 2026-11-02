@@ -1,6 +1,10 @@
+{%
+	const vraw = ubus.call('file', 'read', { path: '/usr/share/lucent/version' });
+	const lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
+-%}
 	{% if (!blank_page): %}
 				<footer class="ltc-foot">
-					<span>Lucent 3.6 · {{ version.luciname }} {{ version.luciversion }}</span>
+					<span>Lucent {{ lver != '' ? lver : '3' }} · {{ version.luciname }} {{ version.luciversion }}</span>
 					<span>{{ version.distname }} {{ version.distversion }}</span>
 				</footer>
 			</main>

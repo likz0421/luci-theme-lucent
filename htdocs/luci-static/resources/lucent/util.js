@@ -216,12 +216,21 @@ function hostsFrom(hints, leases) {
 			pushUnique(rec.ips, l.ipaddr);
 		arr(l.ip6addrs || l.ip6addr).forEach(function (ip) { pushUnique(rec.v6, ip); });
 
-		if (l.expires === false || (typeof l.expires === 'number' && l.expires > 0)) {
+		/* dnsmasq/odhcpd report `expires` as an absolute epoch; false means
+		   a permanent (static) lease. */
+		if (l.expires === false) {
 			rec.online = true;
-			rec.lease = (l.expires === false) ? '∞' : fmtDuration(l.expires);
+			rec.lease = '∞';
 		}
-		else if (rec.lease == null) {
-			rec.lease = 'expired';
+		else if (typeof l.expires === 'number') {
+			var remaining = l.expires - Math.floor(Date.now() / 1000);
+			if (remaining > 0) {
+				rec.online = true;
+				rec.lease = fmtDuration(remaining);
+			}
+			else if (rec.lease == null) {
+				rec.lease = 'expired';
+			}
 		}
 	}
 
@@ -409,6 +418,7 @@ return baseclass.extend({
 	checkUpdate: function () { return callThemeCheck(); },
 	startUpdate: function () { return callThemeUpdate(); },
 	updateStatus: function () { return callThemeStatus(); },
+	overview: function () { return callOverview(); },
 	ip4: ip4,
 	ip6: ip6,
 	hasDefaultRoute: hasDefaultRoute,

@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=3.6.4
+PKG_VERSION:=3.6.5
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard

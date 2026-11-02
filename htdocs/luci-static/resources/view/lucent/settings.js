@@ -192,7 +192,8 @@ return view.extend({
 		return Promise.all([
 			uci.load('lucent'),
 			L.resolveDefault(callMediaList(), { items: [] }),
-			L.resolveDefault(callPluginCheck(), { items: [] })
+			L.resolveDefault(callPluginCheck(), { items: [] }),
+			L.resolveDefault(util.overview(), {})
 		]).then(function (r) {
 			var cfg = {};
 
@@ -204,7 +205,8 @@ return view.extend({
 			return {
 				cfg: cfg,
 				media: (r[1] && r[1].items) || [],
-				plugins: (r[2] && r[2].items) || []
+				plugins: (r[2] && r[2].items) || [],
+				net: r[3] || {}
 			};
 		});
 	},
@@ -228,7 +230,7 @@ return view.extend({
 				])
 			]),
 			E('div', { 'class': 'ltc-hero-side' }, [
-				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Theme')), E('b', {}, 'Lucent 3.6')]),
+				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Theme')), E('b', {}, 'Lucent ' + ((data.net && data.net.version) || '3'))]),
 				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Storage')), E('b', {}, _('Router media library'))]),
 				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Backend')), E('b', {}, 'rpcd · luci.lucent')])
 			])

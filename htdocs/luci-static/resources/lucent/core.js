@@ -2,8 +2,21 @@
 'require baseclass';
 'require uci';
 'require rpc';
+'require lucent.util as util';
 
 var callCommit = rpc.declare({ object: 'uci', method: 'commit', params: ['config'] });
+
+/* Sidebar menu icons keyed by the first path segment after /admin/. */
+var MENU_ICONS = {
+	home: 'home',
+	clients: 'devices',
+	status: 'info',
+	system: 'sliders',
+	network: 'network',
+	services: 'globe',
+	vpn: 'shield',
+	logout: 'x'
+};
 
 /* Small, dependency-light front-end helpers shared by the theme pages. */
 return baseclass.extend({
@@ -241,10 +254,30 @@ return baseclass.extend({
 			return;
 		var self = this;
 		if (window.MutationObserver) {
-			new MutationObserver(function () { self.markActive(); })
+			new MutationObserver(function () {
+				self.decorateIcons();
+				self.markActive();
+			})
 				.observe(menu, { childList: true, subtree: true });
 		}
-		setTimeout(function () { self.markActive(); }, 250);
+		setTimeout(function () {
+			self.decorateIcons();
+			self.markActive();
+		}, 250);
+	},
+
+	/* LuCI builds the menu as plain text links; prepend a small SVG glyph to
+	   top-level entries. Idempotent so the observer can run it on every
+	   mutation without stacking icons. */
+	decorateIcons: function () {
+		document.querySelectorAll('.ltc-nav > ul > li > a.menu').forEach(function (a) {
+			if (a.querySelector('svg'))
+				return;
+			var m = /\/admin\/([a-z0-9_-]+)/i.exec(a.getAttribute('href') || '');
+			var name = m && MENU_ICONS[m[1].toLowerCase()];
+			if (name)
+				a.insertBefore(util.icon(name, 'ltc-nav-ic'), a.firstChild);
+		});
 	},
 
 	markActive: function () {

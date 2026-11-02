@@ -3,6 +3,24 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.5 — 2026-11-02
+
+### Added
+
+- **Sidebar menu icons.** Top-level navigation entries (Home, Devices, Status,
+  System, Network, Services, VPN, Logout) now get a small stroke SVG glyph,
+  injected once LuCI's menu is built and kept idempotent across menu updates.
+
+### Fixed
+
+- **DHCP lease remaining time was wrong.** dnsmasq/odhcpd report `expires` as
+  an absolute epoch, but the theme formatted it as a raw duration, so lease
+  columns showed absurd values (years) and expired leases counted as active.
+  Remaining time and online state are now computed against the current clock.
+- **Hardcoded "Lucent 3.6" strings** in the page footer and the Appearance
+  header now read the installed version (`/usr/share/lucent/version`, falling
+  back to the overview RPC on the Appearance page), so they never go stale.
+
 ## 3.6.4 — 2026-11-02
 
 ### Fixed
