@@ -805,3 +805,6 @@ msgstr "并发连接数"
 
 msgid "available"
 msgstr "可用内存"
+
+msgid "Collapse sidebar"
+msgstr "折叠侧边栏"

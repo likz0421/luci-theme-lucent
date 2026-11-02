@@ -21,6 +21,8 @@
 	const density = cfg.density ?? 'cozy';
 	const greeting = cfg.greeting ?? '1';
 	const logo = cfg.logo_image ?? '';
+	const vraw = ubus.call('file', 'read', { path: '/usr/share/lucent/version' });
+	const lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
 	const bg = cfg.background ?? '';
 	const lbg = lc(bg);
 
@@ -51,9 +53,10 @@
 			var mode = root.dataset.mode || 'auto';
 			var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 			root.dataset.theme = dark ? 'dark' : 'light';
+			try { if (localStorage.getItem('lucent.rail') === '1') root.dataset.rail = '1'; } catch (e) {}
 		})();
 	</script>
-	<link rel="stylesheet" href="{{ media }}/theme.css?v=3.6.2">
+	<link rel="stylesheet" href="{{ media }}/theme.css?v={{ lver != '' ? lver : '3' }}">
 	<link rel="icon" href="{{ media }}/logo.svg" sizes="any">
 	{% if (node?.css): %}
 	<link rel="stylesheet" href="{{ resource }}/{{ node.css }}">

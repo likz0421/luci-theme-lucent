@@ -184,6 +184,18 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 }
 .ltc-icon-btn:hover{background:var(--card-2);color:var(--text)}
 .ltc-icon-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ltc-rail-btn{display:none}
+@media (min-width:981px){.ltc-rail-btn{display:inline-flex}}
+[data-rail="1"] .ltc-shell{grid-template-columns:64px minmax(0,1fr)}
+[data-rail="1"] .ltc-brand{justify-content:center}
+[data-rail="1"] .ltc-brand-t{display:none}
+[data-rail="1"] .ltc-nav a{justify-content:center;gap:0;padding:8px;font-size:0}
+[data-rail="1"] .ltc-nav a svg.ltc-nav-ic{width:18px;height:18px}
+[data-rail="1"] .ltc-nav a.menu::after{display:none}
+[data-rail="1"] .ltc-nav ul.dropdown-menu{display:none!important}
+[data-rail="1"] .ltc-modes{display:none}
+[data-rail="1"] .ltc-side-foot{justify-content:center}
+[data-rail="1"] .ltc-rail-btn svg{transform:rotate(180deg)}
 .ltc-burger{display:none}
 
 .ltc-content{width:100%;max-width:1280px;margin:0 auto;padding:clamp(18px,2.6vw,32px) clamp(16px,2.6vw,30px) 46px;flex:1;min-width:0}

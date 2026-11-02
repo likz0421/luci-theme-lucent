@@ -3,6 +3,32 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.6 — 2026-11-02
+
+### Fixed
+
+- **theme.css was cached forever after upgrades.** The stylesheet URL was
+  pinned to `?v=3.6.2`, so browsers reused stale CSS across updates and new
+  styling never appeared without a hard reload. The cache-buster now carries
+  the installed version read from `/usr/share/lucent/version`.
+- **Menu icons missed leaf entries.** LuCI gives `a.menu` only to group
+  headers; plain links (Home, Devices, Logout) have no class. All top-level
+  anchors are now decorated, group headers resolve their icon via the first
+  child link, unknown entries fall back to a generic glyph, and each link
+  gets a tooltip with its label.
+- **CPU temperature showed "–" on SoCs that report millidegrees.** Thermal
+  zone values like `46000` failed the sanity window and were discarded;
+  values ≥ 1000 are now normalised from millidegrees before comparison.
+  (Devices with no thermal sensor at all still show "–" — there is nothing
+  to read.)
+
+### Added
+
+- **Collapsible sidebar.** A chevron button in the sidebar footer collapses
+  the rail to icons-only (64px); the state persists in localStorage and is
+  applied before first paint, so there is no flash on load. Hidden on
+  phones, where the drawer already covers this.
+
 ## 3.6.5 — 2026-11-02
 
 ### Added

@@ -83,6 +83,7 @@ return baseclass.extend({
 		this.markActive();
 		this.observeMenu();
 		this.initSearch();
+		this.initRail();
 	},
 
 	initSearch: function () {
@@ -270,14 +271,48 @@ return baseclass.extend({
 	   top-level entries. Idempotent so the observer can run it on every
 	   mutation without stacking icons. */
 	decorateIcons: function () {
-		document.querySelectorAll('.ltc-nav > ul > li > a.menu').forEach(function (a) {
+		document.querySelectorAll('.ltc-nav > ul > li > a').forEach(function (a) {
 			if (a.querySelector('svg'))
 				return;
-			var m = /\/admin\/([a-z0-9_-]+)/i.exec(a.getAttribute('href') || '');
-			var name = m && MENU_ICONS[m[1].toLowerCase()];
-			if (name)
-				a.insertBefore(util.icon(name, 'ltc-nav-ic'), a.firstChild);
+
+			var href = a.getAttribute('href') || '';
+			if (!href || href === '#') {
+				var sub = a.parentElement.querySelector('ul.dropdown-menu a[href]');
+				href = sub ? sub.getAttribute('href') : '';
+			}
+
+			var m = /\/admin\/([a-z0-9_-]+)/i.exec(href);
+			var name = (m && MENU_ICONS[m[1].toLowerCase()]) || 'link';
+			var label = (a.textContent || '').replace(/\s+/g, ' ').trim();
+
+			if (label)
+				a.title = label;
+			a.insertBefore(util.icon(name, 'ltc-nav-ic'), a.firstChild);
 		});
+	},
+
+	initRail: function () {
+		var side = document.querySelector('.ltc-side');
+		var foot = document.querySelector('.ltc-side-foot');
+		var root = document.documentElement;
+		if (!side || !foot || foot.querySelector('[data-ltc-rail]'))
+			return;
+
+		var btn = E('button', {
+			'type': 'button',
+			'class': 'ltc-icon-btn ltc-rail-btn',
+			'data-ltc-rail': '',
+			'title': _('Collapse sidebar')
+		});
+		btn.appendChild(util.icon('chev'));
+		btn.addEventListener('click', function () {
+			var on = root.dataset.rail === '1';
+			root.dataset.rail = on ? '0' : '1';
+			try {
+				localStorage.setItem('lucent.rail', on ? '0' : '1');
+			} catch (e) {}
+		});
+		foot.appendChild(btn);
 	},
 
 	markActive: function () {
