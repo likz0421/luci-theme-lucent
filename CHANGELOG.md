@@ -3,6 +3,16 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.6.7 — 2026-11-02
+
+### Fixed
+
+- **Status → Overview uplink cards looked unstyled.** Modern LuCI renders the
+  IPv4/IPv6 upstream boxes as full cards inside `.network-status-table`, while
+  the theme only styled the old pill-shaped `.ifacebox`. Added scoped card
+  styling (tinted header, active accent, roomy body, visible progressbar
+  track) without touching the small pills used on the interface pages.
+
 ## 3.6.6 — 2026-11-02
 
 ### Fixed
