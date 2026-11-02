@@ -16,6 +16,7 @@ var callMediaList = rpc.declare({ object: 'luci.lucent', method: 'media_list' })
 var callMediaCommit = rpc.declare({ object: 'luci.lucent', method: 'media_commit', params: ['kind', 'name'] });
 var callMediaRemove = rpc.declare({ object: 'luci.lucent', method: 'media_remove', params: ['kind', 'name'] });
 var callWallpaperFetch = rpc.declare({ object: 'luci.lucent', method: 'wallpaper_fetch', params: ['provider', 'query', 'key'] });
+var callWallpaperAuto = rpc.declare({ object: 'luci.lucent', method: 'wallpaper_auto', params: ['enabled'] });
 var callPluginCheck = rpc.declare({ object: 'luci.lucent', method: 'plugin_check' });
 var callPluginInstall = rpc.declare({ object: 'luci.lucent', method: 'plugin_install', params: ['name'] });
 var callPluginStatus = rpc.declare({ object: 'luci.lucent', method: 'plugin_status' });
@@ -49,7 +50,8 @@ var DEFAULTS = {
 	density: 'cozy',
 	greeting: '1',
 	background: '',
-	logo_image: ''
+	logo_image: '',
+	wallpaper_auto: '0'
 };
 
 function tr(msg) {
@@ -413,7 +415,22 @@ return view.extend({
 			field(_('Source'), provider),
 			field(_('Search words'), queryInput),
 			field(_('API key'), keyInput, _('Unsplash requires a free API key. Bing and Wallhaven do not.')),
-			E('div', { 'class': 'ltc-row', 'style': 'margin-top:12px;flex-wrap:wrap' }, [fetchButton, fetchStatus])
+			E('div', { 'class': 'ltc-row', 'style': 'margin-top:12px;flex-wrap:wrap' }, [fetchButton, fetchStatus]),
+			field(_('Daily auto wallpaper'), segmented([
+				{ value: '1', label: _('On') },
+				{ value: '0', label: _('Off') }
+			], self.cfg.wallpaper_auto, function (v) {
+				self.cfg.wallpaper_auto = v;
+				save('wallpaper_auto', v);
+				callWallpaperAuto(v).then(function (res) {
+					if (!res || !res.ok)
+						core.toast(_('The cron job could not be updated'), 'err');
+					else
+						core.toast(v === '1' ? _('Bing daily image will be fetched at 06:00') : _('Auto wallpaper disabled'), 'ok');
+				}).catch(function () {
+					core.toast(_('The cron job could not be updated'), 'err');
+				});
+			}), _('When on, the router downloads the Bing image of the day at 06:00 and sets it as the background. It replaces the previous auto image, and needs internet access.'))
 		]);
 
 		var homeBody = E([

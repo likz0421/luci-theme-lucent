@@ -3,6 +3,23 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.0 — 2026-11-02
+
+### Added
+
+- **Daily auto wallpaper.** A new switch under Appearance → Online wallpapers
+  installs a 06:00 cron job that downloads the Bing image of the day,
+  replaces the previous auto image and points the background at it
+  (`/usr/share/lucent/wallpaper.sh`, gated by `lucent.main.wallpaper_auto`).
+  Turning it off removes the cron entry again.
+- **Traffic trend card on the home page.** A mountain-area sparkline of the
+  downlink/uplink rates sampled by the 10-second poll, with a pulsing
+  endpoint, current-rate badge and peak-down / peak-up / sample-count tags.
+  The sample history lives in sessionStorage, so the curve survives page
+  navigation within the tab (up to 120 points).
+- **Entrance animation.** Dashboard sections now rise and fade in with a
+  staggered delay (fully suppressed under prefers-reduced-motion).
+
 ## 3.6.9 — 2026-11-02
 
 ### Fixed / Added

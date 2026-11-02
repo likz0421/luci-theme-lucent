@@ -391,6 +391,22 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 
 .ltc-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+
+/* traffic sparkline: mountain-area chart */
+.ltc-sparkcard{margin-bottom:0}
+.ltc-sparkwrap{position:relative;height:88px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card-2);overflow:hidden}
+.ltc-spark{position:absolute;inset:0;width:100%;height:100%}
+.ltc-spark .rx{fill:color-mix(in srgb,var(--accent) 24%,transparent);stroke:var(--accent);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.ltc-spark .tx{fill:color-mix(in srgb,var(--ok) 14%,transparent);stroke:var(--ok);stroke-width:1.3;vector-effect:non-scaling-stroke;stroke-linejoin:round;opacity:.85}
+.ltc-spark-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%);animation:ltc-pulse 2.2s var(--ease) infinite}
+@keyframes ltc-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes ltc-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.ltc-stack>section,.ltc-stack>div{animation:ltc-rise .45s var(--ease) backwards}
+.ltc-stack>*:nth-child(2){animation-delay:.05s}
+.ltc-stack>*:nth-child(3){animation-delay:.1s}
+.ltc-stack>*:nth-child(4){animation-delay:.15s}
+.ltc-stack>*:nth-child(5){animation-delay:.2s}
+.ltc-stack>*:nth-child(6){animation-delay:.25s}
 .ltc-kpi{padding:14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0;display:flex;flex-direction:column}
 .ltc-kpi small{display:block;color:var(--text-3);font-size:11.5px;margin-bottom:4px}
 .ltc-kpi b{display:block;font:600 22px/1.2 var(--serif);overflow-wrap:anywhere}

@@ -817,3 +817,33 @@ msgstr "已连接时长"
 
 msgid "Lease remaining"
 msgstr "租约剩余"
+
+msgid "Traffic trend"
+msgstr "流量趋势"
+
+msgid "Downlink and uplink rates sampled every 10 seconds."
+msgstr "每 10 秒采样一次上下行速率。"
+
+msgid "peak down"
+msgstr "下行峰值"
+
+msgid "peak up"
+msgstr "上行峰值"
+
+msgid "samples"
+msgstr "采样点"
+
+msgid "Daily auto wallpaper"
+msgstr "每日自动壁纸"
+
+msgid "When on, the router downloads the Bing image of the day at 06:00 and sets it as the background. It replaces the previous auto image, and needs internet access."
+msgstr "开启后,路由器每天 06:00 下载 Bing 今日图片并设为背景,替换上一张自动图片;需要外网访问。"
+
+msgid "Bing daily image will be fetched at 06:00"
+msgstr "已开启:每天 06:00 自动获取 Bing 每日图片"
+
+msgid "Auto wallpaper disabled"
+msgstr "自动壁纸已关闭"
+
+msgid "The cron job could not be updated"
+msgstr "无法更新定时任务"

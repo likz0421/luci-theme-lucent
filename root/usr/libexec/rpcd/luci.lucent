@@ -362,6 +362,33 @@ plugin_status() {
 	json_cleanup
 }
 
+wallpaper_auto() {
+	local enabled mark line
+	read -r input
+	json_load "$input"
+	json_get_var enabled enabled
+	json_cleanup
+
+	case "$enabled" in
+		1)
+			mkdir -p /etc/crontabs
+			mark="# lucent-wallpaper"
+			line="0 6 * * * /bin/sh /usr/share/lucent/wallpaper.sh $mark"
+			grep -qF "$mark" /etc/crontabs/root 2>/dev/null || printf '%s\n' "$line" >> /etc/crontabs/root
+			chmod 600 /etc/crontabs/root 2>/dev/null
+			uci -q set lucent.main.wallpaper_auto=1
+			;;
+		0)
+			sed -i "/# lucent-wallpaper/d" /etc/crontabs/root 2>/dev/null
+			uci -q set lucent.main.wallpaper_auto=0
+			;;
+		*) err "Invalid argument" ;;
+	esac
+	uci -q commit lucent
+	/etc/init.d/cron restart >/dev/null 2>&1 || true
+	ok
+}
+
 storage() {
 	local mp size avail
 	json_init
@@ -573,6 +600,9 @@ list)
 		json_add_string "query" "str"
 		json_add_string "key" "str"
 	json_close_object
+	json_add_object "wallpaper_auto"
+		json_add_string "enabled" "str"
+	json_close_object
 	json_add_object "plugin_check"; json_close_object
 	json_add_object "plugin_install"
 		json_add_string "name" "str"
@@ -592,6 +622,7 @@ call)
 		media_commit) media_commit ;;
 		media_remove) media_remove ;;
 		wallpaper_fetch) wallpaper_fetch ;;
+		wallpaper_auto) wallpaper_auto ;;
 		plugin_check) plugin_check ;;
 		plugin_install) plugin_install ;;
 		plugin_status) plugin_status ;;

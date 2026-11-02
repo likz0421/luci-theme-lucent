@@ -132,6 +132,58 @@ function clientsOf(data) {
 	return util.hosts(data.hints, data.leases);
 }
 
+/* Traffic history survives page navigation within the tab. */
+function loadHist() {
+	try {
+		return JSON.parse(sessionStorage.getItem('lucent.hist') || '[]');
+	} catch (e) {
+		return [];
+	}
+}
+
+function saveHist(h) {
+	try {
+		sessionStorage.setItem('lucent.hist', JSON.stringify(h.slice(-120)));
+	} catch (e) {}
+}
+
+function sparkPath(h, key, max) {
+	if (h.length < 2)
+		return '';
+
+	var d = 'M0,60';
+	h.forEach(function (p, i) {
+		var x = (i * 100 / (h.length - 1)).toFixed(2);
+		var y = (58 - 54 * (Math.min(Number(p[key]) || 0, max) / max)).toFixed(2);
+		d += ' L' + x + ',' + y;
+	});
+	return d + ' L100,60 Z';
+}
+
+function sparkCard() {
+	return E('section', { 'class': 'ltc-card ltc-sparkcard' }, [
+		E('div', { 'class': 'ltc-card-h' }, [
+			E('div', {}, [
+				E('h3', {}, _('Traffic trend')),
+				E('p', { 'class': 'ltc-muted' }, _('Downlink and uplink rates sampled every 10 seconds.'))
+			]),
+			E('span', { 'class': 'ltc-badge plain', 'data-live': 'spark-now' }, '↓ –  ↑ –')
+		]),
+		E('div', { 'class': 'ltc-sparkwrap' }, [
+			E('svg', { 'class': 'ltc-spark', 'viewBox': '0 0 100 60', 'preserveAspectRatio': 'none', 'aria-hidden': 'true' }, [
+				E('path', { 'class': 'tx', 'd': '' }),
+				E('path', { 'class': 'rx', 'd': '' })
+			]),
+			E('i', { 'class': 'ltc-spark-dot', 'style': 'display:none' })
+		]),
+		E('div', { 'class': 'ltc-tags' }, [
+			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'peak-rx' }, '–'), ' ', _('peak down')]),
+			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'peak-tx' }, '–'), ' ', _('peak up')]),
+			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'spark-samples' }, '0'), ' ', _('samples')])
+		])
+	]);
+}
+
 return view.extend({
 	load: function () {
 		return util.load();
@@ -278,6 +330,11 @@ return view.extend({
 				var tx = Math.max(0, (Number(stats.tx_bytes) - this._lastStats.tx) / dt);
 				set('[data-live=traffic]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
 				set('[data-live=traffic-sub]', devName || wan.proto || '');
+				this._hist.push({ rx: rx, tx: tx });
+				if (this._hist.length > 120)
+					this._hist = this._hist.slice(-120);
+				saveHist(this._hist);
+				this.drawSpark();
 			}
 			set('[data-live=traffic-total]', '↓ ' + util.fmtBytes(Number(stats.rx_bytes) || 0) +
 				'  ↑ ' + util.fmtBytes(Number(stats.tx_bytes) || 0));
@@ -297,6 +354,42 @@ return view.extend({
 		var lanNode = document.querySelector('[data-live=hero-lan]');
 		if (lanNode)
 			lanNode.textContent = lan ? util.ip4(lan) : '–';
+	},
+
+	drawSpark: function () {
+		var h = this._hist || [];
+		var svg = document.querySelector('.ltc-spark');
+		if (!svg || h.length < 2)
+			return;
+
+		var peakRx = 0, peakTx = 0;
+		h.forEach(function (p) {
+			if (p.rx > peakRx) peakRx = p.rx;
+			if (p.tx > peakTx) peakTx = p.tx;
+		});
+		var max = Math.max(peakRx, peakTx, 1);
+
+		svg.querySelector('.rx').setAttribute('d', sparkPath(h, 'rx', max));
+		svg.querySelector('.tx').setAttribute('d', sparkPath(h, 'tx', max));
+
+		var last = h[h.length - 1];
+		var dot = document.querySelector('.ltc-spark-dot');
+		if (dot) {
+			var y = 58 - 54 * (Math.min(last.rx, max) / max);
+			dot.style.display = '';
+			dot.style.left = '99.5%';
+			dot.style.top = (y / 60 * 100).toFixed(1) + '%';
+		}
+
+		function set(sel, text) {
+			var el = document.querySelector(sel);
+			if (el)
+				el.textContent = text;
+		}
+		set('[data-live=spark-now]', '↓ ' + util.fmtRate(last.rx) + '  ↑ ' + util.fmtRate(last.tx));
+		set('[data-live=peak-rx]', util.fmtRate(peakRx));
+		set('[data-live=peak-tx]', util.fmtRate(peakTx));
+		set('[data-live=spark-samples]', String(h.length));
 	},
 
 	updateCard: function (data) {
@@ -608,13 +701,17 @@ return view.extend({
 
 		var systemCard = card(_('System'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/status/overview') }, _('Details') + ' →'), systemFacts);
 
+		this._hist = loadHist();
+
 		this.startPoll();
 		if (greetingOn)
 			Promise.resolve().then(L.bind(this.fetchGreeting, this));
+		Promise.resolve().then(L.bind(this.drawSpark, this));
 
 		return E('div', { 'class': 'ltc-stack' }, [
 			hero,
 			kpis,
+			sparkCard(),
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
 			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
 			E('div', { 'class': 'ltc-grid' }, [systemCard, this.updateCard(data)])
