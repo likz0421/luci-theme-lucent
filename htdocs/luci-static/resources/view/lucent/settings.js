@@ -51,7 +51,8 @@ var DEFAULTS = {
 	greeting: '1',
 	background: '',
 	logo_image: '',
-	wallpaper_auto: '0'
+	wallpaper_auto: '0',
+	update_cn: '0'
 };
 
 function tr(msg) {
@@ -455,10 +456,19 @@ return view.extend({
 				_('Only the packages listed above can be installed. They are downloaded from the package feeds already configured on this router; no third-party URL is accepted.'))
 		]);
 
-		var resetBody = E('div', { 'class': 'ltc-row', 'style': 'flex-wrap:wrap;justify-content:space-between' }, [
-			E('div', { 'class': 'ltc-help', 'style': 'max-width:46ch' },
-				_('Restore the default palette, glass values and background. Media files and installed packages are not removed.')),
-			E('button', { 'class': 'ltc-btn danger', 'type': 'button', 'click': function () { self.resetDefaults(); } }, _('Restore defaults'))
+		var resetBody = E('div', { 'class': 'ltc-stack', 'style': 'gap:14px' }, [
+			field(_('China mirrors first'), segmented([
+				{ value: '1', label: _('On') },
+				{ value: '0', label: _('Off') }
+			], self.cfg.update_cn, function (v) {
+				self.cfg.update_cn = v;
+				save('update_cn', v, v === '1' ? _('Update checks will prefer domestic mirrors') : _('Update checks will try GitHub first'));
+			}), _('If update checks keep failing on your network, turn this on to prefer jsDelivr and GitHub proxy mirrors.')),
+			E('div', { 'class': 'ltc-row', 'style': 'flex-wrap:wrap;justify-content:space-between' }, [
+				E('div', { 'class': 'ltc-help', 'style': 'max-width:46ch' },
+					_('Restore the default palette, glass values and background. Media files and installed packages are not removed.')),
+				E('button', { 'class': 'ltc-btn danger', 'type': 'button', 'click': function () { self.resetDefaults(); } }, _('Restore defaults'))
+			])
 		]);
 
 		return E('div', { 'class': 'ltc-stack' }, [

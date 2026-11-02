@@ -3,6 +3,37 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.2 — 2026-11-02
+
+### Fixed
+
+- **In-page updates could fail midway.** The update job ran
+  `/usr/share/lucent/install.sh` directly while the package install
+  overwrote that same file — busybox sh reads scripts incrementally, so the
+  tail of the run executed whatever the new file contained. Both update and
+  check jobs now snapshot the installer to /tmp first.
+
+### Changed
+
+- **Update status moved to the top of the dashboard** as a full-width banner
+  right below the greeting: installed version, state, action buttons and an
+  **animated progress bar** (indeterminate while running, green on success,
+  red on failure, with the last log line alongside).
+
+### Added
+
+- Upgradable **system package count** badge in the update banner (cached
+  server-side for one hour, refreshed by a detached `apk/opkg` job).
+- Appearance → Maintenance: **China mirrors first** switch (`update_cn`), so
+  users behind the GFW can flip one toggle instead of editing uci by hand;
+  check and update jobs honour it.
+- Devices page now **auto-refreshes every 15 seconds**, preserving the
+  active filter text.
+- Traffic card gains a **today peak** tag persisted per day in localStorage
+  (survives reloads, unlike the in-tab sample history).
+- The sidebar theme button cycles **Auto → Light → Dark → Auto** and shows
+  the current mode in its tooltip.
+
 ## 3.7.1 — 2026-11-02
 
 ### Fixed

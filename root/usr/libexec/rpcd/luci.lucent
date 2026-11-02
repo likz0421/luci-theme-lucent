@@ -389,6 +389,58 @@ wallpaper_auto() {
 	ok
 }
 
+# Count upgradable system packages, cached and detached like theme_check.
+PKGUPCACHE="/tmp/lucent-pkgupdates.json"
+PKGUPPID="$RUN/lucent-pkgupdates.pid"
+PKGUPJOB="$RUN/lucent-pkgupdates.job.sh"
+
+pkg_updates() {
+	local now ts body
+	now=$(date +%s 2>/dev/null); case "$now" in ''|*[!0-9]*) now=0 ;; esac
+	if [ -f "$PKGUPCACHE" ]; then
+		ts=$(sed -n '1p' "$PKGUPCACHE" 2>/dev/null)
+		body=$(sed -n '2p' "$PKGUPCACHE" 2>/dev/null)
+		case "$ts" in ''|*[!0-9]*) ts=0 ;; esac
+		case "$body" in
+			'{'*) [ $(( now - ts )) -lt 3600 ] && { printf '%s\n' "$body"; exit 0; } ;;
+		esac
+	fi
+
+	if [ -f "$PKGUPPID" ] && kill -0 "$(cat "$PKGUPPID" 2>/dev/null)" 2>/dev/null; then
+		json_init
+		json_add_int checking 1
+		json_dump
+		json_cleanup
+		exit 0
+	fi
+
+	rm -f "$PKGUPPID"
+	cat > "$PKGUPJOB" <<EOF
+#!/bin/sh
+if command -v apk >/dev/null 2>&1; then
+	apk update >/dev/null 2>&1
+	n=\$(apk list --upgradable 2>/dev/null | grep -c '^')
+else
+	opkg update >/dev/null 2>&1
+	n=\$(opkg list-upgradable 2>/dev/null | grep -c ' - ')
+fi
+case "\$n" in ''|*[!0-9]*) n=-1 ;; esac
+{ printf '%s\\n' "\$(date +%s)"; printf '{"count":%d}\\n' "\$n"; } >'$PKGUPCACHE.tmp' && mv -f '$PKGUPCACHE.tmp' '$PKGUPCACHE'
+EOF
+	chmod 755 "$PKGUPJOB"
+
+	if command -v start-stop-daemon >/dev/null 2>&1; then
+		start-stop-daemon -S -b -m -p "$PKGUPPID" -x /bin/sh -- "$PKGUPJOB"
+	else
+		setsid sh "$PKGUPJOB" </dev/null >/dev/null 2>&1 &
+	fi
+
+	json_init
+	json_add_int checking 1
+	json_dump
+	json_cleanup
+}
+
 storage() {
 	local mp size avail
 	json_init
@@ -501,13 +553,15 @@ theme_check() {
 	fi
 
 	rm -f "$CHECKPID"
+	cp -f "$INSTALLER" /tmp/lucent-check.sh 2>/dev/null || err "Cannot stage the installer"
 	cat > "$CHECKJOB" <<EOF
 #!/bin/sh
 b=\$(uci -q get lucent.main.update_url)
 c=\$(uci -q get lucent.main.update_cn)
 [ "\$c" = 1 ] && export LUCENT_CN=1
 [ -n "\$b" ] && export LUCENT_BASE_URL="\$b"
-out=\$(sh '$INSTALLER' check 2>/dev/null)
+out=\$(sh /tmp/lucent-check.sh check 2>/dev/null)
+rm -f /tmp/lucent-check.sh
 case "\$out" in
 '{'*) printf '%s\\n%s\\n' "\$(date +%s)" "\$out" >'$CHECKCACHE.tmp' && mv -f '$CHECKCACHE.tmp' '$CHECKCACHE' ;;
 esac
@@ -535,6 +589,10 @@ theme_update() {
 
 	rm -f "$UPCODE" "$UPLOG" "$UPPID" "$CHECKCACHE"
 
+	# Snapshot the installer first: the package update overwrites
+	# /usr/share/lucent/install.sh while the shell is still reading it.
+	cp -f "$INSTALLER" /tmp/lucent-update.sh 2>/dev/null || err "Cannot stage the installer"
+
 	# Write a self-contained job script. All paths are baked-in constants and the
 	# mirror config is read fresh from uci inside the job, so nothing user-supplied
 	# is ever interpolated into a shell command.
@@ -544,8 +602,9 @@ b=\$(uci -q get lucent.main.update_url)
 c=\$(uci -q get lucent.main.update_cn)
 [ "\$c" = 1 ] && export LUCENT_CN=1
 [ -n "\$b" ] && export LUCENT_BASE_URL="\$b"
-sh '$INSTALLER' update >'$UPLOG' 2>&1
+sh /tmp/lucent-update.sh update >'$UPLOG' 2>&1
 echo \$? >'$UPCODE'
+rm -f /tmp/lucent-update.sh
 EOF
 	chmod 755 "$UPJOB"
 
@@ -610,6 +669,7 @@ list)
 	json_add_object "plugin_status"; json_close_object
 	json_add_object "storage"; json_close_object
 	json_add_object "overview"; json_close_object
+	json_add_object "pkg_updates"; json_close_object
 	json_add_object "theme_check"; json_close_object
 	json_add_object "theme_update"; json_close_object
 	json_add_object "theme_status"; json_close_object
@@ -628,6 +688,7 @@ call)
 		plugin_status) plugin_status ;;
 		storage) storage ;;
 		overview) overview ;;
+		pkg_updates) pkg_updates ;;
 		theme_check) theme_check ;;
 		theme_update) theme_update ;;
 		theme_status) theme_status ;;

@@ -847,3 +847,24 @@ msgstr "自动壁纸已关闭"
 
 msgid "The cron job could not be updated"
 msgstr "无法更新定时任务"
+
+msgid "China mirrors first"
+msgstr "国内镜像优先"
+
+msgid "If update checks keep failing on your network, turn this on to prefer jsDelivr and GitHub proxy mirrors."
+msgstr "若你的网络下更新检查经常失败,开启此项后优先使用 jsDelivr 与 GitHub 加速镜像。"
+
+msgid "Update checks will prefer domestic mirrors"
+msgstr "更新检查将优先使用国内镜像"
+
+msgid "Update checks will try GitHub first"
+msgstr "更新检查将优先直连 GitHub"
+
+msgid "system packages upgradable"
+msgstr "个系统包可更新"
+
+msgid "today peak"
+msgstr "今日峰值"
+
+msgid "Unable to reach the update source. Check the network, or enable China mirrors in Appearance."
+msgstr "无法连接更新源。请检查网络,或在外观设置中开启“国内镜像优先”。"

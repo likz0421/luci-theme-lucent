@@ -43,9 +43,13 @@ return baseclass.extend({
 		document.querySelectorAll('[data-ltc-theme]').forEach(function (btn) {
 			btn.addEventListener('click', function () {
 				var root = document.documentElement;
-				var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-				root.dataset.theme = next;
+				var cur = root.dataset.mode || 'auto';
+				var next = cur === 'auto' ? 'light' : (cur === 'light' ? 'dark' : 'auto');
+				var dark = next === 'dark' ||
+					(next === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 				root.dataset.mode = next;
+				root.dataset.theme = dark ? 'dark' : 'light';
+				btn.title = '%s · %s'.format(_('Toggle appearance'), next === 'auto' ? _('Auto') : (next === 'light' ? _('Light') : _('Dark')));
 				uci.load('lucent').then(function () {
 					uci.set('lucent', 'main', 'mode', next);
 					return uci.save().then(function () { return callCommit('lucent'); });

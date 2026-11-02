@@ -201,6 +201,7 @@ function sparkCard() {
 		E('div', { 'class': 'ltc-tags' }, [
 			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'peak-rx' }, '–'), ' ', _('peak down')]),
 			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'peak-tx' }, '–'), ' ', _('peak up')]),
+			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'day-peak' }, '–'), ' ', _('today peak')]),
 			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'spark-samples' }, '0'), ' ', _('samples')])
 		])
 	]);
@@ -420,6 +421,15 @@ return view.extend({
 		set('[data-live=peak-rx]', util.fmtRate(peakRx));
 		set('[data-live=peak-tx]', util.fmtRate(peakTx));
 		set('[data-live=spark-samples]', String(h.length));
+
+		/* Persist the daily maximum beyond the in-tab history window. */
+		var dkey = 'lucent.peak.' + new Date().toISOString().slice(0, 10);
+		var dp = {};
+		try { dp = JSON.parse(localStorage.getItem(dkey) || '{}'); } catch (e) { dp = {}; }
+		if (!(dp.rx >= peakRx)) dp.rx = peakRx;
+		if (!(dp.tx >= peakTx)) dp.tx = peakTx;
+		try { localStorage.setItem(dkey, JSON.stringify(dp)); } catch (e) {}
+		set('[data-live=day-peak]', '↓ ' + util.fmtRate(dp.rx) + ' ↑ ' + util.fmtRate(dp.tx));
 	},
 
 	updateCard: function (data) {
@@ -430,18 +440,57 @@ return view.extend({
 			_('Checking for updates automatically…'));
 		var checkBtn = E('button', { 'type': 'button', 'class': 'ltc-btn sm' }, _('Check for updates'));
 		var updBtn = E('button', { 'type': 'button', 'class': 'ltc-btn sm primary', 'style': 'display:none' }, _('Update'));
+		var pkgTag = E('span', { 'class': 'ltc-tag', 'style': 'display:none' });
+		var progBar = E('div', { 'class': 'ltc-progress', 'style': 'display:none' }, E('i'));
+		var progText = E('small', { 'class': 'ltc-muted', 'style': 'display:none' });
 
 		function setBusy(b) {
 			checkBtn.disabled = b;
 			updBtn.disabled = b;
 		}
 		function note(text, cls) {
-			status.className = 'ltc-help';
+			status.className = 'ltc-help' + (cls ? ' ' + cls : '');
 			status.textContent = text;
 		}
+		function progress(mode) {
+			if (mode === 'run') {
+				progBar.style.display = '';
+				progBar.classList.add('run');
+				progText.style.display = '';
+			}
+			else if (mode === 'done') {
+				progBar.classList.remove('run');
+				progBar.classList.add('done');
+				progText.textContent = _('Update finished. Reloading…');
+			}
+			else if (mode === 'fail') {
+				progBar.classList.remove('run');
+				progBar.classList.add('fail');
+			}
+			else {
+				progBar.style.display = 'none';
+				progBar.className = 'ltc-progress';
+				progText.style.display = 'none';
+			}
+		}
 
-		/* The server-side check runs detached across mirrors and answers
-		   {"checking":1} until a fresh result is cached; poll a few seconds. */
+		function showPkgCount() {
+			var tries = 0;
+			function once() {
+				util.pkgUpdates().then(function (r) {
+					if (r && r.checking && tries++ < 20) {
+						setTimeout(once, 3000);
+						return;
+					}
+					if (r && r.count > 0) {
+						pkgTag.style.display = '';
+						pkgTag.textContent = '%d %s'.format(r.count, _('system packages upgradable'));
+					}
+				}).catch(function () {});
+			}
+			once();
+		}
+
 		function doCheck(attempt) {
 			setBusy(true);
 			if (attempt == null) {
@@ -458,23 +507,25 @@ return view.extend({
 				}
 				setBusy(false);
 				if (!res || res.checking || res.error || !res.latest) {
-					note(_('Unable to reach the update source. Check the network, or set a mirror in Appearance.'));
+					note((res && res.error) || _('Unable to reach the update source. Check the network, or enable China mirrors in Appearance.'), 'err');
 					return;
 				}
 				if (!res.current)
 					verLabel.textContent = _('not installed');
 				if (!res.available) {
-					note(_('You are on the latest version (%s).').format(res.latest));
+					note(_('You are on the latest version (%s).').format(res.latest), 'ok');
 					updBtn.style.display = 'none';
+					showPkgCount();
 				}
 				else {
 					note(_('A new version %s is available (current %s).').format(res.latest, res.current || '—'));
 					updBtn.textContent = _('Update to %s').format(res.latest);
 					updBtn.style.display = '';
+					showPkgCount();
 				}
 			}).catch(function () {
 				setBusy(false);
-				note(_('The update check failed.'));
+				note(_('The update check failed.'), 'err');
 			});
 		}
 
@@ -488,7 +539,8 @@ return view.extend({
 						return;
 					if (st.running) {
 						self._upSeen = true;
-						note((st.log || _('Updating…')).slice(-220));
+						progress('run');
+						progText.textContent = (st.log || _('Updating…')).slice(-160);
 						return;
 					}
 					/* The detached job may not have registered yet; keep polling
@@ -498,12 +550,13 @@ return view.extend({
 					clearInterval(self._upTimer);
 					self._upTimer = null;
 					if (st.code === 0) {
-						note(_('Update finished. Reloading…'));
+						progress('done');
 						core.toast(_('Theme updated. Reloading…'), 'ok');
 						setTimeout(function () { location.href = L.url('admin/home'); }, 1200);
 					}
 					else {
-						note(_('Update failed. %s').format(st.log ? String(st.log).slice(-200) : ''));
+						progress('fail');
+						note(_('Update failed. %s').format(st.log ? String(st.log).slice(-200) : ''), 'err');
 						setBusy(false);
 					}
 				}).catch(function () {
@@ -515,13 +568,17 @@ return view.extend({
 		function doUpdate() {
 			setBusy(true);
 			note(_('Starting the update…'));
+			progress('run');
+			progText.textContent = _('Starting the update…');
+			progText.style.display = '';
 			return util.startUpdate().then(function (res) {
 				if (!res || !res.ok)
 					throw new Error((res && res.error) || _('The update could not be started'));
 				pollStatus();
 			}).catch(function (err) {
+				progress('fail');
 				setBusy(false);
-				note(_('Update error: %s').format(err && err.message || String(err)));
+				note(_('Update error: %s').format(err && err.message || String(err)), 'err');
 			});
 		}
 
@@ -533,9 +590,14 @@ return view.extend({
 		setTimeout(function () { doCheck(); }, 800);
 
 		return card(_('Updates'), null, E('div', { 'class': 'ltc-update' }, [
-			E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Installed version')), verLabel]),
+			E('div', { 'class': 'ltc-row', 'style': 'gap:10px;flex-wrap:wrap;align-items:center' }, [
+				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Installed version')), verLabel]),
+				pkgTag,
+				E('div', { 'class': 'grow' }),
+				checkBtn, updBtn
+			]),
 			status,
-			E('div', { 'class': 'ltc-row', 'style': 'gap:8px;margin-top:10px;flex-wrap:wrap' }, [checkBtn, updBtn])
+			E('div', { 'class': 'ltc-row' }, [progBar, progText])
 		]));
 	},
 
@@ -740,11 +802,12 @@ return view.extend({
 
 		return E('div', { 'class': 'ltc-stack' }, [
 			hero,
+			this.updateCard(data),
 			kpis,
 			sparkCard(),
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
 			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
-			E('div', { 'class': 'ltc-grid' }, [systemCard, this.updateCard(data)])
+			E('div', { 'class': 'ltc-grid' }, [systemCard])
 		]);
 	},
 

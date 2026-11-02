@@ -381,9 +381,16 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-hero-quote{display:flex;align-items:center;gap:8px;margin:10px 0 0;max-width:56ch;font-size:13px;font-style:italic;color:var(--text-2);line-height:1.5}
 .ltc-hero-quote::before{content:"“";font-style:normal;font-weight:700;font-size:20px;line-height:1;color:var(--accent);opacity:.7;flex:none}
 .ltc-update{display:flex;flex-direction:column;gap:8px;flex:1}
-.ltc-update .ltc-row{margin-top:auto}
+.ltc-update .ltc-row:last-child{align-items:center;gap:10px}
 .ltc-update .ltc-help{min-height:2.6em}
 .ltc-update b{font-weight:600;color:var(--text)}
+/* indeterminate progress bar for the in-page updater */
+.ltc-progress{flex:1;min-width:120px;max-width:420px;height:8px;border-radius:99px;background:color-mix(in srgb,var(--text-3) 22%,transparent);overflow:hidden}
+.ltc-progress i{display:block;height:100%;width:35%;border-radius:99px;background:var(--accent)}
+.ltc-progress.run i{animation:ltc-slide 1.3s var(--ease) infinite}
+.ltc-progress.done i{width:100%;background:var(--ok);transition:width .4s var(--ease)}
+.ltc-progress.fail i{width:100%;background:var(--bad)}
+@keyframes ltc-slide{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
 .ltc-hero-side{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:0}
 .ltc-hero-line{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2);min-width:0}
 .ltc-hero-line b{font-weight:600;color:var(--text);min-width:0;overflow-wrap:anywhere}

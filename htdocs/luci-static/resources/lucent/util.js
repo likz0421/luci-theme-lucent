@@ -22,6 +22,7 @@ var callOverview = rpc.declare({ object: 'luci.lucent', method: 'overview' });
 var callThemeCheck = rpc.declare({ object: 'luci.lucent', method: 'theme_check' });
 var callThemeUpdate = rpc.declare({ object: 'luci.lucent', method: 'theme_update' });
 var callThemeStatus = rpc.declare({ object: 'luci.lucent', method: 'theme_status' });
+var callPkgUpdates = rpc.declare({ object: 'luci.lucent', method: 'pkg_updates' });
 
 function arr(v) {
 	if (v == null)
@@ -421,6 +422,7 @@ return baseclass.extend({
 	checkUpdate: function () { return callThemeCheck(); },
 	startUpdate: function () { return callThemeUpdate(); },
 	updateStatus: function () { return callThemeStatus(); },
+	pkgUpdates: function () { return callPkgUpdates(); },
 	overview: function () { return callOverview(); },
 	ip4: ip4,
 	ip6: ip6,
