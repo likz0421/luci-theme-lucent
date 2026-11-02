@@ -1,5 +1,5 @@
 config theme 'main'
-	option palette 'clay'
+	option palette 'mist'
 	option mode 'auto'
 	option glass '1'
 	option glass_blur '20'

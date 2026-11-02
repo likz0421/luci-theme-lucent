@@ -160,7 +160,32 @@ function sparkPath(h, key, max) {
 	return d + ' L100,60 Z';
 }
 
+/* LuCI's E() has no SVG namespace support; build these nodes manually. */
+function svgel(name, attrs, children) {
+	var el = document.createElementNS('http://www.w3.org/2000/svg', name);
+	Object.keys(attrs || {}).forEach(function (k) {
+		el.setAttribute(k, attrs[k]);
+	});
+	(children || []).forEach(function (c) {
+		el.appendChild(c);
+	});
+	return el;
+}
+
 function sparkCard() {
+	var grad = function (id, color) {
+		return svgel('linearGradient', { id: id, x1: '0', y1: '0', x2: '0', y2: '1' }, [
+			svgel('stop', { offset: '0', 'stop-color': color, 'stop-opacity': '0.5' }),
+			svgel('stop', { offset: '1', 'stop-color': color, 'stop-opacity': '0.05' })
+		]);
+	};
+
+	var svg = svgel('svg', { 'class': 'ltc-spark', viewBox: '0 0 100 60', preserveAspectRatio: 'none', 'aria-hidden': 'true' }, [
+		svgel('defs', {}, [grad('ltcGRx', 'var(--accent)'), grad('ltcGTx', 'var(--ok)')]),
+		svgel('path', { 'class': 'tx', fill: 'url(#ltcGTx)', d: '' }),
+		svgel('path', { 'class': 'rx', fill: 'url(#ltcGRx)', d: '' })
+	]);
+
 	return E('section', { 'class': 'ltc-card ltc-sparkcard' }, [
 		E('div', { 'class': 'ltc-card-h' }, [
 			E('div', {}, [
@@ -170,10 +195,7 @@ function sparkCard() {
 			E('span', { 'class': 'ltc-badge plain', 'data-live': 'spark-now' }, '↓ –  ↑ –')
 		]),
 		E('div', { 'class': 'ltc-sparkwrap' }, [
-			E('svg', { 'class': 'ltc-spark', 'viewBox': '0 0 100 60', 'preserveAspectRatio': 'none', 'aria-hidden': 'true' }, [
-				E('path', { 'class': 'tx', 'd': '' }),
-				E('path', { 'class': 'rx', 'd': '' })
-			]),
+			svg,
 			E('i', { 'class': 'ltc-spark-dot', 'style': 'display:none' })
 		]),
 		E('div', { 'class': 'ltc-tags' }, [
@@ -265,8 +287,12 @@ return view.extend({
 
 		function set(sel, text) {
 			var el = document.querySelector(sel);
-			if (el)
-				el.textContent = text;
+			if (!el || el.textContent === text)
+				return;
+			el.textContent = text;
+			el.classList.remove('ltc-flash');
+			void el.offsetWidth;
+			el.classList.add('ltc-flash');
 		}
 
 		function dial(key, percent) {
@@ -383,8 +409,12 @@ return view.extend({
 
 		function set(sel, text) {
 			var el = document.querySelector(sel);
-			if (el)
-				el.textContent = text;
+			if (!el || el.textContent === text)
+				return;
+			el.textContent = text;
+			el.classList.remove('ltc-flash');
+			void el.offsetWidth;
+			el.classList.add('ltc-flash');
 		}
 		set('[data-live=spark-now]', '↓ ' + util.fmtRate(last.rx) + '  ↑ ' + util.fmtRate(last.tx));
 		set('[data-live=peak-rx]', util.fmtRate(peakRx));

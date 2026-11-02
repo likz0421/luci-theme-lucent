@@ -12,7 +12,7 @@
 	const cfg = (type(uci) == 'object' && type(uci.values) == 'object' &&
 	             type(uci.values.main) == 'object') ? uci.values.main : {};
 
-	const palette = cfg.palette ?? 'clay';
+	const palette = cfg.palette ?? 'mist';
 	const mode = cfg.mode ?? 'auto';
 	const glass = cfg.glass ?? '1';
 	const blur = cfg.glass_blur ?? '20';

@@ -3,6 +3,30 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.1 — 2026-11-02
+
+### Fixed
+
+- **Traffic trend chart rendered blank on real devices.** LuCI's `E()` DOM
+  helper creates elements in the HTML namespace only (verified against both
+  23.05 and master sources — core views use `<img>` icons for this reason);
+  the sparkline's `E('svg')/E('path')/E('defs')` nodes therefore never drew.
+  SVG nodes are now built with `document.createElementNS`.
+
+### Changed
+
+- **Default palette is now Mist** (soft blue glass) instead of Clay (brown)
+  for fresh installs; existing devices keep their choice, and Appearance →
+  Restore defaults now also lands on Mist.
+
+### Added
+
+- Richer motion: gradient-filled mountain areas with a soft drop shadow,
+  smooth curve morphing between samples (`transition: d`), health rings that
+  sweep to their new value (`@property --val` transition), and a brief
+  highlight flash whenever a live value changes.
+- Restoring defaults now also removes the daily-wallpaper cron entry.
+
 ## 3.7.0 — 2026-11-02
 
 ### Added

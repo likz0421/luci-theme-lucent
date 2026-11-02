@@ -41,7 +41,7 @@ var PLUGINS = {
 };
 
 var DEFAULTS = {
-	palette: 'clay',
+	palette: 'mist',
 	mode: 'auto',
 	glass: '1',
 	glass_blur: '20',
@@ -883,6 +883,8 @@ return view.extend({
 						});
 
 						chain.then(function () {
+							return callWallpaperAuto('0').catch(function () {});
+						}).then(function () {
 							core.toast(_('Defaults restored'), 'ok');
 							setTimeout(function () { location.reload(); }, 400);
 						}).catch(function (err) {
