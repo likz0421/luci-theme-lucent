@@ -479,6 +479,28 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 	.ltc-wirebox{flex-basis:100%;flex-direction:row;gap:10px;padding:2px 0}
 	.ltc-wirebox .ltc-wire{width:auto;flex:1}
 }
+
+/* path summary strip */
+.ltc-pathsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line-2)}
+.ltc-psum small{display:block;color:var(--text-3);font-size:11px;margin-bottom:2px}
+.ltc-psum b{display:block;font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+
+/* sparkline time axis + hover readout */
+.ltc-spark-ticks{display:flex;justify-content:space-between;margin-top:5px;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.ltc-spark-tip{position:absolute;top:6px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);box-shadow:var(--shadow-pop);font-size:11px;white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums}
+
+/* memory split bar + per-core busy meters */
+.ltc-membar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--card-2);margin:4px 0 6px}
+.ltc-membar i{display:block;height:100%;transition:width .5s var(--ease)}
+.ltc-membar .used{background:var(--accent)}
+.ltc-membar .cache{background:color-mix(in srgb,var(--accent) 45%,var(--card-2))}
+.ltc-membar .free{background:color-mix(in srgb,var(--text-3) 25%,transparent)}
+.ltc-legend{display:flex;gap:14px;font-size:11px;color:var(--text-3);margin-bottom:8px}
+.ltc-legend b{color:var(--text-2);font-weight:600}
+.ltc-cpubox{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+.ltc-cpubox small{color:var(--text-3);font-size:11px;white-space:nowrap}
+.ltc-cpubars{flex:1;display:flex;align-items:flex-end;gap:3px;height:26px}
+.ltc-cpubars i{flex:1;min-width:3px;border-radius:3px 3px 1px 1px;background:color-mix(in srgb,var(--accent) 70%,transparent);transition:height .5s var(--ease)}
 .ltc-node{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
 .ltc-node .ic{width:clamp(38px,9vw,48px);height:clamp(38px,9vw,48px);display:grid;place-items:center;border-radius:14px;background:var(--card-2);color:var(--text-2)}
 .ltc-node .ic svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}

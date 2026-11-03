@@ -3,6 +3,29 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.8.1 — 2026-11-03
+
+### Added
+
+- **Traffic trend time axis**: samples now carry their timestamp, so the
+  chart footer shows relative ticks (`now`, `-30s`, `-5m`, `-1h` …) instead
+  of a bare curve, and hovering the plot reveals the exact rate and age of
+  the nearest sample.
+- **Path summary strip**: the network path card grows a bottom row with
+  current traffic, how long the uplink has been connected, the number of
+  active networks and the busiest network by combined down/up rate.
+- **Per-core CPU bars**: the health card reads the new `cpus` array from
+  the `overview` helper (busy % per core, diffed from `/proc/stat` and
+  persisted between polls) and renders one bar per core.
+- **Memory split bar**: memory is drawn as used / cache / free segments
+  with a legend, replacing the single "used" figure.
+
+### Verified
+
+- Browser harness (`tests/harness.html`, two simulated poll rounds):
+  4 core bars, memory split percentages, relative ticks and the summary
+  strip all populate without runtime errors.
+
 ## 3.8.0 — 2026-11-02
 
 ### Added

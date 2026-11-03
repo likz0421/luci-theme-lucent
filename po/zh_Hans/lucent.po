@@ -940,3 +940,30 @@ msgstr "智能设备"
 
 msgid "Network device"
 msgstr "网络设备"
+
+msgid "now"
+msgstr "现在"
+
+msgid "Current traffic"
+msgstr "当前流量"
+
+msgid "Networks"
+msgstr "网络"
+
+msgid "Busiest network"
+msgstr "最繁忙网络"
+
+msgid "CPU per core"
+msgstr "每核占用"
+
+msgid "used"
+msgstr "已用"
+
+msgid "cache"
+msgstr "缓存"
+
+msgid "free"
+msgstr "空闲"
+
+msgid "core"
+msgstr "核心"

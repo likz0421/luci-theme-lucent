@@ -85,6 +85,7 @@ function memoryOf(info) {
 		total: mem.total || 0,
 		used: Math.max(0, used),
 		avail: Math.min(mem.total || 0, avail),
+		cache: Math.min(mem.total || 0, cache),
 		percent: util.pct(used, mem.total),
 		swapTotal: swap.total || 0,
 		swapUsed: Math.max(0, swapUsed),
@@ -185,7 +186,14 @@ function sparkCard() {
 		]),
 		E('div', { 'class': 'ltc-sparkwrap', 'style': 'position:relative;height:88px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--card-2)' }, [
 			svg,
-			E('i', { 'class': 'ltc-spark-dot', 'style': 'display:none' })
+			E('i', { 'class': 'ltc-spark-dot', 'style': 'display:none' }),
+			E('div', { 'class': 'ltc-spark-tip', 'style': 'display:none' })
+		]),
+		E('div', { 'class': 'ltc-spark-ticks' }, [
+			E('span', { 'data-live': 'tick-0' }, ''),
+			E('span', { 'data-live': 'tick-1' }, ''),
+			E('span', { 'data-live': 'tick-2' }, ''),
+			E('span', { 'data-live': 'tick-3' }, _('now'))
 		]),
 		E('div', { 'class': 'ltc-tags' }, [
 			E('span', { 'class': 'ltc-tag' }, [E('b', { 'data-live': 'peak-rx' }, '–'), ' ', _('peak down')]),
@@ -244,8 +252,20 @@ function pathCard(data, wan, lan, wifi, hostname) {
 		]);
 	}
 
+	function psum(label, value, key) {
+		return E('div', { 'class': 'ltc-psum' }, [
+			E('small', {}, label),
+			E('b', key ? { 'data-live': key } : {}, value)
+		]);
+	}
+
+	var upIf = util.arr(data.ifaces).filter(function (i) {
+		return i && i.up && i.interface !== 'loopback';
+	}).length;
+
 	return card(_('Network path'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/network/network') }, _('Manage') + ' →'),
-		E('div', { 'class': 'ltc-path' }, [
+		E('div', {}, [
+			E('div', { 'class': 'ltc-path' }, [
 			node(L.url('admin/status/realtime/traffic'), 'globe', _('Internet'),
 				wan ? (util.ip4(wan) || _('Connected')) : _('Down'),
 				dns.length ? 'DNS ' + dns[0] : ''),
@@ -257,6 +277,13 @@ function pathCard(data, wan, lan, wifi, hostname) {
 			node(L.url('admin/network/wireless'), 'wifi', _('LAN / WiFi'),
 				wifi.ssids.length ? wifi.ssids[0] : '%d / %d %s'.format(wifi.up, wifi.total, _('radios')),
 				'%d %s'.format(clientsOf(data).length, _('devices')))
+			]),
+			E('div', { 'class': 'ltc-pathsum' }, [
+				psum(_('Current traffic'), '↓ –  ↑ –', 'path-now'),
+				psum(_('Connected'), wan && wan.uptime != null ? util.fmtDuration(wan.uptime) : '–', 'path-conn'),
+				psum(_('Networks'), '%d · %s'.format(upIf, _('active')), 'path-nets'),
+				psum(_('Busiest network'), '–', 'path-busy')
+			])
 		]));
 }
 
@@ -420,7 +447,8 @@ return view.extend({
 				set('[data-live=traffic-sub]', devName || wan.proto || '');
 				set('[data-live=path-down]', '↓ ' + util.fmtRate(rx));
 				set('[data-live=path-up]', '↑ ' + util.fmtRate(tx));
-				this._hist.push({ rx: rx, tx: tx });
+				set('[data-live=path-now]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
+				this._hist.push({ t: now, rx: rx, tx: tx });
 				if (this._hist.length > 120)
 					this._hist = this._hist.slice(-120);
 				saveHist(this._hist);
@@ -444,6 +472,63 @@ return view.extend({
 				set('[data-live=path-lan-up]', '↑ ' + util.fmtRate(ltx));
 			}
 			this._lastLan = { t: lnow, rx: Number(lanStats.rx_bytes) || 0, tx: Number(lanStats.tx_bytes) || 0 };
+		}
+
+		/* busiest network = interface with the highest combined rate */
+		var self = this;
+		var bn = '', brx = 0, btx = 0, bv = -1;
+		this._lastDev = this._lastDev || {};
+		var dnow = Date.now();
+		data.ifaces.forEach(function (i) {
+			if (!i || !i.up || i.interface === 'loopback')
+				return;
+			var dn = i['l3_device'] || i.device;
+			var dd = dn && data.devices && data.devices[dn];
+			var ds = dd && (dd.stats || dd.statistics);
+			if (!ds)
+				return;
+			var p = self._lastDev[i.interface];
+			if (p) {
+				var pdt = Math.max(1, (dnow - p.t) / 1000);
+				var prx = Math.max(0, (Number(ds.rx_bytes) - p.rx) / pdt);
+				var ptx = Math.max(0, (Number(ds.tx_bytes) - p.tx) / pdt);
+				if (prx + ptx > bv) {
+					bv = prx + ptx;
+					bn = i.interface;
+					brx = prx;
+					btx = ptx;
+				}
+			}
+			self._lastDev[i.interface] = { t: dnow, rx: Number(ds.rx_bytes) || 0, tx: Number(ds.tx_bytes) || 0 };
+		});
+		if (bn)
+			set('[data-live=path-busy]', '%s ↓ %s ↑ %s'.format(bn, util.fmtRate(brx), util.fmtRate(btx)));
+		if (wan && wan.uptime != null)
+			set('[data-live=path-conn]', util.fmtDuration(wan.uptime));
+
+		var cpus = net.cpus;
+		if (Array.isArray(cpus) && cpus.length) {
+			var cbox = document.querySelector('[data-live=cpubars]');
+			if (cbox) {
+				cbox.textContent = '';
+				cpus.forEach(function (v) {
+					cbox.appendChild(E('i', {
+						'style': 'height:' + Math.max(4, Math.min(100, v)) + '%',
+						'title': '%s %d%%'.format(_('core'), v)
+					}));
+				});
+			}
+		}
+
+		if (mem.total > 0) {
+			var seg = function (sel, w) {
+				var el = document.querySelector(sel);
+				if (el)
+					el.style.width = w.toFixed(1) + '%';
+			};
+			seg('[data-live=mem-used]', (mem.used / mem.total) * 100);
+			seg('[data-live=mem-cache]', (mem.cache / mem.total) * 100);
+			seg('[data-live=mem-free]', Math.max(0, 100 - (mem.used / mem.total) * 100 - (mem.cache / mem.total) * 100));
 		}
 		set('[data-live=ring-mem]', mem.percent + '%');
 		set('[data-live=ring-swap]', mem.swapPercent + '%');
@@ -500,6 +585,23 @@ return view.extend({
 		set('[data-live=peak-tx]', util.fmtRate(peakTx));
 		set('[data-live=spark-samples]', String(h.length));
 
+		var t0 = h[0].t || 0, tN = last.t || 0;
+		function rel(ms) {
+			if (!ms || !tN)
+				return '';
+			var s = Math.max(0, Math.round((tN - ms) / 1000));
+			if (s < 5)
+				return _('now');
+			if (s < 90)
+				return '%ds'.format(s);
+			if (s < 5400)
+				return '%dm'.format(Math.round(s / 60));
+			return '%dh'.format(Math.round(s / 3600));
+		}
+		set('[data-live=tick-0]', rel(t0));
+		set('[data-live=tick-1]', rel(t0 + (tN - t0) / 3));
+		set('[data-live=tick-2]', rel(t0 + (tN - t0) * 2 / 3));
+
 		/* Persist the daily maximum beyond the in-tab history window. */
 		var dkey = 'lucent.peak.' + new Date().toISOString().slice(0, 10);
 		var dp = {};
@@ -508,6 +610,30 @@ return view.extend({
 		if (!(dp.tx >= peakTx)) dp.tx = peakTx;
 		try { localStorage.setItem(dkey, JSON.stringify(dp)); } catch (e) {}
 		set('[data-live=day-peak]', '↓ ' + util.fmtRate(dp.rx) + ' ↑ ' + util.fmtRate(dp.tx));
+	},
+
+	bindSpark: function () {
+		var wrap = document.querySelector('.ltc-sparkwrap');
+		var tip = document.querySelector('.ltc-spark-tip');
+		if (!wrap || !tip || wrap._bound)
+			return;
+		wrap._bound = true;
+		var self = this;
+		wrap.addEventListener('mousemove', function (ev) {
+			var h = self._hist || [];
+			if (h.length < 2)
+				return;
+			var r = wrap.getBoundingClientRect();
+			var ratio = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+			var s = h[Math.round(ratio * (h.length - 1))];
+			tip.style.display = '';
+			tip.style.left = Math.min(72, Math.max(2, ratio * 100 - 14)) + '%';
+			tip.textContent = (s.t ? new Date(s.t).toLocaleTimeString() + ' · ' : '') +
+				'↓ ' + util.fmtRate(s.rx) + '  ↑ ' + util.fmtRate(s.tx);
+		});
+		wrap.addEventListener('mouseleave', function () {
+			tip.style.display = 'none';
+		});
 	},
 
 	updateCard: function (data) {
@@ -802,6 +928,20 @@ return view.extend({
 
 		var healthCard = card(_('System health'), null, E([
 			health,
+			E('div', { 'class': 'ltc-membar', 'title': '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)) }, [
+				E('i', { 'class': 'used', 'data-live': 'mem-used', 'style': 'width:' + util.pct(mem.used, mem.total) + '%' }),
+				E('i', { 'class': 'cache', 'data-live': 'mem-cache', 'style': 'width:' + util.pct(mem.cache, mem.total) + '%' }),
+				E('i', { 'class': 'free', 'data-live': 'mem-free', 'style': 'width:' + Math.max(0, 100 - util.pct(mem.used, mem.total) - util.pct(mem.cache, mem.total)) + '%' })
+			]),
+			E('div', { 'class': 'ltc-legend' }, [
+				E('span', {}, [E('b', {}, util.fmtBytes(mem.used)), ' ', _('used')]),
+				E('span', {}, [E('b', {}, util.fmtBytes(mem.cache)), ' ', _('cache')]),
+				E('span', {}, [E('b', {}, util.fmtBytes(Math.max(0, mem.total - mem.used - mem.cache))), ' ', _('free')])
+			]),
+			E('div', { 'class': 'ltc-cpubox' }, [
+				E('small', {}, _('CPU per core')),
+				E('div', { 'class': 'ltc-cpubars', 'data-live': 'cpubars' })
+			]),
 			E('div', { 'class': 'ltc-tags' }, [
 				E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.used)), ' / ', util.fmtBytes(mem.total), ' ', _('memory')]),
 				E('span', { 'class': 'ltc-tag' }, [E('b', {}, util.fmtBytes(mem.avail)), ' ', _('available')]),
@@ -865,6 +1005,7 @@ return view.extend({
 		if (greetingOn)
 			Promise.resolve().then(L.bind(this.fetchGreeting, this));
 		Promise.resolve().then(L.bind(this.drawSpark, this));
+		Promise.resolve().then(L.bind(this.bindSpark, this));
 
 		var ds = document.documentElement.dataset;
 		var stack = [hero];

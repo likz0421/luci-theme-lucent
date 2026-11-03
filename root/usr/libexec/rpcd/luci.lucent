@@ -504,9 +504,33 @@ overview() {
 		done
 	fi
 
+	# Per-core busy percent from /proc/stat deltas between polls.
+	local prev cur cpubars
+	cpubars=""
+	prev=$(cat /tmp/lucent-cpu.prev 2>/dev/null)
+	cur=$(awk '/^cpu[0-9]/{t=0;idle=$5+$6;for(n=2;n<=NF;n++)t+=$n;printf "%d %d\n", t, idle}' /proc/stat 2>/dev/null)
+	if [ -n "$prev" ] && [ -n "$cur" ]; then
+		cpubars=$(printf '%s\n' "$prev" | awk -v cur="$cur" '
+			BEGIN { n = split(cur, C, "\n") }
+			{ P[FNR] = $0 }
+			END {
+				for (i = 1; i <= n && i <= FNR; i++) {
+					split(P[i], a, " "); split(C[i], b, " ")
+					dt = b[1] - a[1]; di = b[2] - a[2]
+					if (dt > 0) { x = int((dt - di) * 100 / dt); if (x < 0) x = 0; if (x > 100) x = 100; printf "%d\n", x }
+				}
+			}')
+	fi
+	[ -n "$cur" ] && printf '%s\n' "$cur" > /tmp/lucent-cpu.prev
+
 	json_init
 	json_add_string version "$ver"
 	json_add_int cores "$cores"
+	if [ -n "$cpubars" ]; then
+		json_add_array cpus
+		for v in $cpubars; do json_add_int "" "$v"; done
+		json_close_array
+	fi
 	[ -n "$l1" ] && json_add_string load1 "$l1"
 	[ -n "$l5" ] && json_add_string load5 "$l5"
 	[ -n "$l15" ] && json_add_string load15 "$l15"

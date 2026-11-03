@@ -110,7 +110,8 @@ var MOCK = {
 	'luci-rpc.getWirelessDevices': { radio0: { up: true, interfaces: [{ config: { ssid: 'MyHome-2.4G' } }] }, radio1: { up: true, interfaces: [{ config: { ssid: 'MyHome-5G' } }] } },
 	'luci-rpc.getNetworkDevices': { 'pppoe-wan': { statistics: { rx_bytes: 1258291200, tx_bytes: 356515840 } }, 'br-lan': { statistics: { rx_bytes: 999, tx_bytes: 888 } } },
 	'luci.lucent.storage': { '/': { total: 103079215, free: 76545000 } },
-	'luci.lucent.overview': { version: '3.7.2-r1', cores: 2, load1: '0.25', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
+	'luci-rpc.getConnsPerHost': { '192.168.1.30': { count: 12 }, '192.168.1.31': { count: 3 } },
+	'luci.lucent.overview': { version: '3.8.1-r1', cores: 4, cpus: [42, 17, 63, 8], load1: '0.25', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
 	'luci.lucent.theme_check': { current: '3.7.2-r1', latest: '3.7.3', available: true },
 	'luci.lucent.theme_status': { running: 0, code: -1, log: '' },
 	'luci.lucent.pkg_updates': { count: 4 }
@@ -159,6 +160,13 @@ var base = '../htdocs/luci-static/resources/';
 			return c.load().then(function (cd) {
 				document.getElementById('root').appendChild(c.render(cd));
 				document.title = 'HARNESS_READY';
+				/* simulate two poll rounds for live widgets */
+				v.applyLive(d);
+				return new Promise(function (r) { setTimeout(r, 1200); });
+			}).then(function () {
+				MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1260000000, tx_bytes: 357000000 } };
+				MOCK['luci-rpc.getNetworkDevices']['br-lan'] = { statistics: { rx_bytes: 40000, tx_bytes: 30000 } };
+				return v.load().then(function (d2) { v.applyLive(d2); });
 			});
 		});
 	}).catch(function (err) {
