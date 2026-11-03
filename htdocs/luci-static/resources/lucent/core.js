@@ -81,8 +81,23 @@ return baseclass.extend({
 				ev.preventDefault();
 				ev.stopPropagation();
 				li.classList.toggle('open');
+				/* In rail mode the flyout follows :hover/:focus-within; without
+				   this blur the clicked header keeps focus and the panel hangs
+				   open even after the mouse leaves. */
+				if (document.documentElement.dataset.rail === '1')
+					a.blur();
 			}
 		}, true);
+
+		body.addEventListener('click', function (ev) {
+			var a = ev.target.closest && ev.target.closest('.ltc-nav ul.dropdown-menu a');
+			if (a)
+				setTimeout(function () {
+					if (document.activeElement === a) {
+						try { a.blur(); } catch (e) {}
+					}
+				}, 60);
+		});
 
 		this.markActive();
 		this.observeMenu();

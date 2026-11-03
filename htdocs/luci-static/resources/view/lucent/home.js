@@ -180,7 +180,7 @@ function sparkCard() {
 		]);
 	};
 
-	var svg = svgel('svg', { 'class': 'ltc-spark', viewBox: '0 0 100 60', preserveAspectRatio: 'none', 'aria-hidden': 'true' }, [
+	var svg = svgel('svg', { 'class': 'ltc-spark', viewBox: '0 0 100 60', preserveAspectRatio: 'none', 'aria-hidden': 'true', style: 'position:absolute;inset:0;width:100%;height:100%' }, [
 		svgel('defs', {}, [grad('ltcGRx', 'var(--accent)'), grad('ltcGTx', 'var(--ok)')]),
 		svgel('path', { 'class': 'tx', fill: 'url(#ltcGTx)', d: '' }),
 		svgel('path', { 'class': 'rx', fill: 'url(#ltcGRx)', d: '' })
@@ -194,7 +194,7 @@ function sparkCard() {
 			]),
 			E('span', { 'class': 'ltc-badge plain', 'data-live': 'spark-now' }, '↓ –  ↑ –')
 		]),
-		E('div', { 'class': 'ltc-sparkwrap' }, [
+		E('div', { 'class': 'ltc-sparkwrap', 'style': 'position:relative;height:88px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--card-2)' }, [
 			svg,
 			E('i', { 'class': 'ltc-spark-dot', 'style': 'display:none' })
 		]),

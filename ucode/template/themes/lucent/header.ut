@@ -25,7 +25,19 @@
 	const show_updates = cfg.show_updates ?? '1';
 	const logo = cfg.logo_image ?? '';
 	const vraw = ubus.call('file', 'read', { path: '/usr/share/lucent/version' });
-	const lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
+	let lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
+	/* When the version marker is missing (old file-copy installs), fall back
+	   to the stylesheet mtime so the cache buster still changes per upgrade. */
+	if (lver == '') {
+		try {
+			const fsmod = require('fs');
+			const st = fsmod.stat('/www' + (media ?? '/luci-static/lucent') + '/theme.css');
+			if (st && st.mtime != null)
+				lver = 'm' + st.mtime;
+		} catch (e) {}
+	}
+	if (lver == '')
+		lver = 'l' + (version?.luciversion ?? '0');
 	const bg = cfg.background ?? '';
 	const lbg = lc(bg);
 

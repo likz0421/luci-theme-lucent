@@ -3,6 +3,24 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.6 — 2026-11-02
+
+### Fixed
+
+- **Stale cached theme.css could survive upgrades.** When the version marker
+  (`/usr/share/lucent/version`) was missing — typical for older file-copy
+  installs — the stylesheet cache buster fell back to the constant `3`, so
+  every upgrade reused the same URL and browsers kept rendering old CSS:
+  unstyled dashboards and a giant unclipped trend triangle (as seen on the
+  XPON device). The buster now falls back to the theme.css mtime, then the
+  LuCI version, so it always changes after an upgrade.
+- **Trend chart size is now inline-styled**, so even a stale stylesheet
+  cannot blow the SVG up to full-page size.
+- **Rail flyout could hang open forever.** Clicking a group header kept
+  keyboard focus (`:focus-within`), pinning the submenu panel after the
+  mouse left. Clicked headers/items now blur, so the panel follows the
+  pointer again.
+
 ## 3.7.5 — 2026-11-02
 
 ### Added
