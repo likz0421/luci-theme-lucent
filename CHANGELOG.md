@@ -3,6 +3,30 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.5 — 2026-11-02
+
+### Added
+
+- **Two new palettes**: Ocean (sea teal) and Sakura (cherry pink), each with
+  light and dark readings — seven colour families in total, now ordered with
+  Mist first as the recommended light-glass default.
+- **Chinese palette names** across the appearance picker: 雾蓝 / 海青 / 青瓷 /
+  樱粉 / 暮紫 / 陶棕 / 石墨.
+- **Dashboard cards can be turned off** individually under Appearance → Home
+  page: traffic trend card, network topology, update banner.
+- **More motion**: KPI numbers count up/down smoothly when they change
+  (memory, storage, devices); a light packet flows along active topology
+  links; cards lift gently on hover; buttons and quick actions squash on
+  press; the trend line breathes. All of it stays disabled under
+  prefers-reduced-motion.
+
+### Note
+
+- Existing installs keep their saved palette because `/etc/config/lucent` is
+  a conffile (upgrades never overwrite user settings). Switch to Mist (雾蓝)
+  once in Appearance, or run
+  `uci set lucent.main.palette=mist && uci commit lucent`.
+
 ## 3.7.4 — 2026-11-02
 
 ### Fixed

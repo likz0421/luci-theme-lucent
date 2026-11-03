@@ -868,3 +868,42 @@ msgstr "今日峰值"
 
 msgid "Unable to reach the update source. Check the network, or enable China mirrors in Appearance."
 msgstr "无法连接更新源。请检查网络,或在外观设置中开启“国内镜像优先”。"
+
+msgid "Show"
+msgstr "显示"
+
+msgid "Hide"
+msgstr "隐藏"
+
+msgid "Traffic trend card"
+msgstr "流量趋势卡片"
+
+msgid "Network topology"
+msgstr "网络拓扑图"
+
+msgid "Update banner"
+msgstr "更新横幅"
+
+msgid "Changes apply after reloading the home page."
+msgstr "修改后重新打开首页生效。"
+
+msgid "Mist"
+msgstr "雾蓝"
+
+msgid "Ocean"
+msgstr "海青"
+
+msgid "Celadon"
+msgstr "青瓷"
+
+msgid "Sakura"
+msgstr "樱粉"
+
+msgid "Dusk"
+msgstr "暮紫"
+
+msgid "Clay"
+msgstr "陶棕"
+
+msgid "Graphite"
+msgstr "石墨"

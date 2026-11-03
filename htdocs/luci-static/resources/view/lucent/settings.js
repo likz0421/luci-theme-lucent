@@ -22,10 +22,12 @@ var callPluginInstall = rpc.declare({ object: 'luci.lucent', method: 'plugin_ins
 var callPluginStatus = rpc.declare({ object: 'luci.lucent', method: 'plugin_status' });
 
 var PALETTES = [
-	{ id: 'clay', label: 'Clay', color: '#cd7255' },
-	{ id: 'celadon', label: 'Celadon', color: '#3d8674' },
 	{ id: 'mist', label: 'Mist', color: '#4b6daa' },
+	{ id: 'ocean', label: 'Ocean', color: '#1f8fa8' },
+	{ id: 'celadon', label: 'Celadon', color: '#3d8674' },
+	{ id: 'sakura', label: 'Sakura', color: '#c96d8d' },
 	{ id: 'dusk', label: 'Dusk', color: '#96608a' },
+	{ id: 'clay', label: 'Clay', color: '#cd7255' },
 	{ id: 'graphite', label: 'Graphite', color: '#34342f' }
 ];
 
@@ -52,7 +54,10 @@ var DEFAULTS = {
 	background: '',
 	logo_image: '',
 	wallpaper_auto: '0',
-	update_cn: '0'
+	update_cn: '0',
+	show_trend: '1',
+	show_topo: '1',
+	show_updates: '1'
 };
 
 function tr(msg) {
@@ -442,7 +447,28 @@ return view.extend({
 				self.cfg.greeting = greeting;
 				document.documentElement.dataset.greeting = greeting;
 				save('greeting', greeting);
-			}), _('When on, the home page fetches one line of the day from v1.hitokoto.cn and caches it for that date. Without internet it falls back to a built-in line.'))
+			}), _('When on, the home page fetches one line of the day from v1.hitokoto.cn and caches it for that date. Without internet it falls back to a built-in line.')),
+			field(_('Traffic trend card'), segmented([
+				{ value: '1', label: _('Show') },
+				{ value: '0', label: _('Hide') }
+			], self.cfg.show_trend, function (v) {
+				self.cfg.show_trend = v;
+				save('show_trend', v);
+			})),
+			field(_('Network topology'), segmented([
+				{ value: '1', label: _('Show') },
+				{ value: '0', label: _('Hide') }
+			], self.cfg.show_topo, function (v) {
+				self.cfg.show_topo = v;
+				save('show_topo', v);
+			})),
+			field(_('Update banner'), segmented([
+				{ value: '1', label: _('Show') },
+				{ value: '0', label: _('Hide') }
+			], self.cfg.show_updates, function (v) {
+				self.cfg.show_updates = v;
+				save('show_updates', v);
+			}), _('Changes apply after reloading the home page.'))
 		]);
 
 		this.pluginBox = E('div', { 'class': 'ltc-plugins' });

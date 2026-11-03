@@ -20,6 +20,9 @@
 	const dim = cfg.bg_dim ?? '0';
 	const density = cfg.density ?? 'cozy';
 	const greeting = cfg.greeting ?? '1';
+	const show_trend = cfg.show_trend ?? '1';
+	const show_topo = cfg.show_topo ?? '1';
+	const show_updates = cfg.show_updates ?? '1';
 	const logo = cfg.logo_image ?? '';
 	const vraw = ubus.call('file', 'read', { path: '/usr/share/lucent/version' });
 	const lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
@@ -41,6 +44,9 @@
       data-alpha="{{ entityencode(alpha, true) }}"
       data-dim="{{ entityencode(dim, true) }}"
       data-greeting="{{ entityencode(greeting, true) }}"
+      data-trend="{{ entityencode(show_trend, true) }}"
+      data-topo="{{ entityencode(show_topo, true) }}"
+      data-updates="{{ entityencode(show_updates, true) }}"
       style="--glass-blur:{{ entityencode(blur, true) }}px;--glass-alpha:{{ entityencode(alpha, true) }}%;--bg-dim:{{ entityencode(dim, true) }}">
 <head>
 	<meta charset="utf-8">

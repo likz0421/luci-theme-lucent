@@ -207,6 +207,30 @@ function sparkCard() {
 	]);
 }
 
+/* Animated counter for live KPI numbers. */
+function setNum(sel, value, suffix) {
+	var el = document.querySelector(sel);
+	if (!el)
+		return;
+	var from = Number(el._num);
+	if (isNaN(from))
+		from = 0;
+	if (from === value) {
+		el.textContent = value + suffix;
+		return;
+	}
+	el._num = value;
+	var t0 = performance.now();
+	function step(t) {
+		var k = Math.min(1, (t - t0) / 450);
+		var e = 1 - Math.pow(1 - k, 3);
+		el.textContent = Math.round(from + (value - from) * e) + suffix;
+		if (k < 1)
+			requestAnimationFrame(step);
+	}
+	requestAnimationFrame(step);
+}
+
 return view.extend({
 	load: function () {
 		return util.load();
@@ -306,11 +330,11 @@ return view.extend({
 		set('[data-live=uptime-sub]', _('%s since boot').format(util.fmtDuration(data.info.uptime)));
 		if (data.info.localtime)
 			set('[data-live=sys-time]', new Date(data.info.localtime * 1000).toLocaleString());
-		set('[data-live=memory]', mem.percent + '%');
+		setNum('[data-live=memory]', mem.percent, '%');
 		set('[data-live=memory-sub]', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)));
 		set('[data-live=wan]', wan ? (util.ip4(wan) || _('Connected')) : _('Down'));
 		set('[data-live=wan-sub]', wan ? (wan.proto || wan.device || '') : _('No default route'));
-		set('[data-live=devices]', String(clients.length));
+		setNum('[data-live=devices]', clients.length, '');
 		set('[data-live=devices-sub]', _('%d active').format(online));
 
 		var gwv = wan ? util.gateway(wan) : '';
@@ -332,7 +356,7 @@ return view.extend({
 			if (lv6 != null)
 				set('[data-live=lease]', util.fmtDuration(lv6) + ' (v6)');
 		}
-		set('[data-live=storage]', storage ? storage.percent + '%' : '–');
+		setNum('[data-live=storage]', storage ? storage.percent : 0, '%');
 		set('[data-live=storage-sub]', storage
 			? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–');
 
@@ -726,7 +750,7 @@ return view.extend({
 		]);
 
 		var networkCard = card(_('Network'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/network/network') }, _('Manage') + ' →'),
-			E([topo, facts]));
+			E(document.documentElement.dataset.topo === '0' ? [facts] : [topo, facts]));
 
 		var health = E('div', { 'class': 'ltc-rings' }, [
 			ring(_('Memory'), mem.percent + '%', mem.percent, 'mem'),
@@ -800,15 +824,19 @@ return view.extend({
 			Promise.resolve().then(L.bind(this.fetchGreeting, this));
 		Promise.resolve().then(L.bind(this.drawSpark, this));
 
-		return E('div', { 'class': 'ltc-stack' }, [
-			hero,
-			this.updateCard(data),
-			kpis,
-			sparkCard(),
+		var ds = document.documentElement.dataset;
+		var stack = [hero];
+		if (ds.updates !== '0')
+			stack.push(this.updateCard(data));
+		stack.push(kpis);
+		if (ds.trend !== '0')
+			stack.push(sparkCard());
+		stack.push(
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
 			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
 			E('div', { 'class': 'ltc-grid' }, [systemCard])
-		]);
+		);
+		return E('div', { 'class': 'ltc-stack' }, stack);
 	},
 
 	handleSaveApply: null,
