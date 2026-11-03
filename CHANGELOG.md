@@ -3,6 +3,41 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.2 — 2026-11-03
+
+### Fixed
+
+- **The sidebar menu could still be blank.** 3.9.0 removed the dependency on
+  `luci-theme-bootstrap`, but the theme then relied on a single source for the
+  menu tree — `ui.menu.load()`. When that one call fails (session storage
+  blocked, a forked luci-base, a cached empty tree, a menu endpoint that
+  errors) the sidebar rendered nothing at all.
+  - The builder now tries three sources in order: `ui.menu.load()`, then the
+    raw `admin/menu` endpoint over XHR, and only then the built-in menu.
+  - The built-in menu is a real navigation tree — Home, Devices, Status,
+    Network, System, Appearance, Logout with their stock sub-paths — rendered
+    with the same markup as the live menu, so icons, the accordion, the mobile
+    drawer and the command palette all keep working.
+  - When the fallback is used the sidebar **says why**: a note at the top of
+    the menu carries the failing step and the error (e.g.
+    `ui.menu: …; /cgi-bin/luci/admin/menu → HTTP 404`) plus a **Retry** button
+    that flushes LuCI's menu cache and session storage before rebuilding.
+  - A retry is also scheduled once after 4 s in case another module raced the
+    build and left `#topmenu` empty.
+  - Rebuilding clears `#topmenu`, `#modemenu` and `#tabmenu` first, so a retry
+    cannot stack duplicate menus.
+
+### Verified
+
+- Browser harness runs four menu scenarios via URL flags — healthy tree,
+  `ui.menu.load()` rejecting, an empty tree, and no `ui.menu` class at all:
+  42 checks pass in the healthy case and 45 in each failure case, asserting
+  the sidebar is never empty, the note and Retry button appear, the built-in
+  groups render, icons are injected on every link and the active page is still
+  marked and its group expanded.
+- Fallback rendering checked in a browser screenshot at 1600 px.
+- All new strings translated; `lucent.zh-cn.lmo` regenerated (0 missing).
+
 ## 3.10.1 — 2026-11-03
 
 ### Fixed

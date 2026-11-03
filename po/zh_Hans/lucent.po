@@ -1123,3 +1123,36 @@ msgstr "Unsplash"
 
 msgid "Wallhaven"
 msgstr "Wallhaven"
+
+msgid "The live menu could not be loaded, showing the built-in navigation instead."
+msgstr "无法加载实时菜单，已改为显示内置导航。"
+
+msgid "The menu service returned no entries"
+msgstr "菜单服务未返回任何条目"
+
+msgid "This LuCI build exposes no menu class"
+msgstr "当前 LuCI 未提供菜单模块"
+
+msgid "The menu endpoint did not return JSON"
+msgstr "菜单接口未返回 JSON"
+
+msgid "Cannot reach"
+msgstr "无法访问"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "Realtime"
+msgstr "实时"
+
+msgid "System log"
+msgstr "系统日志"
+
+msgid "Interfaces"
+msgstr "网络接口"
+
+msgid "Routes"
+msgstr "路由"
+
+msgid "Administration"
+msgstr "管理权"

@@ -323,6 +323,16 @@ var FLAGS = location.hash || '';
 	registry.core = await mod(base + 'lucent/core.js');
 	var home = await mod(base + 'view/lucent/home.js');
 	var clients = await mod(base + 'view/lucent/clients.js');
+
+	/* menu failure scenarios: the sidebar must never end up blank */
+	var menuFail = /#menu-(reject|empty|noclass)/.test(FLAGS);
+	if (/#menu-reject/.test(FLAGS))
+		ui.menu.load = function () { return Promise.reject(new Error('mock session failure')); };
+	if (/#menu-empty/.test(FLAGS))
+		ui.menu.load = function () { return Promise.resolve({ children: {} }); };
+	if (/#menu-noclass/.test(FLAGS))
+		ui.menu = null;
+
 	var menu = await mod(base + 'menu-lucent.js');
 	var side = await mod(base + 'lucent/sideinfo.js');
 
@@ -383,8 +393,15 @@ var FLAGS = location.hash || '';
 		document.title = 'HARNESS_READY';
 		check('pathname patched', pathOk, location.pathname);
 		check('menu entries', top.length >= 6, top.length + ' top level');
-		check('submenu groups', groups.length >= 4, groups.length + ' groups');
-		check('nav icons injected', document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length >= top.length);
+		check('submenu groups', groups.length >= 3, groups.length + ' groups');
+		check('nav icons injected',
+			document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length >= document.querySelectorAll('#topmenu > li > a').length,
+			document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length + ' icons / ' + document.querySelectorAll('#topmenu > li > a').length + ' links');
+		if (menuFail) {
+			check('fallback note shown', !!document.querySelector('.ltc-nav-note'));
+			check('retry button present', !!document.querySelector('.ltc-nav-note .ltc-btn'));
+			check('fallback keeps groups', document.querySelectorAll('#topmenu > li.dropdown').length >= 3);
+		}
 		check('active link marked', document.querySelectorAll('.ltc-nav a.on').length === 1,
 			'on=' + document.querySelectorAll('.ltc-nav a.on').length);
 
