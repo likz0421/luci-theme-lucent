@@ -683,13 +683,39 @@ host_rates() {
 # Which physical and wireless links sit under the LAN bridge, at what speed,
 # and which MAC learned on which port — enough to draw a branching tree.
 topology() {
-	local br p dev st sp dx wl mac label
+	local br p dev st sp dx wl mac label member parent
 	br=""
-	for p in /sys/class/net/*/brif; do
-		[ -d "$p" ] || continue
-		br=${p%/brif}; br=${br##*/}
-		break
-	done
+
+	# 先认 br-lan，再认 lan 口所在的桥，最后才退到任意一个桥 —— ONU/DSA 上
+	# 常有多个桥，取第一个会把整棵树挂到无关的桥上
+	[ -d /sys/class/net/br-lan/brif ] && br=br-lan
+
+	if [ -z "$br" ]; then
+		for member in "$(uci -q get network.lan.device 2>/dev/null)" \
+			"$(uci -q get network.lan.ifname 2>/dev/null)"; do
+			[ -n "$member" ] || continue
+			if [ -d "/sys/class/net/$member/brif" ]; then
+				br=$member
+				break
+			fi
+			for p in /sys/class/net/*/brif/"$member"; do
+				[ -e "$p" ] || continue
+				parent=$(dirname "$(dirname "$p")")
+				br=${parent##*/}
+				break
+			done
+			[ -n "$br" ] && break
+		done
+	fi
+
+	if [ -z "$br" ]; then
+		for p in /sys/class/net/*/brif; do
+			[ -d "$p" ] || continue
+			parent=$(dirname "$p")
+			br=${parent##*/}
+			break
+		done
+	fi
 
 	json_init
 	json_add_string bridge "$br"
@@ -703,6 +729,7 @@ topology() {
 		for p in /sys/class/net/$br/brif/*; do
 			[ -d "$p" ] || continue
 			dev=${p##*/}
+			[ -n "$dev" ] || continue
 			st=$(cat "$p/operstate" 2>/dev/null)
 			sp=$(cat "$p/speed" 2>/dev/null)
 			dx=$(cat "$p/duplex" 2>/dev/null)
@@ -715,7 +742,8 @@ topology() {
 
 			json_add_object
 			json_add_string device "$dev"
-			json_add_string state "${st:-unknown}"
+			# 读不到 operstate 就省略，而不是塞一个 "unknown" 占满整棵树
+			[ -n "$st" ] && json_add_string state "$st"
 			json_add_int wireless "$wl"
 			case "$sp" in ''|*[!0-9]*) ;; *) json_add_int speed "$sp" ;; esac
 			[ -n "$dx" ] && json_add_string duplex "$dx"
@@ -754,6 +782,59 @@ topology() {
 		rm -f /tmp/lucent-fdb.txt
 	fi
 	json_close_array
+	json_dump
+	json_cleanup
+}
+
+# ------------------------------------------------------------- day traffic
+# Today's counters are the current WAN byte totals minus a baseline captured
+# on the first call of the day; a reconnect resets the kernel counters, which
+# shows up as a negative delta and is clamped to zero.
+DAYFILE="/tmp/lucent-day.traffic"
+
+day_traffic() {
+	local i dev brx btx today ddate="" drx=0 dtx=0 rx tx
+
+	for i in wan wwan modem; do
+		dev=$(ubus call network.interface.$i status 2>/dev/null | jsonfilter -e '@.l3_device' 2>/dev/null)
+		[ -n "$dev" ] && break
+	done
+	[ -n "$dev" ] || dev=$(uci -q get network.wan.device 2>/dev/null)
+
+	json_init
+
+	if [ -z "$dev" ] || [ ! -r "/sys/class/net/$dev/statistics/rx_bytes" ]; then
+		json_add_int ok 0
+		json_dump
+		json_cleanup
+		return
+	fi
+
+	brx=$(cat "/sys/class/net/$dev/statistics/rx_bytes" 2>/dev/null)
+	btx=$(cat "/sys/class/net/$dev/statistics/tx_bytes" 2>/dev/null)
+	case "$brx" in ''|*[!0-9]*) brx=0 ;; esac
+	case "$btx" in ''|*[!0-9]*) btx=0 ;; esac
+	today=$(date +%Y-%m-%d 2>/dev/null)
+
+	[ -f "$DAYFILE" ] && read -r ddate drx dtx < "$DAYFILE" 2>/dev/null
+
+	if [ "$ddate" != "$today" ]; then
+		drx=$brx; dtx=$btx
+	fi
+
+	rx=$(( brx - drx )); tx=$(( btx - dtx ))
+	[ "$rx" -lt 0 ] && rx=0
+	[ "$tx" -lt 0 ] && tx=0
+
+	printf '%s %s %s\n' "$today" "$brx" "$btx" > "$DAYFILE" 2>/dev/null
+
+	json_add_int ok 1
+	json_add_string device "$dev"
+	json_add_string day "$today"
+	json_add_int down "$rx"
+	json_add_int up "$tx"
+	json_add_int since_boot_down "$brx"
+	json_add_int since_boot_up "$btx"
 	json_dump
 	json_cleanup
 }
@@ -910,6 +991,7 @@ list)
 	json_add_object "overview"; json_close_object
 	json_add_object "topology"; json_close_object
 	json_add_object "host_rates"; json_close_object
+	json_add_object "day_traffic"; json_close_object
 	json_add_object "pkg_updates"; json_close_object
 	json_add_object "theme_check"; json_close_object
 	json_add_object "theme_update"; json_close_object
@@ -931,6 +1013,7 @@ call)
 		overview) overview ;;
 		topology) topology ;;
 		host_rates) host_rates ;;
+		day_traffic) day_traffic ;;
 		pkg_updates) pkg_updates ;;
 		theme_check) theme_check ;;
 		theme_update) theme_update ;;

@@ -56,6 +56,36 @@ function childrenOf(tree) {
 		.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 }
 
+/* A request that never answers is worse than one that fails: the promise
+   never settles, so neither the menu nor the fallback is ever drawn and the
+   sidebar stays blank forever. Every source therefore gets a deadline. */
+function withTimeout(promise, ms, label) {
+	return new Promise(function (resolve, reject) {
+		var settled = false;
+
+		var timer = setTimeout(function () {
+			if (settled)
+				return;
+			settled = true;
+			reject(new Error('%s → %s %dms'.format(label, _('timed out'), ms)));
+		}, ms);
+
+		promise.then(function (v) {
+			if (settled)
+				return;
+			settled = true;
+			clearTimeout(timer);
+			resolve(v);
+		}, function (e) {
+			if (settled)
+				return;
+			settled = true;
+			clearTimeout(timer);
+			reject(e);
+		});
+	});
+}
+
 return baseclass.extend({
 	__init: function () {
 		var self = this;
@@ -63,11 +93,14 @@ return baseclass.extend({
 		this.reason = '';
 		this.build();
 
-		/* If something else cleared or raced the menu, one retry is cheap. */
+		/* Last resort: by now every deadline above has expired, so an empty
+		   menu here means something else cleared it. Rebuild once, no more. */
 		setTimeout(function () {
-			if (!document.querySelector('#topmenu li'))
+			if (!self._retried && !document.querySelector('#topmenu li')) {
+				self._retried = true;
 				self.build();
-		}, 4000);
+			}
+		}, 12000);
 	},
 
 	build: function () {
@@ -109,18 +142,23 @@ return baseclass.extend({
 		var self = this;
 
 		if (ui.menu && typeof ui.menu.load === 'function') {
-			return ui.menu.load().catch(function (err) {
+			return withTimeout(ui.menu.load(), 4000, 'ui.menu.load()').catch(function (err) {
 				self.reason = 'ui.menu: ' + String(err && err.message || err);
-				return self.fetchTree();
+				return withTimeout(self.fetchTree(), 6000, 'admin/menu').catch(function (err2) {
+					self.reason += '; ' + String(err2 && err2.message || err2);
+					return null;
+				});
 			});
 		}
 
 		this.reason = _('This LuCI build exposes no menu class');
-		return this.fetchTree();
+		return withTimeout(this.fetchTree(), 6000, 'admin/menu').catch(function (err) {
+			self.reason += '; ' + String(err && err.message || err);
+			return null;
+		});
 	},
 
 	fetchTree: function () {
-		var self = this;
 		var url = L.url('admin/menu');
 
 		return new Promise(function (resolve, reject) {
@@ -143,9 +181,6 @@ return baseclass.extend({
 				reject(new Error('%s %s'.format(_('Cannot reach'), url)));
 			};
 			req.send();
-		}).catch(function (err) {
-			self.reason = self.reason ? self.reason + '; ' + String(err.message || err) : String(err.message || err);
-			return null;
 		});
 	},
 

@@ -1156,3 +1156,12 @@ msgstr "路由"
 
 msgid "Administration"
 msgstr "管理权"
+
+msgid "more ports"
+msgstr "个其他端口"
+
+msgid "Hosts the bridge forwarding table could not place"
+msgstr "桥接转发表无法定位这些主机所在的端口"
+
+msgid "timed out"
+msgstr "超时"

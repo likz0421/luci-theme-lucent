@@ -386,7 +386,7 @@ function treeSection(data, wifi) {
 		}
 		if (p.speed)
 			meta.push('%d Mb/s'.format(p.speed));
-		if (p.state && p.state !== 'up')
+		if (p.state && p.state !== 'up' && p.state !== 'unknown')
 			meta.push(p.state);
 
 		return E('li', {}, [
@@ -410,11 +410,26 @@ function treeSection(data, wifi) {
 	/* leaf() records what it placed, so the catch-all has to be computed after
 	   the port branches exist, not before */
 	var kids = ports.map(portNode);
+
+	/* ONUs and DSA boards can expose dozens of bridge members; show the first
+	   screenful and let the user open the rest */
+	var LIMIT = 12;
+	var hidden = [];
+
+	if (kids.length > LIMIT) {
+		hidden = kids.slice(LIMIT);
+		kids = kids.slice(0, LIMIT);
+	}
+
 	var stray = hosts.filter(function (h) { return h.mac && !placed[h.mac]; });
 
+	var branch = E('ul', { 'class': 'ltc-tkids' });
+
+	kids.forEach(function (n) { branch.appendChild(n); });
+
 	if (stray.length) {
-		kids.push(E('li', {}, [
-			E('div', { 'class': 'ltc-tnode port' }, [
+		branch.appendChild(E('li', {}, [
+			E('div', { 'class': 'ltc-tnode other', 'title': _('Hosts the bridge forwarding table could not place') }, [
 				E('span', { 'class': 'ic' }, util.icon('info')),
 				E('span', { 'class': 'tname' }, _('Other links')),
 				E('small', { 'class': 'tmeta' }, _('port unknown')),
@@ -424,6 +439,20 @@ function treeSection(data, wifi) {
 		]));
 	}
 
+	if (hidden.length) {
+		var more = E('li', {}, E('div', { 'class': 'ltc-tnode more', 'role': 'button', 'tabindex': '0' }, [
+			E('span', { 'class': 'ic' }, util.icon('chev')),
+			E('span', { 'class': 'tname' }, '%d %s'.format(hidden.length, _('more ports')))
+		]));
+
+		more.firstChild.addEventListener('click', function () {
+			hidden.forEach(function (n) { branch.insertBefore(n, more); });
+			more.remove();
+		});
+
+		branch.appendChild(more);
+	}
+
 	return E('ul', { 'class': 'ltc-tree' }, [
 		E('li', {}, [
 			E('div', { 'class': 'ltc-tnode root' }, [
@@ -431,7 +460,7 @@ function treeSection(data, wifi) {
 				E('span', { 'class': 'tname' }, topo.bridge || _('Bridge')),
 				E('small', { 'class': 'tmeta' }, '%d · %d %s'.format(ports.length, hosts.length, _('devices')))
 			]),
-			E('ul', { 'class': 'ltc-tkids' }, kids)
+			branch
 		])
 	]);
 }

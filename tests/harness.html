@@ -325,13 +325,25 @@ var FLAGS = location.hash || '';
 	var clients = await mod(base + 'view/lucent/clients.js');
 
 	/* menu failure scenarios: the sidebar must never end up blank */
-	var menuFail = /#menu-(reject|empty|noclass)/.test(FLAGS);
+	var menuFail = /#menu-(reject|empty|noclass|hang)/.test(FLAGS);
 	if (/#menu-reject/.test(FLAGS))
 		ui.menu.load = function () { return Promise.reject(new Error('mock session failure')); };
 	if (/#menu-empty/.test(FLAGS))
 		ui.menu.load = function () { return Promise.resolve({ children: {} }); };
 	if (/#menu-noclass/.test(FLAGS))
 		ui.menu = null;
+	/* a request that never answers must still fall back, on a deadline */
+	if (/#menu-hang/.test(FLAGS))
+		ui.menu.load = function () { return new Promise(function () {}); };
+
+	if (/#manyports/.test(FLAGS)) {
+		var extra = [];
+		for (var pi = 1; pi <= 13; pi++)
+			extra.push({ device: 'lan' + pi, state: pi % 3 ? 'up' : 'down', wireless: 0, speed: 1000, label: 'lan' + pi });
+		MOCK['luci.lucent.topology'].ports = [{ device: 'wlan0', state: 'up', wireless: 1, label: 'wlan0' },
+			{ device: 'wlan1', state: 'up', wireless: 1, label: 'wlan1' }].concat(extra);
+		MOCK['luci.lucent.topology'].fdb = [];
+	}
 
 	var menu = await mod(base + 'menu-lucent.js');
 	var side = await mod(base + 'lucent/sideinfo.js');
@@ -402,6 +414,25 @@ var FLAGS = location.hash || '';
 			check('retry button present', !!document.querySelector('.ltc-nav-note .ltc-btn'));
 			check('fallback keeps groups', document.querySelectorAll('#topmenu > li.dropdown').length >= 3);
 		}
+		if (/#menu-hang/.test(FLAGS)) {
+			var why = document.querySelector('.ltc-nav-note small');
+			check('hanging menu hits its deadline', !!why && /timed out/.test(why.textContent),
+				why && why.textContent.slice(0, 80));
+			check('hang still yields a menu', document.querySelectorAll('#topmenu > li').length >= 7,
+				document.querySelectorAll('#topmenu > li').length + ' entries');
+		}
+		if (/#manyports/.test(FLAGS)) {
+			var shown = document.querySelectorAll('.ltc-tnode.port').length;
+			var moreBtn = document.querySelector('.ltc-tnode.more');
+			check('ports capped', shown === 12, shown + ' shown');
+			check('more toggle present', !!moreBtn, moreBtn && moreBtn.textContent);
+			if (moreBtn) {
+				moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+				var after = document.querySelectorAll('.ltc-tnode.port').length;
+				check('toggle expands the rest', after === 15 && !document.querySelector('.ltc-tnode.more'),
+					after + ' after click');
+			}
+		}
 		check('active link marked', document.querySelectorAll('.ltc-nav a.on').length === 1,
 			'on=' + document.querySelectorAll('.ltc-nav a.on').length);
 
@@ -451,7 +482,9 @@ var FLAGS = location.hash || '';
 		check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
 		check('phone placed under radio', /phone/.test(leafText), leafText.slice(0, 90));
 		check('laptop placed under lan1', /laptop/.test(leafText));
-		check('every host placed on a branch', !/Other links/.test(portText), 'no catch-all needed');
+		check('every host placed on a branch',
+			/#manyports/.test(FLAGS) || !/Other links/.test(portText),
+			/#manyports/.test(FLAGS) ? 'skipped: fdb emptied on purpose' : 'no catch-all needed');
 		check('per-host rate in tree', !!document.querySelector('[data-live=hr-192-168-1-30]'),
 			document.querySelector('[data-live=hr-192-168-1-30]') && document.querySelector('[data-live=hr-192-168-1-30]').textContent);
 

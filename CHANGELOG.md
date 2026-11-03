@@ -3,6 +3,48 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.4 — 2026-11-04
+
+### Fixed
+
+- **A menu request that never answers left the sidebar blank forever.** The
+  fallback added in 3.10.2 only ran when a source *rejected*; a hanging one
+  never settles, so neither the live menu nor the fallback was ever drawn —
+  which is what the mobile drawer showed while the desktop was fine. Every
+  source now has a deadline (`ui.menu.load()` 4 s, the raw `admin/menu`
+  request 6 s); on expiry the builder moves to the next source and ultimately
+  to the built-in menu, with the reason line reading e.g.
+  `ui.menu: ui.menu.load() → timed out 4000ms`. The last-resort rebuild fires
+  once at 12 s instead of re-running every few seconds.
+- **The topology could attach the tree to the wrong bridge.** The helper
+  picked the first `/sys/class/net/*/brif` it found, so on boxes with several
+  bridges (ONUs, DSA boards) the tree described an unrelated bridge. It now
+  prefers `br-lan`, then the bridge that actually carries `network.lan`, and
+  only then any bridge.
+- **A wall of `unknown` rows.** `operstate` is unreadable for many virtual
+  members; that used to be reported as the literal string `unknown` and the
+  frontend printed it as the row's only content. The helper now omits the
+  field instead of inventing a value, and the tree skips it.
+- **Long port lists flooded the card.** The tree renders the first 12 members
+  and offers a "N more ports" row that expands the rest in place.
+
+### Added
+
+- `day_traffic` helper method: today's down/up totals from the WAN counters,
+  with the daily baseline kept in `/tmp` and reset on date change (a
+  reconnect that zeroes the kernel counters clamps to zero instead of
+  reporting a huge number). The dashboard surface for it lands next.
+
+### Verified
+
+- Six harness scenarios, each a full page run: healthy menu (42 checks),
+  `ui.menu.load()` rejecting (45), **hanging forever (47 — asserts the
+  deadline fires and a menu still appears)**, an empty tree (45), no `ui.menu`
+  class at all (45), and a 15-port bridge (45 — asserts exactly 12 rendered,
+  the toggle present, and 15 after clicking it). 0 failures in all six.
+- `sh -n` clean on the rpcd helper; all touched JS modules parse.
+- Port cap and tree rendering checked in a browser screenshot.
+
 ## 3.10.3 — 2026-11-04
 
 ### Fixed
