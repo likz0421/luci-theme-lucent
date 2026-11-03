@@ -7,10 +7,50 @@
 <style>
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Microsoft YaHei",sans-serif;font-size:14px}
 main{max-width:1560px;margin:0 auto;padding:20px}
+#report{display:none;position:fixed;left:8px;bottom:8px;z-index:9999;margin:0;padding:8px 10px;max-width:520px;
+	max-height:40vh;overflow:auto;background:#000;color:#0f0;font:11px/1.45 monospace;white-space:pre-wrap}
+body.show-report #report{display:block}
 </style>
 </head>
-<body>
-<main id="root"><div style="padding:40px">loading…</div></main>
+<body class="ltc-page lang_zh" data-page="admin-home">
+<div class="ltc-shell">
+	<aside class="ltc-side" id="ltc-side">
+		<a class="ltc-brand" href="#">
+			<span class="ltc-mark" aria-hidden="true">
+				<svg viewBox="0 0 40 40"><rect width="40" height="40" rx="13"/><path d="M11 25a9 9 0 0 1 18 0M15.4 25a4.6 4.6 0 0 1 9.2 0"/><circle cx="20" cy="28.2" r="1.9"/></svg>
+			</span>
+			<span class="ltc-brand-t"><b>Lucent</b><small>OpenWrt</small></span>
+		</a>
+		<nav class="ltc-nav" aria-label="Navigation"><ul id="topmenu"></ul></nav>
+		<div class="ltc-side-foot">
+			<ul id="modemenu" class="ltc-modes"></ul>
+			<button type="button" class="ltc-icon-btn" data-ltc-theme title="Toggle appearance">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/></svg>
+			</button>
+		</div>
+	</aside>
+	<div class="ltc-stage">
+		<header class="ltc-bar">
+			<button type="button" class="ltc-icon-btn ltc-burger" data-ltc-menu aria-label="Menu">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+			</button>
+			<div class="ltc-crumb"><span>OpenWrt</span><b>Home</b></div>
+			<div class="ltc-bar-right">
+				<button type="button" class="ltc-icon-btn ltc-search-btn" data-ltc-search aria-label="Search">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+				</button>
+				<div id="indicators"></div>
+			</div>
+		</header>
+		<main id="root" class="ltc-content"><div style="padding:40px">loading…</div></main>
+		<div id="tabmenu" class="ltc-tabmenu"></div>
+	</div>
+</div>
+<nav class="ltc-dock" aria-label="Quick navigation">
+	<a href="#" data-dock="home"><svg viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.8l8.5 6.7V19a1.5 1.5 0 0 1-1.5 1.5h-4.4v-5.7H9.4v5.7H5A1.5 1.5 0 0 1 3.5 19z"/></svg><b>Home</b></a>
+	<a href="#" data-dock="clients"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="13.5" height="10" rx="1.6"/><path d="M1.5 18.5h16"/><rect x="18" y="8.5" width="4.5" height="10" rx="1.2"/></svg><b>Devices</b></a>
+</nav>
+<pre id="report"></pre>
 <script>
 /* Minimal LuCI shim so the real view modules can run outside OpenWrt. */
 var SVG_TAGS = ['svg','path','circle','rect','g','defs','lineargradient','stop','line','polyline','polygon','text','tspan','use','filter','clippath'];
@@ -80,10 +120,13 @@ if (!String.prototype.format) {
 	};
 }
 window.L = {
-	url: function () { return '#'; },
+	url: function () {
+		return '/cgi-bin/luci/' + Array.prototype.slice.call(arguments).join('/');
+	},
 	bind: function (f, c) { return f.bind(c); },
 	resolveDefault: function (p, d) { return Promise.resolve(p).catch(function () { return d; }); },
-	env: {}
+	isObject: function (v) { return v != null && typeof v === 'object'; },
+	env: { dispatchpath: ['admin', 'home'], requestpath: ['admin', 'home'] }
 };
 
 var NOW = Math.floor(Date.now() / 1000);
@@ -111,11 +154,46 @@ var MOCK = {
 	'luci-rpc.getNetworkDevices': { 'pppoe-wan': { statistics: { rx_bytes: 1258291200, tx_bytes: 356515840 } }, 'br-lan': { statistics: { rx_bytes: 999, tx_bytes: 888 } } },
 	'luci.lucent.storage': { '/': { total: 103079215, free: 76545000 } },
 	'luci-rpc.getConnsPerHost': { '192.168.1.30': { count: 12 }, '192.168.1.31': { count: 3 } },
-	'luci.lucent.overview': { version: '3.8.1-r1', cores: 4, cpus: [42, 17, 63, 8], load1: '0.25', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
+	'luci.lucent.overview': { version: '3.9.0-r1', cores: 4, cpus: [42, 17, 63, 8], load1: '0.25', load5: '0.31', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
 	'luci.lucent.theme_check': { current: '3.7.2-r1', latest: '3.7.3', available: true },
 	'luci.lucent.theme_status': { running: 0, code: -1, log: '' },
 	'luci.lucent.pkg_updates': { count: 4 }
 };
+
+/* Root menu node in the shape /admin/menu serves: children keyed by node name,
+   each carrying `satisfied` and `title`. */
+function node(title, order, children) {
+	return { title: title, order: order, satisfied: true, children: children || {} };
+}
+var MENU = node(null, 0, {
+	admin: node('Admin', 10, {
+		home: node('Home', 1),
+		clients: node('Devices', 2),
+		status: node('Status', 3, {
+			realtime: node('Realtime', 1),
+			load: node('Load', 2),
+			sessions: node('Sessions', 3)
+		}),
+		network: node('Network', 5, {
+			network: node('Interfaces', 1),
+			wireless: node('Wireless', 2),
+			dhcp: node('DHCP Leases', 3)
+		}),
+		services: node('Services', 6, {
+			cron: node('Cron Control', 1)
+		}),
+		vpn: node('VPN', 7, {
+			o: node('OpenVPN', 1)
+		}),
+		system: node('System', 8, {
+			general: node('System', 1),
+			packages: node('Software', 2),
+			advanced: node('Tuning', 3),
+			admin: node('Administration', 4)
+		}),
+		logout: node('Logout', 99)
+	})
+});
 
 var rpc = { declare: function (spec) {
 	return function () {
@@ -133,47 +211,191 @@ var baseclass = {
 var uci = { load: function () { return Promise.resolve(); }, get: function () { return null; }, set: function () {}, save: function () { return Promise.resolve(); } };
 var poll = { add: function () {} };
 var view = baseclass;
+var ui = { menu: {
+	load: function () { return Promise.resolve(MENU); },
+	getChildren: function (n) {
+		var kids = (n && n.children) || {};
+		return Object.keys(kids)
+			.filter(function (k) { return kids[k].satisfied && kids[k].title != null; })
+			.map(function (k) {
+				var c = kids[k];
+				c.name = k;
+				return c;
+			})
+			.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+	}
+} };
 
-async function mod(path, name) {
-	var src = await (await fetch(path)).text();
-	var fn = new Function('L', 'rpc', 'baseclass', 'uci', 'poll', 'view', 'E', '_', 'core', 'util', src);
-	return fn(L, rpc, baseclass, uci, poll, view, E, window._, registry.core, registry.util);
+var REPORT = [];
+function check(name, ok, detail) {
+	REPORT.push('%s %s%s'.format(ok ? 'PASS' : 'FAIL', name, detail != null ? ' — ' + detail : ''));
+	document.getElementById('report').textContent = REPORT.join('\n');
+	if (!ok)
+		document.title = 'HARNESS_FAILED';
+}
+
+/* Surface setup failures instead of swallowing them as unhandled rejections. */
+function bail(where, err) {
+	REPORT.push('THREW in %s — %s'.format(where, (err && err.stack || err)));
+	document.getElementById('report').textContent = REPORT.join('\n');
+	document.getElementById('root').textContent = 'RUNTIME ERROR in %s: %s'.format(where, err && err.stack || err);
+	document.title = 'HARNESS_ERROR';
+}
+window.addEventListener('error', function (ev) { bail('window', ev.error || ev.message); });
+window.addEventListener('unhandledrejection', function (ev) { bail('rejection', ev.reason); });
+
+async function mod(path) {
+	var resp = await fetch(path);
+	var src = await resp.text();
+	var fn = new Function('L', 'rpc', 'baseclass', 'uci', 'poll', 'view', 'E', '_', 'ui', 'core', 'util', src);
+	var res = fn(window.L, rpc, baseclass, uci, poll, view, E, window._, ui, registry.core, registry.util);
+
+	if (res === undefined)
+		throw new Error('%s → %d %d bytes, body starts %s'.format(path, resp.status, src.length, JSON.stringify(src.slice(0, 60))));
+
+	/* LuCI's require instantiates baseclass modules, which runs __init. */
+	if (typeof res.__init === 'function')
+		res.__init();
+
+	return res;
 }
 
 var registry = { core: null, util: null };
-var base = '../htdocs/luci-static/resources/';
+/* absolute, so the later pathname rewrite cannot break these fetches */
+var base = new URL('../htdocs/luci-static/resources/', document.baseURI).href;
+
+function wait(ms) {
+	return new Promise(function (r) { setTimeout(r, ms); });
+}
+
+/* #rail and #drawer force the two sidebar modes so they can be screenshotted. */
+var FLAGS = location.hash || '';
 
 (async function () {
 	registry.util = await mod(base + 'lucent/util.js');
 	registry.core = await mod(base + 'lucent/core.js');
 	var home = await mod(base + 'view/lucent/home.js');
 	var clients = await mod(base + 'view/lucent/clients.js');
+	var menu = await mod(base + 'menu-lucent.js');
+	var side = await mod(base + 'lucent/sideinfo.js');
+
+	side.init();
+	registry.core.init();
 
 	var v = Object.create(home);
+	var dash = null;
+
 	v.load().then(function (d) {
+		dash = d;
 		var el = v.render(d);
 		document.getElementById('root').textContent = '';
 		document.getElementById('root').appendChild(el);
 		window.__home = v;
-		return new Promise(function (r) { setTimeout(r, 1500); }).then(function () {
-			var c = Object.create(clients);
-			return c.load().then(function (cd) {
-				document.getElementById('root').appendChild(c.render(cd));
-				document.title = 'HARNESS_READY';
-				/* simulate two poll rounds for live widgets */
-				v.applyLive(d);
-				return new Promise(function (r) { setTimeout(r, 1200); });
-			}).then(function () {
-				MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1260000000, tx_bytes: 357000000 } };
-				MOCK['luci-rpc.getNetworkDevices']['br-lan'] = { statistics: { rx_bytes: 40000, tx_bytes: 30000 } };
-				return v.load().then(function (d2) { v.applyLive(d2); });
-			});
+		return wait(1500);
+	}).then(function () {
+		var c = Object.create(clients);
+		return c.load().then(function (cd) {
+			document.getElementById('root').appendChild(c.render(cd));
 		});
+	}).then(function () { return wait(1300); }).then(function () {
+		/* sidebar traffic: two more samples with moved counters */
+		MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1260000000, tx_bytes: 357000000 } };
+		side._n = 3;
+		side.tick();
+		return wait(1300);
+	}).then(function () {
+		MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1264800000, tx_bytes: 357640000 } };
+		side._n = 4;
+		side.tick();
+		return wait(2600);
+	}).then(function () {
+		/* markActive() compares against location.pathname, which on a router is
+		   /cgi-bin/luci/admin/<page>. Mirror that here when the origin allows it. */
+		var pathOk = false;
+		try {
+			history.replaceState(null, '', '/cgi-bin/luci/admin/home');
+			pathOk = true;
+		} catch (e) {}
+
+		registry.core.markActive();
+
+		var top = document.querySelectorAll('#topmenu > li');
+		var groups = document.querySelectorAll('#topmenu > li.dropdown');
+		var panel = document.querySelector('.ltc-side-info');
+		var rows = document.querySelectorAll('.ltc-si-rows li');
+		var visible = Array.prototype.filter.call(rows, function (li) { return li.style.display !== 'none'; });
+		var curve = document.querySelector('.ltc-si-curve .rx');
+		var skel = document.querySelectorAll('.ltc-side-info .ltc-skel');
+		var bar = panel && panel.querySelector('[data-si-bar=sto]');
+
+		function txt(key) {
+			var el = panel && panel.querySelector('[data-si=' + key + ']');
+			return el ? el.textContent : null;
+		}
+
+		document.title = 'HARNESS_READY';
+		check('pathname patched', pathOk, location.pathname);
+		check('menu entries', top.length >= 6, top.length + ' top level');
+		check('submenu groups', groups.length >= 4, groups.length + ' groups');
+		check('nav icons injected', document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length >= top.length);
+		check('active link marked', document.querySelectorAll('.ltc-nav a.on').length === 1,
+			'on=' + document.querySelectorAll('.ltc-nav a.on').length);
+
+		/* a page inside a group must open that group and keep others closed */
+		try { history.replaceState(null, '', '/cgi-bin/luci/admin/system/packages'); } catch (e) {}
+		registry.core.markActive();
+		var onNested = document.querySelectorAll('.ltc-nav a.on');
+		var groupsOpen = document.querySelectorAll('#topmenu > li.open').length;
+		check('nested page opens its group',
+			onNested.length === 1 && groupsOpen === 1 && /system\/packages$/.test(onNested[0].getAttribute('href')),
+			'on=' + onNested.length + ' open=' + groupsOpen);
+		try { history.replaceState(null, '', '/cgi-bin/luci/admin/home'); } catch (e) {}
+		registry.core.markActive();
+		check('sidebar panel exists', !!panel);
+		check('panel rows visible', visible.length >= 5, visible.length + '/' + rows.length);
+		check('cpu dial reads', /%$/.test(txt('cpu') || ''), txt('cpu'));
+		check('mem dial reads', /%$/.test(txt('mem') || ''), txt('mem'));
+		check('dial --val set', !!(panel && panel.querySelector('[data-si-dial=cpu]').style.getPropertyValue('--val')));
+		check('wan address', /^[\d.]+$/.test(txt('wan') || ''), txt('wan'));
+		check('lan address', txt('lan') === '192.168.1.1', txt('lan'));
+		check('uptime', /\d/.test(txt('up') || ''), txt('up'));
+		check('devices', /\d/.test(txt('dev') || ''), txt('dev'));
+		check('wifi ssid', /MyHome/.test(txt('wifi') || ''), txt('wifi'));
+		check('temp', /°C$/.test(txt('temp') || ''), txt('temp'));
+		check('storage bar', !!bar && bar.style.width !== '', txt('sto'));
+		check('traffic curve drawn', !!(curve && curve.getAttribute('d').length > 12), curve && curve.getAttribute('d').slice(0, 26));
+		check('rx rate', /↓/.test(txt('rx') || ''), txt('rx'));
+		check('tx rate', /↑/.test(txt('tx') || ''), txt('tx'));
+		check('conntrack tag', /\d/.test(txt('ct') || ''), txt('ct'));
+		check('clock ticking', /\d\d/.test(txt('clock') || ''), txt('clock'));
+		check('skeletons cleared', skel.length === 0, skel.length + ' left');
+
+		return v.applyLive(dash);
+	}).then(function () {
+		/* second dashboard poll round, per the live-widget rule */
+		MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1270000000, tx_bytes: 358900000 } };
+		return v.load();
+	}).then(function (d2) {
+		v.applyLive(d2);
+		return wait(400);
+	}).then(function () {
+		var live = document.querySelector('[data-live=spark-now]');
+		check('dashboard live after 2nd round', !!(live && /↓/.test(live.textContent)), live && live.textContent);
+
+		if (/#rail/.test(FLAGS))
+			document.documentElement.dataset.rail = '1';
+		if (/#drawer/.test(FLAGS))
+			document.body.classList.add('ltc-menu-open');
+		if (/#report/.test(FLAGS))
+			document.body.classList.add('show-report');
+
+		document.title = /FAIL|THREW/.test(REPORT.join('\n')) ? 'HARNESS_FAILED' : 'HARNESS_READY';
 	}).catch(function (err) {
-		document.getElementById('root').textContent = 'RUNTIME ERROR: ' + (err && err.stack || err);
-		document.title = 'HARNESS_ERROR';
+		bail('chain', err);
 	});
-})();
+})().catch(function (err) {
+	bail('setup', err);
+});
 </script>
 </body>
 </html>

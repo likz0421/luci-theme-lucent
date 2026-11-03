@@ -40,7 +40,14 @@ stylesheets, scripts or package metadata with them.
 - Wi-Fi radio count and the first configured SSID
 
 **Navigation**
-- Grouped sidebar with a mobile drawer
+- Grouped sidebar with a mobile drawer, built by the theme itself — no
+  dependency on `luci-theme-bootstrap` being installed
+- Live status panel docked in the sidebar on every page: animated CPU and
+  memory rings, a WAN throughput curve with down/up rates, WAN/LAN addresses,
+  uptime, online devices, Wi-Fi, temperature, a storage meter and load /
+  conntrack / process tags, refreshed on a tiered 5 s poll
+- Collapsible panel (state persists); in the 64 px rail it reduces to the
+  two rings
 - Command palette: `Ctrl/Cmd+K`, `/`, or the toolbar search button;
   arrow keys + Enter to jump to any visible menu entry
 - Simplified Chinese (see below) and English UI
@@ -256,6 +263,7 @@ Argon and Fluent, but it is not a drop-in clone. Current status:
 | Wi-Fi status / SSID | Yes | Radio count + first SSID |
 | Online device list | Yes | DHCP + ARP + IPv6 hints |
 | Grouped menu + keyboard search | Yes | Sidebar groups, `Ctrl/Cmd+K` palette |
+| Live readings in the sidebar | Yes | CPU/memory rings, traffic curve, WAN/LAN, uptime, devices, Wi-Fi, temperature, storage |
 | Multiple palettes / dark mode / glass | Yes | 5 palettes, auto mode, adjustable blur |
 | Chinese localization | Yes | Own catalog + bundled LuCI core catalogs |
 | Media library / wallpapers / custom logo | Yes | Magic-byte validated uploads |

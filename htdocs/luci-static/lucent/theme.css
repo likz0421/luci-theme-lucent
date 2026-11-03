@@ -179,6 +179,92 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 .ltc-modes a:hover{background:var(--tint);color:var(--text)}
 .ltc-modes li.active a{background:var(--card-2);color:var(--text);font-weight:600}
 
+/* ------------------------------------------------------------ side panel */
+/* Registered so conic-gradient stops interpolate instead of snapping. */
+@property --val{syntax:'<number>';inherits:false;initial-value:0}
+
+.ltc-side-info{
+	flex:none;max-height:58%;overflow:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:7px;
+	padding:9px 8px;border:1px solid var(--line);border-radius:var(--r-md);
+	background:color-mix(in srgb,var(--card-2) 55%,transparent);
+}
+.ltc-side-info[data-open="1"] .ltc-si-body{display:flex;flex-direction:column;gap:7px;min-width:0}
+.ltc-side-info[data-open="0"]{max-height:none;overflow:visible}
+.ltc-side-info[data-open="0"] .ltc-si-body{display:none}
+.ltc-si-body>*{animation:ltc-rise .42s var(--ease) backwards}
+.ltc-si-body>:nth-child(2){animation-delay:.05s}
+.ltc-si-body>:nth-child(3){animation-delay:.1s}
+.ltc-si-body>:nth-child(4){animation-delay:.15s}
+.ltc-si-body>:nth-child(5){animation-delay:.2s}
+
+.ltc-si-head{display:flex;align-items:center;gap:6px;min-width:0}
+.ltc-si-name{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+.ltc-si-name b{
+	font:600 10.5px var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);
+	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+.ltc-si-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--ok);animation:ltc-blink 2.6s var(--ease) infinite}
+@keyframes ltc-blink{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent);opacity:1}
+	55%{box-shadow:0 0 0 5px transparent;opacity:.55}}
+.ltc-si-clock{font:500 11px var(--mono);color:var(--text-2);font-variant-numeric:tabular-nums;flex:none}
+.ltc-si-btn{
+	flex:none;width:24px;height:24px;display:grid;place-items:center;padding:0;border:1px solid var(--line);
+	border-radius:7px;background:var(--card);color:var(--text-3);cursor:pointer;
+}
+.ltc-si-btn:hover{background:var(--tint);color:var(--text)}
+.ltc-si-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:transform .22s var(--ease)}
+.ltc-si-btn.spin svg{animation:ltc-spin .7s linear}
+.ltc-side-info[data-open="1"] [data-si-toggle] svg{transform:rotate(-90deg)}
+.ltc-side-info[data-open="0"] [data-si-toggle] svg{transform:rotate(180deg)}
+
+.ltc-si-dials{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ltc-si-dial{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;color:inherit;text-decoration:none!important}
+.ltc-si-dial .dial{
+	--val:0;position:relative;width:46px;height:46px;display:grid;place-items:center;border-radius:50%;
+	background:conic-gradient(var(--accent) calc(var(--val) * 1%),var(--card-2) 0);
+	transition:--val .9s var(--ease),transform .2s var(--ease);
+}
+.ltc-si-dial .dial::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--card)}
+.ltc-si-dial .dial b{position:relative;font:600 12px/1 var(--serif);font-variant-numeric:tabular-nums}
+.ltc-si-dial:hover .dial{transform:scale(1.07)}
+.ltc-si-dial small{font-size:10.5px;color:var(--text-3);letter-spacing:.03em}
+
+.ltc-si-spark{position:relative;height:36px;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.ltc-si-curve{position:absolute;inset:0;width:100%;height:100%}
+.ltc-si-curve .rx{stroke:var(--accent);stroke-width:1.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;transition:d .8s linear;filter:drop-shadow(0 1px 2px color-mix(in srgb,var(--accent) 35%,transparent))}
+.ltc-si-curve:empty{display:none}
+.ltc-si-rate{position:absolute;top:4px;right:7px;display:flex;flex-direction:column;align-items:flex-end;gap:1px;pointer-events:none;font:500 10.5px var(--mono);color:var(--text-2);font-variant-numeric:tabular-nums}
+
+.ltc-si-rows{display:flex;flex-direction:column;list-style:none;margin:0;padding:0}
+.ltc-si-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:3px 6px;border-radius:8px;color:inherit;text-decoration:none!important;font-size:11.5px}
+.ltc-si-row small{flex:none;color:var(--text-3)}
+.ltc-si-row b{min-width:0;font-weight:500;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a.ltc-si-row{transition:background .18s,transform .18s}
+a.ltc-si-row:hover{background:var(--tint)}
+a.ltc-si-row:hover b{color:var(--accent-2)}
+
+.ltc-si-meter{display:flex;flex-direction:column;gap:5px;padding:0 7px}
+.ltc-si-mrow{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:11.5px}
+.ltc-si-mrow small{color:var(--text-3)}
+.ltc-si-mrow b{font-weight:500;font-variant-numeric:tabular-nums}
+.ltc-si-track{display:block;height:5px;overflow:hidden;border-radius:99px;background:var(--card-2)}
+.ltc-si-track u{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .8s var(--ease)}
+.ltc-si-track u.hi{background:var(--bad)}
+
+.ltc-si-tags{display:flex;flex-wrap:wrap;gap:4px}
+.ltc-si-tags .ltc-tag{font-size:10px;padding:3px 7px}
+.ltc-si-tags .ltc-tag b{font-size:10.5px;font-variant-numeric:tabular-nums}
+/* short windows: drop the least useful strip instead of cutting a row in half */
+@media (max-height:660px){.ltc-si-tags{display:none}}
+
+/* shimmering placeholders until the first reading lands */
+.ltc-skel{
+	color:transparent!important;background:linear-gradient(90deg,var(--card-2) 20%,var(--tint) 40%,var(--card-2) 60%);
+	background-size:400% 100%;border-radius:5px;animation:ltc-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes ltc-shimmer{from{background-position:100% 0}to{background-position:0 0}}
+.ltc-nav-note{padding:8px 10px;border-radius:10px;background:var(--card-2);color:var(--text-3);font-size:11.5px;line-height:1.5}
+
 .ltc-stage{display:flex;flex-direction:column;min-width:0;min-height:100dvh}
 .ltc-bar{
 	position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;min-height:64px;
@@ -225,6 +311,22 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 	[data-rail="1"] .ltc-modes{display:none}
 	[data-rail="1"] .ltc-side-foot{justify-content:center}
 	[data-rail="1"] .ltc-rail-btn svg{transform:rotate(180deg)}
+	/* collapsed rail keeps only the two rings — enough to read the box at a glance */
+	[data-rail="1"] .ltc-side-info{max-height:none;padding:4px 2px;border:0;background:none;overflow:visible}
+	[data-rail="1"] .ltc-side-info .ltc-si-head{flex-direction:column;gap:4px}
+	[data-rail="1"] .ltc-side-info .ltc-si-name,
+	[data-rail="1"] .ltc-side-info .ltc-si-clock,
+	[data-rail="1"] .ltc-side-info [data-si-toggle],
+	[data-rail="1"] .ltc-side-info .ltc-si-spark,
+	[data-rail="1"] .ltc-side-info .ltc-si-rows,
+	[data-rail="1"] .ltc-side-info .ltc-si-meter,
+	[data-rail="1"] .ltc-side-info .ltc-si-tags{display:none}
+	[data-rail="1"] .ltc-side-info .ltc-si-body{display:flex!important}
+	[data-rail="1"] .ltc-si-dials{grid-template-columns:minmax(0,1fr);gap:7px}
+	[data-rail="1"] .ltc-si-dial .dial{width:40px;height:40px}
+	[data-rail="1"] .ltc-si-dial .dial::before{inset:4px}
+	[data-rail="1"] .ltc-si-dial .dial b{font-size:10.5px}
+	[data-rail="1"] .ltc-si-dial small{display:none}
 }
 .ltc-burger{display:none}
 
@@ -631,6 +733,10 @@ button.ltc-act{width:100%}
 [data-density=compact] .ltc-kpi{padding:11px 12px}
 [data-density=compact] .cbi-value{padding:9px 0}
 [data-density=compact] .ltc-list li{padding:6px 0}
+[data-density=compact] .ltc-side-info{gap:7px;padding:8px 7px}
+[data-density=compact] .ltc-si-dial .dial{width:46px;height:46px}
+[data-density=compact] .ltc-si-row{padding:3px 6px}
+[data-density=compact] .ltc-si-spark{height:34px}
 
 /* ---------------------------------------------------------------- alerts & modal */
 .ltc-alert,.alert-message{
@@ -693,6 +799,18 @@ body:has(.ltc-login){background:var(--bg)}
 		transform:translateX(-102%);transition:transform .25s var(--ease);box-shadow:var(--shadow-pop);
 	}
 	body.ltc-menu-open .ltc-side{transform:none}
+	/* entries follow the drawer in instead of appearing all at once */
+	body.ltc-menu-open .ltc-nav>ul>li,
+	body.ltc-menu-open .ltc-side-info .ltc-si-body>*{animation:ltc-side-in .34s var(--ease) backwards}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(2){animation-delay:.04s}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(3){animation-delay:.08s}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(4){animation-delay:.12s}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(5){animation-delay:.16s}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(6){animation-delay:.2s}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(7){animation-delay:.24s}
+	body.ltc-menu-open .ltc-nav>ul>li:nth-child(n+8){animation-delay:.28s}
+	.ltc-side-info{max-height:50%}
+	@keyframes ltc-side-in{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
 	body.ltc-menu-open::after{content:"";position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.38)}
 	.ltc-burger{display:grid}
 	.ltc-bar{min-height:58px}

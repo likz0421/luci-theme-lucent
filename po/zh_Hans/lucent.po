@@ -967,3 +967,66 @@ msgstr "空闲"
 
 msgid "core"
 msgstr "核心"
+
+msgid "Live status"
+msgstr "实时状态"
+
+msgid "Refresh now"
+msgstr "立即刷新"
+
+msgid "Collapse panel"
+msgstr "折叠面板"
+
+msgid "Expand panel"
+msgstr "展开面板"
+
+msgid "Open dashboard"
+msgstr "打开总览"
+
+msgid "CPU"
+msgstr "CPU"
+
+msgid "Wi-Fi"
+msgstr "Wi-Fi"
+
+msgid "Temp"
+msgstr "温度"
+
+msgid "load"
+msgstr "负载"
+
+msgid "connections"
+msgstr "并发连接"
+
+msgid "processes"
+msgstr "进程"
+
+msgid "no SSID"
+msgstr "未配置 SSID"
+
+msgid "no gateway"
+msgstr "无网关"
+
+msgid "%d cores · %s °C"
+msgstr "%d 核 · %s °C"
+
+msgid "Used %s of %s"
+msgstr "已用 %s / 共 %s"
+
+msgid "%d of %d known hosts online"
+msgstr "%d 台在线（共 %d 台已知设备）"
+
+msgid "%s free of %s"
+msgstr "剩余 %s / 共 %s"
+
+msgid "Menu could not be loaded"
+msgstr "菜单无法加载"
+
+msgid "The menu could not be fetched"
+msgstr "菜单获取失败"
+
+msgid "This account has no visible menu entries"
+msgstr "当前账号没有可见的菜单项"
+
+msgid "Logout"
+msgstr "退出登录"

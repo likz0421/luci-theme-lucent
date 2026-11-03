@@ -3,6 +3,61 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.9.0 — 2026-11-03
+
+### Fixed
+
+- **The sidebar could open completely empty.** The theme asked LuCI to load
+  `menu-bootstrap`, but that module ships with **luci-theme-bootstrap**, not
+  with luci-base. On images where the bootstrap theme is not installed the
+  require rejects, `#topmenu` is never filled and the sidebar is a blank
+  column with no navigation. Lucent now builds its own menu
+  (`resources/menu-lucent.js`) from the same ACL-filtered tree —
+  top level, submenus, mode menu and tab menu — and only falls back to
+  `menu-bootstrap` if that ever fails. If the tree itself cannot be fetched
+  (or the account sees no nodes), the sidebar says so and keeps the entries
+  this package guarantees instead of showing nothing.
+
+### Added
+
+- **Live status panel in the sidebar** (`resources/lucent/sideinfo.js`), so
+  the readings that used to exist only on `/admin/home` are visible on every
+  page, in the drawer too:
+  - animated CPU and memory rings, each linking to the dashboard and
+    carrying cores / temperature / used-of-total in its tooltip;
+  - a live WAN throughput curve with down and up rates, sampled every 5 s
+    and smoothed by a `d` transition;
+  - rows for WAN, LAN, uptime, online devices, Wi-Fi (radio count + first
+    SSID) and temperature, with WAN, devices and Wi-Fi clickable;
+  - a storage meter with an animated bar that turns red above 90 %, and a
+    tag strip for load, conntrack and process counts;
+  - a ticking clock, a refresh button and a collapse toggle whose state
+    persists in `localStorage`.
+  Calls are tiered so the panel stays cheap: counters every 5 s, the
+  interface dump every 3rd round, leases and host hints every 6th, wireless
+  and storage every 12th. Hidden tabs skip their tick.
+- **Motion**: conic rings now interpolate (a registered `--val` custom
+  property — the dashboard rings animate too), shimmering skeleton
+  placeholders until the first reading lands, a flash on values that
+  actually change, a pulsing live dot, and drawer entries that stagger in
+  behind the panel instead of appearing all at once. Everything is gated by
+  `prefers-reduced-motion`.
+- **Collapsed rail keeps the two rings** (CPU and memory) and drops the rest,
+  so the 64 px sidebar still tells you how the box is doing.
+- **Short windows drop the tag strip** rather than cutting a row in half.
+
+### Verified
+
+- Browser harness (`tests/harness.html`), now rendering the real sidebar with
+  a mocked menu tree: 25 assertions pass at 1600×1000, plus rail mode, the
+  500 px drawer and a 720 px-tall window. Covers 8 top-level entries, 5
+  submenu groups, icon injection, active marking, a nested page opening only
+  its own group, every panel reading, the drawn curve, cleared skeletons and
+  two dashboard poll rounds.
+- The harness caught a collision on the way: the panel's curve originally
+  carried `.ltc-spark`, which the home view queries document-wide, so the
+  dashboard sparkline threw. The panel now uses its own `ltc-si-curve`.
+
 ## 3.8.1 — 2026-11-03
 
 ### Added

@@ -30,8 +30,13 @@
 		</a>
 	</nav>
 
-	<script>L.require('menu-bootstrap')</script>
+	<script>
+		L.require('menu-lucent').catch(function () {
+			return L.require('menu-bootstrap').catch(function () {});
+		});
+	</script>
 	<script>L.require('lucent.core').then(function (core) { core.init(); })</script>
+	<script>L.require('lucent.sideinfo').then(function (side) { side.init(); })</script>
 	{% else %}
 	<script>
 		(function () {
