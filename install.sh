@@ -27,8 +27,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.10.2-r1"
-LUCENT_TAG_DEFAULT="v3.10.2"
+LUCENT_VERSION_DEFAULT="3.10.3-r1"
+LUCENT_TAG_DEFAULT="v3.10.3"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -110,27 +110,67 @@ latest_bases() {
 }
 
 # ---- 权威"最新版" ----------------------------------------------------------
-# CDN 对 @main 的缓存最长 7 天（jsDelivr: max-age=604800），所以仓库里的脚本
-# 本身和 latest*.txt 都可能是旧副本。GitHub 的 release 端点不受这个缓存影响：
-# 先读 api.github.com 的 tag_name，再退回 releases/latest 的 302 Location。
-resolve_latest() {
-	local v="" api="https://api.github.com/repos/$LUCENT_REPO/releases/latest"
-	local red="https://github.com/$LUCENT_REPO/releases/latest"
-	local tmo="${LUCENT_FETCH_TIMEOUT:-8}"
+# CDN 对 @main 的文件缓存最长 7 天（jsDelivr: max-age=604800），所以仓库里的脚本
+# 本身和 latest*.txt 都可能是旧副本。下面这些是接口而不是仓库文件，不受该缓存影响：
+#   1) jsDelivr 版本索引（国内可达，第一项就是最新已发布 tag）
+#   2) GitHub api releases/latest 的 tag_name
+#   3) GitHub releases/latest 的 302 Location
+# 命中的来源记进 LATEST_VIA，输出里能直接看出是谁在骗人。
+# 命中的来源写进 $TMP/latest-via（resolve_latest 常在子 shell 里跑，变量传不出来）
+mark_via() { [ -n "$TMP" ] && printf '%s' "$1" > "$TMP/latest-via" 2>/dev/null; }
+
+json_field() {
+	# json_field <field> — 取 JSON 里该字段的第一个字符串值。
+	# 先删掉空白和方括号，这样 "versions":["x" 和 "tag_name":"x" 变成同一种形状
+	# （GNU sed 的 BRE 里 `\[?` 不是可选量词，得避免）
+	tr -d ' \t\r\n[]' | sed -n "s/.*\"$1\":\"v\{0,1\}\([^\"]*\)\".*/\1/p" | head -n1
+}
+
+try_url() {
+	# try_url <url> <field|""> — field 为空表示从 302 Location 里取 tag
+	local url="$1" field="$2" v="" tmo="${LUCENT_FETCH_TIMEOUT:-8}"
 
 	if have curl; then
-		v=$(curl -fsSL --connect-timeout "$tmo" --max-time $((tmo * 4)) "$api" 2>/dev/null | \
-			sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
-		[ -n "$v" ] || v=$(curl -fsSI --connect-timeout "$tmo" --max-time $((tmo * 4)) "$red" 2>/dev/null | \
-			sed -n 's/^[Ll]ocation:[[:space:]]*.*\/tag\/v\{0,1\}\([0-9][^[:space:]]*\).*/\1/p' | head -n1)
+		if [ -n "$field" ]; then
+			v=$(curl -fsSL --connect-timeout "$tmo" --max-time $((tmo * 4)) "$url" 2>/dev/null | json_field "$field")
+		else
+			v=$(curl -fsSI --connect-timeout "$tmo" --max-time $((tmo * 4)) "$url" 2>/dev/null | \
+				sed -n 's/^[Ll]ocation:[[:space:]]*.*\/tag\/v\{0,1\}\([0-9][^[:space:]]*\).*/\1/p' | head -n1)
+		fi
 	elif have wget; then
-		v=$(wget -q -T "$tmo" -O- "$api" 2>/dev/null | \
-			sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
-		[ -n "$v" ] || v=$(wget -q -S --spider -T "$tmo" "$red" 2>&1 | \
-			sed -n 's/^[[:space:]]*[Ll]ocation:[[:space:]]*.*\/tag\/v\{0,1\}\([0-9][^[:space:]]*\).*/\1/p' | head -n1)
+		if [ -n "$field" ]; then
+			v=$(wget -q -T "$tmo" -O- "$url" 2>/dev/null | json_field "$field")
+		else
+			v=$(wget -q -S --spider -T "$tmo" "$url" 2>&1 | \
+				sed -n 's/^[[:space:]]*[Ll]ocation:[[:space:]]*.*\/tag\/v\{0,1\}\([0-9][^[:space:]]*\).*/\1/p' | head -n1)
+		fi
 	fi
 
 	printf '%s' "$v" | sed 's/^v//' | tr -cd '0-9A-Za-z._-'
+}
+
+resolve_latest() {
+	local api="https://api.github.com/repos/$LUCENT_REPO/releases/latest"
+	local red="https://github.com/$LUCENT_REPO/releases/latest"
+	local jdi="https://data.jsdelivr.com/v1/package/gh/$LUCENT_REPO"
+	local v=""
+
+	v=$(try_url "$jdi" "versions")
+	if [ -n "$v" ]; then mark_via "jsdelivr-index"; printf '%s' "$v"; return 0; fi
+
+	if [ "${LUCENT_CN:-0}" = "1" ]; then
+		v=$(try_url "$red" "")
+		if [ -n "$v" ]; then mark_via "gh-redirect"; printf '%s' "$v"; return 0; fi
+		v=$(try_url "$api" "tag_name")
+		if [ -n "$v" ]; then mark_via "gh-api"; printf '%s' "$v"; return 0; fi
+	else
+		v=$(try_url "$api" "tag_name")
+		if [ -n "$v" ]; then mark_via "gh-api"; printf '%s' "$v"; return 0; fi
+		v=$(try_url "$red" "")
+		if [ -n "$v" ]; then mark_via "gh-redirect"; printf '%s' "$v"; return 0; fi
+	fi
+
+	return 1
 }
 
 # 尝试从多个地址下载某个文件
@@ -170,7 +210,7 @@ get_current() {
 	fi
 	# File-copy installs leave no package record; fall back to the marker we
 	# write at install time so the dashboard can still show the current version.
-	[ -n "$v" ] || v=$(cat /usr/share/lucent/version 2>/dev/null)
+	[ -n "$v" ] || v=$(cat /usr/share/lucent/version 2>/dev/null || true)
 	printf '%s' "$v"
 }
 
@@ -182,6 +222,7 @@ get_latest() {
 	if [ -n "$LUCENT_BASE_URL" ]; then
 		if fetch "$LUCENT_BASE_URL/$f" "$TMP/latest"; then
 			sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
+			mark_via "base-url"
 			return 0
 		fi
 		return 1
@@ -195,13 +236,12 @@ get_latest() {
 			*) log "  检查 $base/$f"; fetch "$base/$f" "$TMP/latest" && \
 				ptr=$(sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n') ;;
 		esac
-		[ -n "$ptr" ] && break
+		[ -n "$ptr" ] && { mark_via "pointer-file"; break; }
 	done
 
+	# 线上 tag 才是准的，命中时 mark_via 会覆盖上面的 pointer-file
 	tag=$(resolve_latest)
 
-	# 线上 tag 才是准的：指针与它一致时沿用指针（带精确的 -rN），
-	# 不一致或读不到时按 tag 推断（发布固定 PKG_RELEASE=1）
 	if [ -n "$tag" ]; then
 		if [ "${ptr%%-r*}" = "$tag" ]; then
 			printf '%s' "$ptr"
@@ -406,13 +446,16 @@ do_check() {
 	LATEST=$(sanitize "$(get_latest 2>/dev/null)")
 	QUIET=0
 	AVAIL=false
+	# 注意：脚本开了 set -e，这里必须容忍文件不存在，否则整个 check 会在
+	# 输出之前静默退出，用户只看到"拉不到新版"而没有任何原因。
+	VIA=$(cat "$TMP/latest-via" 2>/dev/null || true)
 	[ -n "$LATEST" ] || { printf '{"current":"%s","latest":"","available":false,"error":"no-source"}\n' "$CURRENT"; exit 0; }
 	if [ -z "$CURRENT" ]; then
 		AVAIL=true
 	elif [ "$(vkey "$LATEST")" != "$(vkey "$CURRENT")" ]; then
 		AVAIL=true
 	fi
-	printf '{"current":"%s","latest":"%s","available":%s}\n' "$CURRENT" "$LATEST" "$AVAIL"
+	printf '{"current":"%s","latest":"%s","available":%s,"via":"%s"}\n' "$CURRENT" "$LATEST" "$AVAIL" "${VIA:-unknown}"
 }
 
 # ---- 在线升级 --------------------------------------------------------------

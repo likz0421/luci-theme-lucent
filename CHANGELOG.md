@@ -3,6 +3,49 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.3 — 2026-11-04
+
+### Fixed
+
+- **`install.sh check` could exit silently, printing nothing.** The script runs
+  under `set -e`, and the new `VIA=$(cat "$TMP/latest-via")` line — plus the
+  `/usr/share/lucent/version` read in `get_current` — returned non-zero when
+  those files did not exist. The script then aborted *before* printing its
+  JSON, so a failed update check looked like "can't fetch a new version" with
+  no reason anywhere. Both reads are now guarded with `|| true`.
+- **A stale `@main` copy of the script could still not see the newest
+  release.** `resolve_latest()` now has three independent sources instead of
+  two, ordered so that a network which can reach jsDelivr but not GitHub (or
+  the reverse) still resolves a version:
+  1. `data.jsdelivr.com/v1/package/gh/<repo>` — the version index, first entry
+     is the newest published tag; it is an API, not a cached repo file;
+  2. `api.github.com/repos/<repo>/releases/latest` → `tag_name`;
+  3. `github.com/<repo>/releases/latest` → 302 `Location`.
+  With `LUCENT_CN=1` the GitHub redirect is preferred over the API.
+- **`sed` pattern bug in the JSON reader:** `\[?` was used as if it were an
+  optional quantifier, but in GNU sed BRE a bare `?` is a literal, so the
+  jsDelivr index never parsed. `json_field()` now strips brackets along with
+  whitespace, which makes `"versions":["x"` and `"tag_name":"x"` the same
+  shape for one pattern.
+- **The check result now says where the version came from**: the JSON gained
+  `"via":"jsdelivr-index|gh-api|gh-redirect|pointer-file|base-url"`, so a wrong
+  "already up to date" can be traced to its source instead of guessed at.
+
+### Verified
+
+`sh install.sh check` against the live repo, with hosts blocked selectively
+through a `curl` shim:
+
+| scenario | result |
+| --- | --- |
+| everything reachable | `latest: 3.10.2-r1`, `via: jsdelivr-index` |
+| jsDelivr blocked | `via: gh-api` |
+| all GitHub hosts blocked | `via: jsdelivr-index` |
+| private `LUCENT_BASE_URL` mirror | `via: base-url` |
+| nothing reachable | `{"latest":"","available":false,"error":"no-source"}` — prints, does not abort |
+| installed 3.7.6 / 3.9.0 | `available: true` (numeric compare, not lexical) |
+| installed 3.10.2 | `available: false` |
+
 ## 3.10.2 — 2026-11-03
 
 ### Fixed
