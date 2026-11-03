@@ -101,6 +101,12 @@ stylesheets, scripts or package metadata with them.
 在路由器 SSH 里执行一行命令即可。脚本会自动下载对应固件的安装包、
 检测 `apk`/`opkg`、安装并启用 Lucent、注册中文、清理缓存。
 
+**推荐：用最新发布版的安装脚本**（不受 CDN 缓存影响，永远拿到当前版本的脚本）：
+
+```sh
+wget -qO- https://github.com/likz0421/luci-theme-lucent/releases/latest/download/lucent-install.sh | sh
+```
+
 **国内用户请用镜像加速**（直连 GitHub 常常很慢或失败）：
 
 ```sh
@@ -113,10 +119,15 @@ wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh
 wget -qO- https://raw.githubusercontent.com/likz0421/luci-theme-lucent/main/install.sh | sh
 ```
 
+> 注意：jsDelivr 对 `@main` 的文件缓存最长 7 天（`max-age=604800`），所以 `@main`
+> 路径可能给你一份**旧脚本**。脚本现在会先向 GitHub 的 release 端点确认最新版再下载，
+> 因此旧副本也会装上最新版本；但如果你想要脚本本身也是最新的，请用上面的
+> `releases/latest/download/lucent-install.sh`。
+
 没有 `wget` 时用 `curl`：
 
 ```sh
-curl -fsSL https://github.com/likz0421/luci-theme-lucent/raw/main/install.sh | sh
+curl -fsSL https://github.com/likz0421/luci-theme-lucent/releases/latest/download/lucent-install.sh | sh
 ```
 
 卸载 / 查看状态：

@@ -27,8 +27,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.10.0-r1"
-LUCENT_TAG_DEFAULT="v3.10.0"
+LUCENT_VERSION_DEFAULT="3.10.1-r1"
+LUCENT_TAG_DEFAULT="v3.10.1"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -109,6 +109,30 @@ latest_bases() {
 	fi
 }
 
+# ---- 权威"最新版" ----------------------------------------------------------
+# CDN 对 @main 的缓存最长 7 天（jsDelivr: max-age=604800），所以仓库里的脚本
+# 本身和 latest*.txt 都可能是旧副本。GitHub 的 release 端点不受这个缓存影响：
+# 先读 api.github.com 的 tag_name，再退回 releases/latest 的 302 Location。
+resolve_latest() {
+	local v="" api="https://api.github.com/repos/$LUCENT_REPO/releases/latest"
+	local red="https://github.com/$LUCENT_REPO/releases/latest"
+	local tmo="${LUCENT_FETCH_TIMEOUT:-8}"
+
+	if have curl; then
+		v=$(curl -fsSL --connect-timeout "$tmo" --max-time $((tmo * 4)) "$api" 2>/dev/null | \
+			sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+		[ -n "$v" ] || v=$(curl -fsSI --connect-timeout "$tmo" --max-time $((tmo * 4)) "$red" 2>/dev/null | \
+			sed -n 's/^[Ll]ocation:[[:space:]]*.*\/tag\/v\{0,1\}\([0-9][^[:space:]]*\).*/\1/p' | head -n1)
+	elif have wget; then
+		v=$(wget -q -T "$tmo" -O- "$api" 2>/dev/null | \
+			sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+		[ -n "$v" ] || v=$(wget -q -S --spider -T "$tmo" "$red" 2>&1 | \
+			sed -n 's/^[[:space:]]*[Ll]ocation:[[:space:]]*.*\/tag\/v\{0,1\}\([0-9][^[:space:]]*\).*/\1/p' | head -n1)
+	fi
+
+	printf '%s' "$v" | sed 's/^v//' | tr -cd '0-9A-Za-z._-'
+}
+
 # 尝试从多个地址下载某个文件
 try_download() {
 	fname="$1"; dest="$2"
@@ -151,8 +175,10 @@ get_current() {
 }
 
 get_latest() {
-	local f base
+	local f base ptr="" tag
 	if have apk; then f="latest-apk.txt"; else f="latest.txt"; fi
+
+	# 自建镜像优先：完全按用户指定的地址，不去碰 GitHub
 	if [ -n "$LUCENT_BASE_URL" ]; then
 		if fetch "$LUCENT_BASE_URL/$f" "$TMP/latest"; then
 			sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
@@ -160,13 +186,32 @@ get_latest() {
 		fi
 		return 1
 	fi
+
+	# 指针文件带时间戳参数，绕开镜像 CDN 的长缓存
 	for base in $(latest_bases); do
-		log "  检查 $base/$f"
-		if fetch "$base/$f" "$TMP/latest"; then
-			sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
-			return 0
-		fi
+		case "$base" in
+			*jsdelivr.net*) log "  检查 $base/$f"; fetch "$base/$f?cb=$(date +%s 2>/dev/null || echo 0)" "$TMP/latest" && \
+				ptr=$(sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n') ;;
+			*) log "  检查 $base/$f"; fetch "$base/$f" "$TMP/latest" && \
+				ptr=$(sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n') ;;
+		esac
+		[ -n "$ptr" ] && break
 	done
+
+	tag=$(resolve_latest)
+
+	# 线上 tag 才是准的：指针与它一致时沿用指针（带精确的 -rN），
+	# 不一致或读不到时按 tag 推断（发布固定 PKG_RELEASE=1）
+	if [ -n "$tag" ]; then
+		if [ "${ptr%%-r*}" = "$tag" ]; then
+			printf '%s' "$ptr"
+		else
+			printf '%s-r1' "$tag"
+		fi
+		return 0
+	fi
+
+	[ -n "$ptr" ] && { printf '%s' "$ptr"; return 0; }
 	return 1
 }
 
@@ -220,6 +265,18 @@ do_install() {
 
 	new_tmp
 	ensure_luci || exit 1
+
+	# 这份脚本自己可能就是 CDN 里的旧副本，所以装之前先向线上确认最新版；
+	# 用户显式给了 LUCENT_VERSION 时不擅自改动。
+	if [ -z "$LUCENT_VERSION" ]; then
+		QUIET=1
+		NEWEST=$(sanitize "$(get_latest 2>/dev/null)")
+		QUIET=0
+		if [ -n "$NEWEST" ] && [ "$NEWEST" != "$VER" ]; then
+			log "→ 脚本内置默认 $VER，线上最新为 $NEWEST，改按最新版安装"
+			VER="$NEWEST"; VER_NO_R="${VER%%-r*}"; TAG="v$VER_NO_R"
+		fi
+	fi
 
 	log "→ 从 GitHub / 镜像在线下载 Lucent…"
 

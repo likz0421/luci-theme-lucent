@@ -3,6 +3,49 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.1 — 2026-11-03
+
+### Fixed
+
+- **The online installer could install an old version, and the in-app update
+  check could report "already up to date" forever.** Both read
+  `cdn.jsdelivr.net/gh/<repo>@main/…`, and jsDelivr caches `@main` files for
+  **7 days** (`Cache-Control: public, max-age=604800`, verified with
+  `X-Cache: HIT` and `Age: 23579`). A freshly released version was therefore
+  invisible through that path: the piped `install.sh` was itself a stale copy
+  whose baked `LUCENT_TAG_DEFAULT` pointed at an old release, and
+  `latest*.txt` could name the previous version too.
+  - `get_latest()` now asks GitHub's release endpoints first —
+    `api.github.com/repos/<repo>/releases/latest` (`tag_name`), falling back to
+    the `releases/latest` 302 `Location` — neither of which is behind that
+    cache. The pointer files are only used to learn the exact `-rN` suffix
+    when they agree with the tag, and jsDelivr/fastly pointer fetches now carry
+    a `?cb=<epoch>` cache buster.
+  - Plain `install.sh` no longer trusts its own baked default: when
+    `LUCENT_VERSION` was not given, it resolves the newest release online and
+    installs that instead, logging the substitution. So even an old copy of the
+    script upgrades to the current version.
+  - The tag's leading `v` is stripped before use, so asset URLs are built as
+    `…/download/v3.10.1/…` rather than `…/vv3.10.1/…`.
+- **README** now leads with
+  `github.com/<repo>/releases/latest/download/lucent-install.sh` as the
+  recommended one-liner — release assets are immutable per version and the
+  `latest` redirect always resolves to the newest, so it cannot serve a stale
+  script — and documents the jsDelivr cache caveat.
+
+### Verified
+
+- `sh install.sh check` against the live repo returns
+  `{"current":"","latest":"3.10.0-r1","available":true}` — previously the
+  pointer-only path could report the older release as latest.
+- Private-mirror path (`LUCENT_BASE_URL=http://127.0.0.1:…`) still resolves the
+  version from the served pointer file: `{"latest":"3.10.0-r1"}`.
+- Fully offline (proxies pointed at a dead port) degrades to
+  `{"current":"","latest":"","available":false,"error":"no-source"}` without
+  hanging.
+- `sh -n install.sh` clean; the published `lucent-install.sh` asset is a valid
+  installer with correct baked defaults.
+
 ## 3.10.0 — 2026-11-03
 
 ### Added
