@@ -458,6 +458,27 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-kpi span{display:block;color:var(--text-3);font-size:11.5px;margin-top:auto;padding-top:3px;overflow-wrap:anywhere}
 
 .ltc-topo{display:flex;align-items:flex-start;gap:2px;margin:6px 0 14px;min-width:0}
+
+/* network path: clickable node cards joined by live-rate links */
+.ltc-path{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap}
+.ltc-pnode{flex:1 1 150px;min-width:0;display:flex;flex-direction:column;gap:2px;padding:12px 13px;
+	border:1px solid var(--line);border-radius:14px;background:var(--card);color:inherit;text-decoration:none!important;
+	transition:transform .16s var(--ease),border-color .16s,box-shadow .16s}
+.ltc-pnode:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow)}
+.ltc-pnode .ic{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--card-2);color:var(--text-2);margin-bottom:4px}
+.ltc-pnode .ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ltc-pnode.me{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:var(--tint)}
+.ltc-pnode.me .ic{background:var(--accent);color:var(--on-accent)}
+.ltc-pnode b{font-size:13px}
+.ltc-pnode small{font-size:11.5px;color:var(--text-2);overflow-wrap:anywhere}
+.ltc-pnode small.ltc-muted{color:var(--text-3)}
+.ltc-wirebox{flex:0 0 96px;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+	font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.ltc-wirebox .ltc-wire{width:100%;padding-top:0;flex:none}
+@media (max-width:720px){
+	.ltc-wirebox{flex-basis:100%;flex-direction:row;gap:10px;padding:2px 0}
+	.ltc-wirebox .ltc-wire{width:auto;flex:1}
+}
 .ltc-node{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
 .ltc-node .ic{width:clamp(38px,9vw,48px);height:clamp(38px,9vw,48px);display:grid;place-items:center;border-radius:14px;background:var(--card-2);color:var(--text-2)}
 .ltc-node .ic svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -497,6 +518,22 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-list{list-style:none;margin:0;padding:0}
 .ltc-list li{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line-2);min-width:0}
 .ltc-list li:first-child{border-top:0}
+
+/* device kind chips and sortable table heads */
+.ltc-kico{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--card-2);color:var(--text-2)}
+.ltc-kico svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ltc-kico.ph{background:rgba(75,109,170,.14);color:#4b6daa}
+.ltc-kico.tv{background:rgba(150,96,138,.14);color:#96608a}
+.ltc-kico.cam{background:rgba(201,109,141,.14);color:#c96d8d}
+.ltc-kico.pc{background:rgba(61,134,116,.14);color:#3d8674}
+.ltc-kico.prn{background:rgba(192,122,46,.14);color:#c07a2e}
+.ltc-kico.wear{background:rgba(31,143,168,.14);color:#1f8fa8}
+.ltc-kico.iot{background:rgba(120,140,60,.14);color:#788c3c}
+.ltc-kico.net{background:rgba(90,90,84,.14);color:#61615a}
+th.ltc-sortable{cursor:pointer;user-select:none}
+th.ltc-sortable .ltc-sortarr{display:inline-block;width:0;height:0;margin-left:6px;border:4px solid transparent;border-bottom-color:var(--text-3);opacity:.5;vertical-align:middle}
+th.ltc-sortable.on .ltc-sortarr{opacity:1;border-bottom-color:var(--accent)}
+th.ltc-sortable.on.desc .ltc-sortarr{border-bottom-color:transparent;border-top-color:var(--accent)}
 .ltc-list .grow{flex:1;min-width:0}
 .ltc-list b{display:block;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ltc-list small{display:block;color:var(--text-3);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

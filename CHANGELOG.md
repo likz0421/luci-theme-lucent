@@ -3,6 +3,29 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.8.0 — 2026-11-02
+
+### Added
+
+- **Network path card** on the home page (replaces the small icon strip,
+  still governed by the topology toggle): Internet → this device → LAN/WiFi
+  as clickable node cards — WAN IP + DNS, hostname + LAN address/mask +
+  uptime + memory, SSID + device count — joined by links carrying live
+  down/up rates (WAN link and LAN bridge link, refreshed every poll).
+- **Devices page upgrades**:
+  - device-class chips (phone / TV / camera / computer / printer / wearable
+    / smart / network) guessed from the advertised hostname, each with its
+    own colour and tooltip;
+  - a **Connections** column fed by `luci-rpc.getConnsPerHost` (added to
+    the theme ACL);
+  - sortable table heads (name, IPv4, connections, status) with direction
+    indicator; sorting keeps the active filter.
+
+### Verified
+
+- Harness run: path card (3 nodes + live links), client chips, connection
+  counts and sorting all render without runtime errors.
+
 ## 3.7.7 — 2026-11-02
 
 ### Fixed

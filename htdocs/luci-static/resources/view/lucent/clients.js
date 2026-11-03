@@ -10,13 +10,35 @@ function summary(value, label) {
 	]);
 }
 
-function ifaceName(ifaces, ip) {
-	var found = util.arr(ifaces).filter(function (i) {
-		return util.arr(i['ipv4-address']).some(function (a) { return a && a.address === ip; });
-	})[0];
+/* Lightweight device-class guess from the advertised name. */
+function kindOf(name) {
+	var n = String(name || '').toLowerCase();
 
-	return found ? found.interface : '';
+	if (/iphone|ipad|pixel|galaxy|redmi|xiaomi|huawei|oneplus|honor|oppo|vivo|realme|nubia|phone|note ?[0-9]|mi ?[0-9]/.test(n))
+		return { icon: 'devices', cls: 'ph', label: _('Phone') };
+	if (/tv|televis|bravia|mi_tv|tvbox|tv box|roku|apple ?tv|tmall|magicbox|projector/.test(n))
+		return { icon: 'video', cls: 'tv', label: _('TV / Box') };
+	if (/camera|cam-|cam$|ipc|sgt|sl[0-9]|imou|ezviz|reolink|tp-link.*cam|\btp[cl][0-9]/.test(n))
+		return { icon: 'video', cls: 'cam', label: _('Camera') };
+	if (/macbook|imac|mac ?mini|windows|desktop|thinkpad|notebook|yoga|matebook|laptop|pc-|-pc\b|^pc\b/.test(n))
+		return { icon: 'laptop', cls: 'pc', label: _('Computer') };
+	if (/printer|print|laserjet|deskjet|cf[0-9]|mfp/.test(n))
+		return { icon: 'sliders', cls: 'prn', label: _('Printer') };
+	if (/watch|band|watch[0-9]|gt[0-9]/.test(n))
+		return { icon: 'refresh', cls: 'wear', label: _('Wearable') };
+	if (/esp|tuya|smart|plug|bulb|sensor|switch|socket|feeder|scale|speaker|sound|audio|box$/.test(n))
+		return { icon: 'wifi', cls: 'iot', label: _('Smart device') };
+	if (/router|gateway|switch|ap[0-9]?|mesh|repeater| ONU|xpon|ont/.test(n))
+		return { icon: 'router', cls: 'net', label: _('Network device') };
+	return { icon: 'globe', cls: 'unk', label: _('Device') };
 }
+
+var SORTS = {
+	name: function (a, b) { return String(a.name).toLowerCase() < String(b.name).toLowerCase() ? -1 : 1; },
+	ip: function (a, b) { return (Number(a.ip.split('.').reduce(function (p, o) { return p * 256 + Number(o); }, 0)) || 0) - ((Number(b.ip.split('.').reduce(function (p, o) { return p * 256 + Number(o); }, 0)) || 0)); },
+	conns: function (a, b) { return a.conns - b.conns; },
+	status: function (a, b) { return (b.online ? 1 : 0) - (a.online ? 1 : 0); }
+};
 
 return view.extend({
 	load: function () {
@@ -26,18 +48,10 @@ return view.extend({
 	render: function (data) {
 		var self = this;
 
+		this.sortKey = 'status';
+		this.sortDir = 1;
+
 		this.sumBox = E('div', { 'class': 'ltc-kpis' });
-
-		this.table = E('table', { 'class': 'table' }, [
-			E('tr', { 'class': 'tr table-titles' }, [
-				E('th', { 'class': 'th' }, _('Device')),
-				E('th', { 'class': 'th' }, _('IPv4 address')),
-				E('th', { 'class': 'th' }, _('IPv6 address')),
-				E('th', { 'class': 'th' }, _('MAC address')),
-				E('th', { 'class': 'th' }, _('Status'))
-			])
-		]);
-
 		this.empty = E('div', { 'class': 'ltc-empty' },
 			_('No devices have been seen yet. Connect a device or check the DHCP leases.'));
 
@@ -48,6 +62,17 @@ return view.extend({
 			'spellcheck': 'false'
 		});
 		this.filter.addEventListener('input', function () { self.applyFilter(); });
+
+		this.table = E('table', { 'class': 'table' }, [
+			E('tr', { 'class': 'tr table-titles' }, [
+				this.th(_('Device'), 'name'),
+				this.th(_('IPv4 address'), 'ip'),
+				E('th', { 'class': 'th' }, _('IPv6 address')),
+				E('th', { 'class': 'th' }, _('MAC address')),
+				this.th(_('Connections'), 'conns'),
+				this.th(_('Status'), 'status')
+			])
+		]);
 
 		this.fill(data);
 
@@ -80,12 +105,52 @@ return view.extend({
 		return E('div', { 'class': 'ltc-stack' }, [body]);
 	},
 
-	fill: function (data) {
+	th: function (label, key) {
+		var self = this;
+		var th = E('th', { 'class': 'th ltc-sortable' }, [label, E('i', { 'class': 'ltc-sortarr' })]);
+		th._key = key;
+		th.addEventListener('click', function () {
+			if (self.sortKey === key)
+				self.sortDir = -self.sortDir;
+			else {
+				self.sortKey = key;
+				self.sortDir = 1;
+			}
+			self.fill(window.__lastClientsData || { hints: {}, leases: {}, ifaces: [], conns: {} }, true);
+		});
+		return th;
+	},
+
+	fill: function (data, keepScroll) {
 		var self = this;
 		var hosts = util.hosts(data.hints, data.leases);
 		var online = hosts.filter(function (h) { return h.online; }).length;
 		var v6 = hosts.filter(function (h) { return h.v6 && h.v6.length; }).length;
 		var named = hosts.filter(function (h) { return h.name; }).length;
+
+		window.__lastClientsData = data;
+
+		var rows = hosts.map(function (h) {
+			return {
+				h: h,
+				name: h.name || h.mac,
+				ip: h.ips[0] || '',
+				conns: h.ips.reduce(function (p, ip) { return p + util.connCount(data.conns, ip); }, 0),
+				online: h.online
+			};
+		});
+
+		var cmp = SORTS[this.sortKey] || SORTS.status;
+		rows.sort(function (a, b) { return cmp(a, b) * self.sortDir; });
+
+		var titles = this.table.querySelector('.table-titles');
+		if (titles)
+			Array.prototype.forEach.call(titles.children, function (th) {
+				if (th._key) {
+					th.classList.toggle('on', th._key === self.sortKey);
+					th.classList.toggle('desc', th._key === self.sortKey && self.sortDir < 0);
+				}
+			});
 
 		while (this.table.rows.length > 1)
 			this.table.deleteRow(1);
@@ -98,26 +163,25 @@ return view.extend({
 			summary(String(v6), _('IPv6 capable'))
 		].forEach(function (s) { self.sumBox.appendChild(s); });
 
-		hosts.forEach(function (h) {
-			var name = h.name || h.mac;
-			var ip = h.ips[0] || '';
-			var v6a = h.v6[0] || '';
-			var net = ifaceName(data.ifaces, ip);
-			var search = [name, h.mac, h.ips.join(' '), h.v6.join(' '), net].join(' ').toLowerCase();
+		rows.forEach(function (r) {
+			var h = r.h;
+			var kind = kindOf(h.name || h.mac);
+			var search = [r.name, h.mac, h.ips.join(' '), h.v6.join(' '), kind.label].join(' ').toLowerCase();
 
 			var row = E('tr', { 'class': 'tr', 'data-search': search }, [
 				E('td', { 'class': 'td' }, [
 					E('div', { 'class': 'ltc-row' }, [
-						E('span', { 'class': 'ltc-dot' + (h.online ? '' : ' off') }),
+						E('span', { 'class': 'ltc-kico ' + kind.cls, 'title': kind.label }, util.icon(kind.icon)),
 						E('div', { 'class': 'grow', 'style': 'min-width:0' }, [
-							E('b', {}, name),
-							net ? E('small', { 'class': 'ltc-muted', 'style': 'display:block' }, net) : ''
+							E('b', {}, r.name),
+							E('small', { 'class': 'ltc-muted', 'style': 'display:block' }, kind.label + (h.online ? ' · ' + _('Active') : ''))
 						])
 					])
 				]),
-				E('td', { 'class': 'td' }, ip || '–'),
-				E('td', { 'class': 'td' }, v6a || '–'),
+				E('td', { 'class': 'td' }, r.ip || '–'),
+				E('td', { 'class': 'td' }, h.v6[0] || '–'),
 				E('td', { 'class': 'td' }, E('code', {}, h.mac)),
+				E('td', { 'class': 'td' }, r.conns > 0 ? String(r.conns) : '–'),
 				E('td', { 'class': 'td' }, [
 					E('span', { 'class': 'ltc-badge ' + (h.online ? 'ok' : 'plain') },
 						h.online ? _('Active') : _('Known')),

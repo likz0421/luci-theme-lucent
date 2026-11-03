@@ -30,17 +30,6 @@ function ring(label, value, percent, key) {
 	]);
 }
 
-function node(iconName, label, cls) {
-	return E('div', { 'class': 'ltc-node' + (cls ? ' ' + cls : '') }, [
-		E('span', { 'class': 'ic' }, util.icon(iconName)),
-		E('b', {}, label)
-	]);
-}
-
-function wire(down) {
-	return E('div', { 'class': 'ltc-wire' + (down ? ' down' : '') }, [E('i')]);
-}
-
 function fact(label, value, key) {
 	return E('div', {}, [
 		E('small', {}, label),
@@ -231,6 +220,54 @@ function setNum(sel, value, suffix) {
 	requestAnimationFrame(step);
 }
 
+function pathCard(data, wan, lan, wifi, hostname) {
+	var info = data.info || {};
+	var board = data.board || {};
+	var dns = wan ? util.dns(wan) : [];
+	var lanMask = util.arr(lan && lan['ipv4-address'])[0];
+	var mem = memoryOf(info);
+
+	function node(href, iconName, title, l1, l2, cls) {
+		return E('a', { 'class': 'ltc-pnode' + (cls ? ' ' + cls : ''), 'href': href, 'title': title }, [
+			E('span', { 'class': 'ic' }, util.icon(iconName)),
+			E('b', {}, title),
+			E('small', {}, l1 || '–'),
+			l2 ? E('small', { 'class': 'ltc-muted' }, l2) : ''
+		]);
+	}
+
+	function link(downKey, upKey, mid) {
+		return E('div', { 'class': 'ltc-wirebox' }, [
+			E('span', { 'data-live': downKey }, '↓ –'),
+			E('div', { 'class': 'ltc-wire' + (mid === false ? ' down' : '') }, E('i')),
+			E('span', { 'data-live': upKey }, '↑ –')
+		]);
+	}
+
+	return card(_('Network path'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/network/network') }, _('Manage') + ' →'),
+		E('div', { 'class': 'ltc-path' }, [
+			node(L.url('admin/status/realtime/traffic'), 'globe', _('Internet'),
+				wan ? (util.ip4(wan) || _('Connected')) : _('Down'),
+				dns.length ? 'DNS ' + dns[0] : ''),
+			link('path-down', 'path-up', !!wan),
+			node(L.url('admin/status/overview'), 'router', hostname,
+				lanIpOf(lan) + (board.model ? ' · ' + board.model : ''),
+				util.fmtDuration(info.uptime) + ' · ' + mem.percent + '% ' + _('memory'), 'me'),
+			link('path-lan-down', 'path-lan-up', !!lan),
+			node(L.url('admin/network/wireless'), 'wifi', _('LAN / WiFi'),
+				wifi.ssids.length ? wifi.ssids[0] : '%d / %d %s'.format(wifi.up, wifi.total, _('radios')),
+				'%d %s'.format(clientsOf(data).length, _('devices')))
+		]));
+}
+
+function lanIpOf(lan) {
+	var a = util.arr(lan && lan['ipv4-address'])[0];
+	if (!a)
+		return '–';
+	var mask = a.mask != null ? '/' + a.mask : '';
+	return a.address + mask;
+}
+
 return view.extend({
 	load: function () {
 		return util.load();
@@ -381,6 +418,8 @@ return view.extend({
 				var tx = Math.max(0, (Number(stats.tx_bytes) - this._lastStats.tx) / dt);
 				set('[data-live=traffic]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
 				set('[data-live=traffic-sub]', devName || wan.proto || '');
+				set('[data-live=path-down]', '↓ ' + util.fmtRate(rx));
+				set('[data-live=path-up]', '↑ ' + util.fmtRate(tx));
 				this._hist.push({ rx: rx, tx: tx });
 				if (this._hist.length > 120)
 					this._hist = this._hist.slice(-120);
@@ -390,6 +429,21 @@ return view.extend({
 			set('[data-live=traffic-total]', '↓ ' + util.fmtBytes(Number(stats.rx_bytes) || 0) +
 				'  ↑ ' + util.fmtBytes(Number(stats.tx_bytes) || 0));
 			this._lastStats = { t: now, rx: Number(stats.rx_bytes) || 0, tx: Number(stats.tx_bytes) || 0 };
+		}
+
+		var lanDevName = lan && (lan['l3_device'] || lan.device);
+		var lanDev = lanDevName && data.devices && data.devices[lanDevName];
+		var lanStats = lanDev && (lanDev.stats || lanDev.statistics);
+		if (lanStats) {
+			var lnow = Date.now();
+			if (this._lastLan) {
+				var ldt = Math.max(1, (lnow - this._lastLan.t) / 1000);
+				var lrx = Math.max(0, (Number(lanStats.rx_bytes) - this._lastLan.rx) / ldt);
+				var ltx = Math.max(0, (Number(lanStats.tx_bytes) - this._lastLan.tx) / ldt);
+				set('[data-live=path-lan-down]', '↓ ' + util.fmtRate(lrx));
+				set('[data-live=path-lan-up]', '↑ ' + util.fmtRate(ltx));
+			}
+			this._lastLan = { t: lnow, rx: Number(lanStats.rx_bytes) || 0, tx: Number(lanStats.tx_bytes) || 0 };
 		}
 		set('[data-live=ring-mem]', mem.percent + '%');
 		set('[data-live=ring-swap]', mem.swapPercent + '%');
@@ -704,18 +758,6 @@ return view.extend({
 			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage')
 		]);
 
-		var topo = E('div', { 'class': 'ltc-topo' }, [
-			node('globe', _('Internet'), wan ? 'ok' : 'bad'),
-			wire(!wan),
-			node('network', 'WAN', wan ? 'ok' : 'bad'),
-			wire(false),
-			node('router', _('Router'), 'me'),
-			wire(false),
-			node('laptop', _('LAN'), lan ? 'ok' : ''),
-			wire(false),
-			node('wifi', _('WiFi'), wifi.up ? 'ok' : '')
-		]);
-
 		var leaseRem = '–';
 		var addr4 = util.arr(wan && wan['ipv4-address'])[0];
 		if (addr4 && addr4.valid != null)
@@ -750,7 +792,7 @@ return view.extend({
 		]);
 
 		var networkCard = card(_('Network'), E('a', { 'class': 'ltc-link', 'href': L.url('admin/network/network') }, _('Manage') + ' →'),
-			E(document.documentElement.dataset.topo === '0' ? [facts] : [topo, facts]));
+			E([facts]));
 
 		var health = E('div', { 'class': 'ltc-rings' }, [
 			ring(_('Memory'), mem.percent + '%', mem.percent, 'mem'),
@@ -829,6 +871,8 @@ return view.extend({
 		if (ds.updates !== '0')
 			stack.push(this.updateCard(data));
 		stack.push(kpis);
+		if (ds.topo !== '0')
+			stack.push(pathCard(data, wan, lan, wifi, hostname));
 		if (ds.trend !== '0')
 			stack.push(sparkCard());
 		stack.push(

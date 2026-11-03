@@ -17,6 +17,7 @@ var callHosts = rpc.declare({ object: 'luci-rpc', method: 'getHostHints' });
 var callLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases' });
 var callWifi = rpc.declare({ object: 'luci-rpc', method: 'getWirelessDevices' });
 var callDevices = rpc.declare({ object: 'luci-rpc', method: 'getNetworkDevices' });
+var callConns = rpc.declare({ object: 'luci-rpc', method: 'getConnsPerHost' });
 var callStorage = rpc.declare({ object: 'luci.lucent', method: 'storage' });
 var callOverview = rpc.declare({ object: 'luci.lucent', method: 'overview' });
 var callThemeCheck = rpc.declare({ object: 'luci.lucent', method: 'theme_check' });
@@ -397,7 +398,8 @@ return baseclass.extend({
 			L.resolveDefault(callWifi(), {}),
 			L.resolveDefault(callStorage(), {}),
 			L.resolveDefault(callDevices(), {}),
-			L.resolveDefault(callOverview(), {})
+			L.resolveDefault(callOverview(), {}),
+			L.resolveDefault(callConns(), {})
 		]).then(function (r) {
 			return {
 				board: r[0] || {},
@@ -408,12 +410,19 @@ return baseclass.extend({
 				wifi: r[5] || {},
 				storage: r[6] || {},
 				devices: r[7] || {},
-				net: r[8] || {}
+				net: r[8] || {},
+				conns: r[9] || {}
 			};
 		});
 	},
 
 	hosts: function (hints, leases) { return hostsFrom(hints, leases); },
+	connCount: function (conns, ip) {
+		var v = (conns || {})[ip];
+		if (v == null)
+			return 0;
+		return typeof v === 'number' ? v : (Number(v.count) || 0);
+	},
 	wan: function (ifaces) { return findWan(ifaces); },
 	lan: function (ifaces, wan) { return findLan(ifaces, wan); },
 	gateway: gatewayOf,

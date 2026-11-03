@@ -6,7 +6,7 @@
 				"luci.lucent": [ "*" ],
 				"system": [ "board", "info" ],
 				"network.interface": [ "dump" ],
-				"luci-rpc": [ "getHostHints", "getDHCPLeases", "getNetworkDevices", "getWirelessDevices", "getBoardJSON" ],
+				"luci-rpc": [ "getHostHints", "getDHCPLeases", "getNetworkDevices", "getWirelessDevices", "getBoardJSON", "getConnsPerHost" ],
 				"dhcp": [ "ipv4leases", "ipv6leases" ],
 				"uci": [ "get", "order", "changes", "revert" ]
 			},

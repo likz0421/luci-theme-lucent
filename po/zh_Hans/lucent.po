@@ -907,3 +907,36 @@ msgstr "陶棕"
 
 msgid "Graphite"
 msgstr "石墨"
+
+msgid "Network path"
+msgstr "网络路径"
+
+msgid "LAN / WiFi"
+msgstr "局域网 / WiFi"
+
+msgid "Connections"
+msgstr "连接数"
+
+msgid "Phone"
+msgstr "手机"
+
+msgid "TV / Box"
+msgstr "电视 / 盒子"
+
+msgid "Camera"
+msgstr "摄像头"
+
+msgid "Computer"
+msgstr "电脑"
+
+msgid "Printer"
+msgstr "打印机"
+
+msgid "Wearable"
+msgstr "穿戴设备"
+
+msgid "Smart device"
+msgstr "智能设备"
+
+msgid "Network device"
+msgstr "网络设备"
