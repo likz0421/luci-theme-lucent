@@ -218,6 +218,8 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 	[data-rail="1"] .ltc-nav{overflow:visible}
 	[data-rail="1"] .ltc-nav>ul>li{position:relative}
 	[data-rail="1"] .ltc-nav ul.dropdown-menu{display:none;position:absolute;left:calc(100% - 2px);top:-4px;z-index:40;min-width:190px;margin:0;padding:8px 9px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:var(--shadow)}
+	/* an accordion-opened group (.open) must not pin its flyout on screen */
+	[data-rail="1"] .ltc-nav>ul>li.open>ul.dropdown-menu{display:none}
 	[data-rail="1"] .ltc-nav>ul>li:hover ul.dropdown-menu,[data-rail="1"] .ltc-nav>ul>li:focus-within ul.dropdown-menu{display:block}
 	[data-rail="1"] .ltc-nav ul.dropdown-menu a{justify-content:flex-start;gap:7px;padding:6px 9px;font-size:12.5px}
 	[data-rail="1"] .ltc-modes{display:none}
@@ -290,6 +292,9 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .cbi-dropdown>ul>li{display:none;flex:1 1 auto;min-width:0;align-items:center;padding:7px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cbi-dropdown>ul>li[display],.cbi-dropdown[open]>ul.dropdown>li{display:flex}
 .cbi-dropdown[open]>ul.dropdown{position:absolute;z-index:1200;top:calc(100% + 4px);left:0;right:0;display:block;max-height:280px;overflow:auto;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-pop)}
+/* cards create a stacking context via backdrop-filter, so an open dropdown
+   would otherwise slide under the sticky save bar; lift the host card */
+.ltc-card:has(.cbi-dropdown[open]),.cbi-section:has(.cbi-dropdown[open]),.cbi-value:has(.cbi-dropdown[open]){z-index:1000}
 .cbi-dropdown[open]>ul.dropdown>li{display:block;border-radius:8px;padding:8px 10px;white-space:normal}
 .cbi-dropdown[open]>ul.dropdown>li:hover{background:var(--tint)}
 .cbi-dropdown>.open,.cbi-dropdown>.more{flex:none;display:flex;align-items:center;padding:0 9px;color:var(--text-3);font-size:11px}

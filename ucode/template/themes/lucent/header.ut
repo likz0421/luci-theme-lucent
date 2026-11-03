@@ -72,9 +72,7 @@
 			var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 			root.dataset.theme = dark ? 'dark' : 'light';
 			try {
-				var w = innerWidth;
-				var rail = localStorage.getItem('lucent.rail');
-				if (w >= 981 && (rail === '1' || (!rail && w < 1200)))
+				if (innerWidth >= 981 && localStorage.getItem('lucent.rail') === '1')
 					root.dataset.rail = '1';
 			} catch (e) {}
 		})();

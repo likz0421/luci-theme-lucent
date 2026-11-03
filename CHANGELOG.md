@@ -3,6 +3,27 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.7.7 — 2026-11-02
+
+### Fixed
+
+- **Rail flyouts could hang open permanently.** A group left `.open` by an
+  earlier accordion click had its submenu `display:block` rule beat the
+  rail-mode hide rule, so panels stayed stacked over the page with the
+  mouse nowhere near. `.open` groups now stay hidden until actually
+  hovered/focused.
+- **Open dropdowns slipped under the sticky save bar.** Cards create a
+  stacking context via `backdrop-filter`, so a dropdown's high z-index was
+  trapped inside the card while the sticky action bar (z-index 20) drew over
+  it. The host card/value now lifts above the bar while a dropdown is open
+  (`:has()`).
+
+### Changed
+
+- **Auto-collapse removed.** The rail only activates when you click the
+  chevron button (persisted per browser). Window width no longer decides it,
+  so mid-size desktop windows get the normal sidebar by default.
+
 ## 3.7.6 — 2026-11-02
 
 ### Fixed
