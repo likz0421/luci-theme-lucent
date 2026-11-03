@@ -24,6 +24,12 @@ var callThemeCheck = rpc.declare({ object: 'luci.lucent', method: 'theme_check' 
 var callThemeUpdate = rpc.declare({ object: 'luci.lucent', method: 'theme_update' });
 var callThemeStatus = rpc.declare({ object: 'luci.lucent', method: 'theme_status' });
 var callPkgUpdates = rpc.declare({ object: 'luci.lucent', method: 'pkg_updates' });
+var callTopology = rpc.declare({ object: 'luci.lucent', method: 'topology' });
+var callHostRates = rpc.declare({ object: 'luci.lucent', method: 'host_rates' });
+/* current LuCI reads stations from the iwinfo ubus object; older builds only
+   had the luci-rpc wrapper, so assocList() tries both. */
+var callAssocIwinfo = rpc.declare({ object: 'iwinfo', method: 'assoclist', params: [ 'device' ] });
+var callAssocLegacy = rpc.declare({ object: 'luci-rpc', method: 'getWirelessAssocList', params: [ 'ifname' ] });
 
 function arr(v) {
 	if (v == null)
@@ -179,6 +185,39 @@ function pct(part, total) {
 	if (total <= 0)
 		return 0;
 	return Math.max(0, Math.min(100, Math.round(part * 100 / total)));
+}
+
+/* iwinfo exposes the association list either as an array or keyed by MAC, and
+   the signal field name differs across drivers. */
+function stationsOf(res) {
+	if (res && !Array.isArray(res) && res.results)
+		res = res.results;
+
+	var list = Array.isArray(res) ? res : Object.keys(res || {}).map(function (k) {
+		return res[k];
+	});
+
+	return list.map(function (s) {
+		if (!s || typeof s !== 'object')
+			return null;
+		var mac = s.mac && s.mac.address ? s.mac.address : (s.mac || s.address || s.sta);
+		return {
+			mac: String(mac || '').toUpperCase(),
+			signal: Number(s.signal != null ? s.signal : s.quality),
+			rx: Number(s.rx_bytes || s.rx || 0),
+			tx: Number(s.tx_bytes || s.tx || 0)
+		};
+	}).filter(function (s) { return s.mac; });
+}
+
+/* MAC -> bridge port, from the helper's fdb dump. */
+function fdbMap(topology) {
+	var map = {};
+	arr(topology && topology.fdb).forEach(function (e) {
+		if (e && e.mac && e.port)
+			map[String(e.mac).toUpperCase()] = e.port;
+	});
+	return map;
 }
 
 function hostsFrom(hints, leases) {
@@ -433,6 +472,17 @@ return baseclass.extend({
 	updateStatus: function () { return callThemeStatus(); },
 	pkgUpdates: function () { return callPkgUpdates(); },
 	overview: function () { return callOverview(); },
+	topology: function () { return L.resolveDefault(callTopology(), {}); },
+	hostRates: function () { return L.resolveDefault(callHostRates(), {}); },
+	assocList: function (ifname) {
+		return callAssocIwinfo(ifname).then(function (res) {
+			return stationsOf(res);
+		}).catch(function () {
+			return L.resolveDefault(callAssocLegacy(ifname), []).then(stationsOf);
+		});
+	},
+	stations: stationsOf,
+	fdbMap: fdbMap,
 	ip4: ip4,
 	ip6: ip6,
 	hasDefaultRoute: hasDefaultRoute,

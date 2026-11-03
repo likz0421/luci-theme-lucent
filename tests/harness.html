@@ -150,14 +150,54 @@ var MOCK = {
 		{ macaddr: 'aa:bb:cc:00:00:01', hostname: 'phone', ipaddr: '192.168.1.30', expires: NOW + 7200 },
 		{ macaddr: 'aa:bb:cc:00:00:02', hostname: 'laptop', ipaddr: '192.168.1.31', expires: NOW + 86400 }
 	] },
-	'luci-rpc.getWirelessDevices': { radio0: { up: true, interfaces: [{ config: { ssid: 'MyHome-2.4G' } }] }, radio1: { up: true, interfaces: [{ config: { ssid: 'MyHome-5G' } }] } },
+	'luci-rpc.getWirelessDevices': {
+		radio0: { up: true, interfaces: [{ ifname: 'wlan0', config: { ssid: 'MyHome-2.4G' } }] },
+		radio1: { up: true, interfaces: [{ ifname: 'wlan1', config: { ssid: 'MyHome-5G' } }] }
+	},
 	'luci-rpc.getNetworkDevices': { 'pppoe-wan': { statistics: { rx_bytes: 1258291200, tx_bytes: 356515840 } }, 'br-lan': { statistics: { rx_bytes: 999, tx_bytes: 888 } } },
 	'luci.lucent.storage': { '/': { total: 103079215, free: 76545000 } },
 	'luci-rpc.getConnsPerHost': { '192.168.1.30': { count: 12 }, '192.168.1.31': { count: 3 } },
 	'luci.lucent.overview': { version: '3.9.0-r1', cores: 4, cpus: [42, 17, 63, 8], load1: '0.25', load5: '0.31', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
 	'luci.lucent.theme_check': { current: '3.7.2-r1', latest: '3.7.3', available: true },
 	'luci.lucent.theme_status': { running: 0, code: -1, log: '' },
-	'luci.lucent.pkg_updates': { count: 4 }
+	'luci.lucent.pkg_updates': { count: 4 },
+	'luci.lucent.topology': {
+		bridge: 'br-lan',
+		wan_device: 'eth0',
+		wan_iface: 'eth0.2',
+		lan_device: 'eth0',
+		lan_ifname: 'eth0.1',
+		ports: [
+			{ device: 'lan1', state: 'up', wireless: 0, speed: 1000, duplex: 'full', label: 'lan1', mac: '00:11:22:33:44:01' },
+			{ device: 'lan2', state: 'down', wireless: 0, label: 'lan2', mac: '00:11:22:33:44:02' },
+			{ device: 'wlan0', state: 'up', wireless: 1, label: 'wlan0' },
+			{ device: 'wlan1', state: 'up', wireless: 1, label: 'wlan1' }
+		],
+		fdb: [
+			{ mac: 'AA:BB:CC:00:00:02', port: 'lan1' },
+			{ mac: 'DD:EE:FF:00:00:09', port: 'lan1' }
+		]
+	},
+	'luci.lucent.host_rates': {
+		enabled: 1,
+		wanted: 1,
+		hosts: 3,
+		seconds: NOW,
+		rates: {
+			'192.168.1.30': { rx_rate: 4200000, tx_rate: 310000, rx_total: 88000000, tx_total: 4400000, age: 0 },
+			'192.168.1.31': { rx_rate: 120000, tx_rate: 9000, rx_total: 1200000, tx_total: 90000, age: 45 }
+		}
+	},
+	'luci-rpc.getWirelessAssocList': { radio: 'radio0' }
+};
+
+/* the assoc list is per interface, so it needs the call argument */
+var ASSOC = {
+	wlan0: [
+		{ mac: 'aa:bb:cc:00:00:01', signal: -48, rx_bytes: 1000, tx_bytes: 200 },
+		{ mac: '11:22:33:44:55:66', signal: -71 }
+	],
+	wlan1: []
 };
 
 /* Root menu node in the shape /admin/menu serves: children keyed by node name,
@@ -198,6 +238,13 @@ var MENU = node(null, 0, {
 var rpc = { declare: function (spec) {
 	return function () {
 		var key = spec.object + '.' + spec.method;
+		if (key === 'iwinfo.assoclist' || key === 'luci-rpc.getWirelessAssocList')
+			return Promise.resolve({ results: ASSOC[arguments[0]] || [] });
+		if (key === 'luci.lucent.host_rates' && MOCK['luci.lucent.host_rates'].bump) {
+			var r = MOCK['luci.lucent.host_rates'].rates['192.168.1.30'];
+			r.rx_rate += 900000;
+			r.age = 0;
+		}
 		return Promise.resolve(MOCK[key] !== undefined ? MOCK[key] : {});
 	};
 } };
@@ -370,13 +417,56 @@ var FLAGS = location.hash || '';
 		check('clock ticking', /\d\d/.test(txt('clock') || ''), txt('clock'));
 		check('skeletons cleared', skel.length === 0, skel.length + ' left');
 
+		/* ---- branching topology tree ---- */
+		var tree = document.querySelector('.ltc-tree');
+		var ports = document.querySelectorAll('.ltc-tnode.port');
+		var leaves = document.querySelectorAll('.ltc-tnode.leaf');
+		var leafText = Array.prototype.map.call(leaves, function (n) {
+			return n.textContent;
+		}).join(' | ');
+		var portText = Array.prototype.map.call(ports, function (n) { return n.textContent; }).join(' | ');
+
+		check('tree rendered', !!tree && !!document.querySelector('.ltc-tnode.root'));
+		check('all bridge ports', ports.length >= 4, ports.length + ' ports');
+		check('wired port speed shown', /1000 Mb\/s/.test(portText), portText.slice(0, 70));
+		check('down port marked', !!document.querySelector('.ltc-tnode.down'));
+		check('ssid on radio node', /MyHome-2\.4G/.test(portText));
+		check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
+		check('phone placed under radio', /phone/.test(leafText), leafText.slice(0, 90));
+		check('laptop placed under lan1', /laptop/.test(leafText));
+		check('every host placed on a branch', !/Other links/.test(portText), 'no catch-all needed');
+		check('per-host rate in tree', !!document.querySelector('[data-live=hr-192-168-1-30]'),
+			document.querySelector('[data-live=hr-192-168-1-30]') && document.querySelector('[data-live=hr-192-168-1-30]').textContent);
+
+		/* ---- top talkers ---- */
+		var talkers = document.querySelectorAll('[data-talkers] li');
+		var first = talkers[0];
+		check('talkers listed', talkers.length >= 2, talkers.length + ' rows');
+		check('heaviest first', !!first && /phone/.test(first.querySelector('.who').textContent),
+			first && first.querySelector('.who').textContent);
+		check('talker bar scaled', !!first && /width:100%/.test(first.querySelector('.bar u').getAttribute('style')));
+		check('talker rates formatted', !!first && /↓/.test(first.querySelector('.val').textContent),
+			first && first.querySelector('.val').textContent);
+
+		/* ---- devices page rate column ---- */
+		var heads = document.querySelectorAll('.ltc-content .table .table-titles .th');
+		var rateCells = document.querySelectorAll('.ltc-rate');
+		check('devices table has rate column', heads.length >= 7, heads.length + ' columns');
+		check('devices rate cells filled', rateCells.length >= 2 && /↓/.test(rateCells[0].textContent),
+			rateCells.length + ' cells');
+
 		return v.applyLive(dash);
 	}).then(function () {
 		/* second dashboard poll round, per the live-widget rule */
 		MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1270000000, tx_bytes: 358900000 } };
+		MOCK['luci.lucent.host_rates'].bump = 1;
 		return v.load();
 	}).then(function (d2) {
+		var cell = document.querySelector('[data-live=hr-192-168-1-30]');
+		var before = cell ? cell.textContent : '';
 		v.applyLive(d2);
+		var after = cell ? cell.textContent : '';
+		check('tree rate refreshed', before !== after, before + ' → ' + after);
 		return wait(400);
 	}).then(function () {
 		var live = document.querySelector('[data-live=spark-now]');

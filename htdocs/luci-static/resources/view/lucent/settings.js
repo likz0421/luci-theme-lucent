@@ -461,7 +461,16 @@ return view.extend({
 			], self.cfg.show_topo, function (v) {
 				self.cfg.show_topo = v;
 				save('show_topo', v);
-			})),
+			}), _('The network path card also draws the LAN branches: bridge ports, their negotiated speed and the hosts learned on each.')),
+			field(_('Per-device rates'), segmented([
+				{ value: '1', label: _('On') },
+				{ value: '0', label: _('Off') }
+			], self.cfg.acct || '0', function (v) {
+				self.cfg.acct = v;
+				save('acct', v, v === '1'
+					? _('Conntrack accounting will be turned on')
+					: _('Conntrack accounting will be turned off'));
+			}), _('Lets the devices page and the top talkers card show each host’s live down/up rate and how long it has been silent. It turns on kernel connection tracking accounting, which costs a little CPU per connection and is reset by a reboot — the theme re-enables it while this stays on.')),
 			field(_('Update banner'), segmented([
 				{ value: '1', label: _('Show') },
 				{ value: '0', label: _('Hide') }

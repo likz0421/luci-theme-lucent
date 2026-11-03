@@ -34,6 +34,12 @@ stylesheets, scripts or package metadata with them.
 - Greeting, hostname, firmware and model
 - WAN/LAN addresses, uptime, memory, device count and live WAN
   throughput KPIs, refreshed by polling
+- Branching LAN tree: bridge → ports (negotiated speed, up/down) → the hosts
+  learned on each, wired from the bridge FDB and wireless from the driver's
+  association list; every host leaf links to the devices page
+- Top talkers: the busiest hosts right now with proportional bars, plus how
+  long the quiet ones have been silent (needs per-device accounting, which is
+  off by default — see Appearance)
 - Uplink topology (Internet → WAN → router → LAN → Wi-Fi)
 - Memory, swap and load rings
 - Device list and quick actions
@@ -55,6 +61,7 @@ stylesheets, scripts or package metadata with them.
 **Devices** (`/cgi-bin/luci/admin/clients`)
 - Merges DHCP leases, ARP/neighbour hints and IPv6 addresses
 - Search filter, online state, interface name and lease time
+- Per-device live down/up rate and last-seen columns, sortable by rate
 
 **Media library**
 - Uploads are streamed to `/tmp/lucent-upload/` in 192 KiB chunks and
@@ -262,6 +269,8 @@ Argon and Fluent, but it is not a drop-in clone. Current status:
 | Live WAN throughput | Yes | Computed client-side from `wan.statistics` |
 | Wi-Fi status / SSID | Yes | Radio count + first SSID |
 | Online device list | Yes | DHCP + ARP + IPv6 hints |
+| Per-device live rate / last seen | Yes | conntrack accounting diff, opt-in via Appearance |
+| Branching LAN topology | Yes | bridge → ports → hosts, FDB + association list |
 | Grouped menu + keyboard search | Yes | Sidebar groups, `Ctrl/Cmd+K` palette |
 | Live readings in the sidebar | Yes | CPU/memory rings, traffic curve, WAN/LAN, uptime, devices, Wi-Fi, temperature, storage |
 | Multiple palettes / dark mode / glass | Yes | 5 palettes, auto mode, adjustable blur |

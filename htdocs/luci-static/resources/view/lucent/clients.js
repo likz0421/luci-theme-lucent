@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require poll';
+'require lucent.core as core';
 'require lucent.util as util';
 
 function summary(value, label) {
@@ -8,6 +9,33 @@ function summary(value, label) {
 		E('small', {}, label),
 		E('b', {}, value)
 	]);
+}
+
+/* Per-host throughput comes from the conntrack accounting diff; without it the
+   column stays empty and the card explains how to turn it on. */
+function rateCell(r) {
+	if (!r)
+		return E('div', { 'class': 'ltc-rate none' }, '–');
+
+	var total = Math.max(r.rx_rate + r.tx_rate, 1);
+
+	return E('div', { 'class': 'ltc-rate' }, [
+		E('span', {}, '↓ ' + util.fmtRate(r.rx_rate)),
+		E('span', {}, '↑ ' + util.fmtRate(r.tx_rate)),
+		E('i', { 'class': 'ltc-ratebar' }, E('u', { 'style': 'width:' + Math.min(100, Math.round(total / 1024 / 1024 * 10)) + '%' }))
+	]);
+}
+
+function ageText(r) {
+	if (!r || r.age < 0)
+		return '';
+	if (r.age <= 2)
+		return _('now');
+	if (r.age < 90)
+		return _('%ds ago').format(r.age);
+	if (r.age < 5400)
+		return _('%dm ago').format(Math.round(r.age / 60));
+	return _('%dh ago').format(Math.round(r.age / 3600));
 }
 
 /* Lightweight device-class guess from the advertised name. */
@@ -37,12 +65,22 @@ var SORTS = {
 	name: function (a, b) { return String(a.name).toLowerCase() < String(b.name).toLowerCase() ? -1 : 1; },
 	ip: function (a, b) { return (Number(a.ip.split('.').reduce(function (p, o) { return p * 256 + Number(o); }, 0)) || 0) - ((Number(b.ip.split('.').reduce(function (p, o) { return p * 256 + Number(o); }, 0)) || 0)); },
 	conns: function (a, b) { return a.conns - b.conns; },
-	status: function (a, b) { return (b.online ? 1 : 0) - (a.online ? 1 : 0); }
+	status: function (a, b) { return (b.online ? 1 : 0) - (a.online ? 1 : 0); },
+	rate: function (a, b) { return (b.rate ? b.rate.rx_rate + b.rate.tx_rate : 0) - (a.rate ? a.rate.rx_rate + a.rate.tx_rate : 0); }
 };
 
 return view.extend({
 	load: function () {
-		return util.load();
+		return this.refresh();
+	},
+
+	refresh: function () {
+		var self = this;
+
+		return Promise.all([util.load(), util.hostRates()]).then(function (r) {
+			self._hr = r[1] || {};
+			return r[0];
+		});
 	},
 
 	render: function (data) {
@@ -70,6 +108,7 @@ return view.extend({
 				E('th', { 'class': 'th' }, _('IPv6 address')),
 				E('th', { 'class': 'th' }, _('MAC address')),
 				this.th(_('Connections'), 'conns'),
+				this.th(_('Rate'), 'rate'),
 				this.th(_('Status'), 'status')
 			])
 		]);
@@ -87,9 +126,32 @@ return view.extend({
 			])
 		]);
 
+		var acctOn = data.rates && Number(data.rates.enabled) === 1;
+		var acctNote = E('div', { 'class': 'ltc-acctnote' + (acctOn ? ' on' : '') }, [
+			E('span', {}, acctOn
+				? _('Per-device traffic is being counted from the connection tracking table.')
+				: _('Per-device rates are off: they need conntrack accounting, which costs a little CPU per flow.')),
+			acctOn ? '' : E('button', {
+				'type': 'button', 'class': 'ltc-btn primary sm', 'click': function (ev) {
+					var btn = ev.currentTarget;
+					btn.disabled = true;
+					btn.textContent = _('Turning on…');
+					core.save('acct', '1').then(function () {
+						core.toast(_('Per-device accounting enabled'), 'ok');
+						setTimeout(function () { location.reload(); }, 700);
+					}).catch(function () {
+						btn.disabled = false;
+						btn.textContent = _('Enable');
+						core.toast(_('The router refused the change'), 'err');
+					});
+				}
+			}, _('Enable'))
+		]);
+
 		var body = E('section', { 'class': 'ltc-card' }, [
 			head,
 			this.sumBox,
+			acctNote,
 			E('div', { 'class': 'ltc-field-row', 'style': 'margin:6px 0 12px' }, [
 				util.icon('search'),
 				this.filter
@@ -99,7 +161,7 @@ return view.extend({
 		]);
 
 		poll.add(L.bind(function () {
-			return util.load().then(L.bind(this.fill, this));
+			return this.refresh().then(L.bind(this.fill, this));
 		}, this), 15);
 
 		return E('div', { 'class': 'ltc-stack' }, [body]);
@@ -124,18 +186,25 @@ return view.extend({
 	fill: function (data, keepScroll) {
 		var self = this;
 		var hosts = util.hosts(data.hints, data.leases);
+		var rates = (data.rates && data.rates.rates) || (this._hr && this._hr.rates) || {};
 		var online = hosts.filter(function (h) { return h.online; }).length;
 		var v6 = hosts.filter(function (h) { return h.v6 && h.v6.length; }).length;
 		var named = hosts.filter(function (h) { return h.name; }).length;
 
+		if (data.rates)
+			this._hr = data.rates;
+
 		window.__lastClientsData = data;
 
 		var rows = hosts.map(function (h) {
+			var ip = h.ips[0] || '';
+
 			return {
 				h: h,
 				name: h.name || h.mac,
-				ip: h.ips[0] || '',
-				conns: h.ips.reduce(function (p, ip) { return p + util.connCount(data.conns, ip); }, 0),
+				ip: ip,
+				rate: ip ? rates[ip] : null,
+				conns: h.ips.reduce(function (p, ip2) { return p + util.connCount(data.conns, ip2); }, 0),
 				online: h.online
 			};
 		});
@@ -182,6 +251,10 @@ return view.extend({
 				E('td', { 'class': 'td' }, h.v6[0] || '–'),
 				E('td', { 'class': 'td' }, E('code', {}, h.mac)),
 				E('td', { 'class': 'td' }, r.conns > 0 ? String(r.conns) : '–'),
+				E('td', { 'class': 'td' }, [
+					rateCell(r.rate),
+					r.rate ? E('small', { 'class': 'ltc-muted' }, ageText(r.rate)) : ''
+				]),
 				E('td', { 'class': 'td' }, [
 					E('span', { 'class': 'ltc-badge ' + (h.online ? 'ok' : 'plain') },
 						h.online ? _('Active') : _('Known')),

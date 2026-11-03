@@ -278,6 +278,7 @@ function pathCard(data, wan, lan, wifi, hostname) {
 				wifi.ssids.length ? wifi.ssids[0] : '%d / %d %s'.format(wifi.up, wifi.total, _('radios')),
 				'%d %s'.format(clientsOf(data).length, _('devices')))
 			]),
+			treeSection(data, data.wifi),
 			E('div', { 'class': 'ltc-pathsum' }, [
 				psum(_('Current traffic'), '↓ –  ↑ –', 'path-now'),
 				psum(_('Connected'), wan && wan.uptime != null ? util.fmtDuration(wan.uptime) : '–', 'path-conn'),
@@ -295,9 +296,209 @@ function lanIpOf(lan) {
 	return a.address + mask;
 }
 
+function rateText(r) {
+	if (!r)
+		return '–';
+	return '↓ %s ↑ %s'.format(util.fmtRate(r.rx_rate), util.fmtRate(r.tx_rate));
+}
+
+/* The wireless netdev behind an SSID differs per build (wlan0, radio0, ath0)
+   and the wireless dump carries it under a different key per LuCI version, so
+   match on whichever of them happens to line up. */
+function ssidForNetdev(wifi, dev) {
+	var found = '';
+
+	Object.keys(wifi || {}).forEach(function (k) {
+		var ifs = (wifi[k] || {}).interfaces;
+		var list;
+
+		if (Array.isArray(ifs))
+			list = ifs;
+		else
+			list = Object.keys(ifs || {}).map(function (n) {
+				var v = ifs[n];
+				if (v && typeof v === 'object' && !v.ifname)
+					v.ifname = n;
+				return v;
+			});
+
+		list.forEach(function (i) {
+			if (!i || !(i.config && i.config.ssid))
+				return;
+			var names = [i.ifname, i.section, i['.name'], i.config['.name'], k];
+			if (names.indexOf(dev) >= 0)
+				found = i.config.ssid;
+		});
+	});
+
+	return found;
+}
+
+/* Branching LAN view: bridge → physical ports → the hosts learned on each.
+   Wired ports come from the bridge FDB, wireless ones from the driver's
+   association list, so a device lands under the radio it actually uses. */
+function treeSection(data, wifi) {
+	var topo = data.topology || {};
+	var rates = (data.rates && data.rates.rates) || {};
+	var assoc = data.assoc || {};
+	var fdb = util.fdbMap(topo);
+	var hosts = util.hosts(data.hints, data.leases);
+	var byMac = {};
+	var placed = {};
+
+	hosts.forEach(function (h) {
+		if (h.mac)
+			byMac[h.mac] = h;
+	});
+
+	function leaf(mac) {
+		var h = byMac[mac] || {};
+		var ip = (h.ips && h.ips[0]) || '';
+		var key = 'hr-' + String(ip || mac).replace(/[.:]/g, '-');
+
+		placed[mac] = true;
+
+		return E('li', {}, E('a', {
+			'class': 'ltc-tnode leaf' + (h.online ? ' up' : ''),
+			'href': L.url('admin/clients'),
+			'title': '%s · %s'.format(h.name || mac, mac)
+		}, [
+			E('span', { 'class': 'ic' }, util.icon('devices')),
+			E('span', { 'class': 'tname' }, h.name || mac),
+			E('small', { 'class': 'tmeta' }, ip || _('no address')),
+			E('b', { 'class': 'trate', 'data-live': key }, ip ? rateText(rates[ip]) : '–')
+		]));
+	}
+
+	function portNode(p) {
+		var stations = p.wireless ? (assoc[p.device] || []) : [];
+		var macs = p.wireless
+			? stations.map(function (s) { return s.mac; })
+			: Object.keys(fdb).filter(function (mac) { return fdb[mac] === p.device; });
+
+		macs = macs.filter(function (m, i) { return macs.indexOf(m) === i && !placed[m]; });
+
+		var meta = [];
+		if (p.wireless) {
+			var ssid = ssidForNetdev(wifi, p.device);
+			if (ssid)
+				meta.push(ssid);
+		}
+		if (p.speed)
+			meta.push('%d Mb/s'.format(p.speed));
+		if (p.state && p.state !== 'up')
+			meta.push(p.state);
+
+		return E('li', {}, [
+			E('div', {
+				'class': 'ltc-tnode port ' + (p.state === 'up' ? 'up' : 'down') + (p.wireless ? ' wifi' : ''),
+				'title': '%s · %s'.format(p.label || p.device, meta.join(' · ') || p.state || '–')
+			}, [
+				E('span', { 'class': 'ic' }, util.icon(p.wireless ? 'wifi' : 'network')),
+				E('span', { 'class': 'tname' }, p.label || p.device),
+				E('small', { 'class': 'tmeta' }, meta.join(' · ') || (p.wireless ? _('radio') : _('idle'))),
+				macs.length ? E('b', { 'class': 'tcount' }, String(macs.length)) : ''
+			]),
+			macs.length ? E('ul', { 'class': 'ltc-tkids' }, macs.map(leaf)) : ''
+		]);
+	}
+
+	var ports = util.arr(topo.ports);
+	if (!ports.length)
+		return E('div', { 'class': 'ltc-muted ltc-tree-empty' }, _('No bridge ports were reported.'));
+
+	/* leaf() records what it placed, so the catch-all has to be computed after
+	   the port branches exist, not before */
+	var kids = ports.map(portNode);
+	var stray = hosts.filter(function (h) { return h.mac && !placed[h.mac]; });
+
+	if (stray.length) {
+		kids.push(E('li', {}, [
+			E('div', { 'class': 'ltc-tnode port' }, [
+				E('span', { 'class': 'ic' }, util.icon('info')),
+				E('span', { 'class': 'tname' }, _('Other links')),
+				E('small', { 'class': 'tmeta' }, _('port unknown')),
+				E('b', { 'class': 'tcount' }, String(stray.length))
+			]),
+			E('ul', { 'class': 'ltc-tkids' }, stray.map(function (h) { return leaf(h.mac); }))
+		]));
+	}
+
+	return E('ul', { 'class': 'ltc-tree' }, [
+		E('li', {}, [
+			E('div', { 'class': 'ltc-tnode root' }, [
+				E('span', { 'class': 'ic' }, util.icon('router')),
+				E('span', { 'class': 'tname' }, topo.bridge || _('Bridge')),
+				E('small', { 'class': 'tmeta' }, '%d · %d %s'.format(ports.length, hosts.length, _('devices')))
+			]),
+			E('ul', { 'class': 'ltc-tkids' }, kids)
+		])
+	]);
+}
+
+/* Heaviest talkers right now, straight from the conntrack accounting diff.
+   The rows are filled by drawTalkers() so a poll can move them. */
+function talkersCard(data) {
+	var enabled = data.rates && data.rates.enabled;
+
+	return card(_('Top talkers'),
+		E('span', { 'class': 'ltc-badge ' + (enabled ? 'ok' : 'plain'), 'data-live': 'talkers-mode' },
+			enabled ? _('live') : _('accounting off')),
+		E('ul', { 'class': 'ltc-talkers', 'data-talkers': '' }),
+		E('div', { 'class': 'ltc-muted', 'data-talkers-hint': '' },
+			enabled ? '' : _('Enable per-device accounting in Appearance to see which hosts are busy.')));
+}
+
 return view.extend({
 	load: function () {
-		return util.load();
+		return util.load().then(L.bind(function (d) {
+			return this.enrich(d);
+		}, this));
+	},
+
+	/* Bridge ports and stations are fetched with the view; per-device rates
+	   refresh on every poll because that is the part that actually moves. */
+	enrich: function (d, keepStructure) {
+		var self = this;
+
+		if (keepStructure && this._topo) {
+			d.topology = this._topo;
+			d.assoc = this._assoc || {};
+		}
+		else {
+			d.topology = {};
+			d.assoc = {};
+
+			var ports = [];
+
+			return util.topology().then(function (topo) {
+				self._topo = topo || {};
+				d.topology = self._topo;
+				ports = util.arr(self._topo.ports).filter(function (p) { return p && p.wireless; });
+
+				return Promise.all(ports.map(function (p) {
+					return util.assocList(p.device)
+						.then(function (stations) { return { dev: p.device, stations: stations || [] }; })
+						.catch(function () { return { dev: p.device, stations: [] }; });
+				}));
+			}).then(function (list) {
+				self._assoc = {};
+				(list || []).forEach(function (e) {
+					if (e && e.dev)
+						self._assoc[e.dev] = e.stations || [];
+				});
+				d.assoc = self._assoc;
+				return util.hostRates();
+			}).then(function (hr) {
+				d.rates = hr || {};
+				return d;
+			});
+		}
+
+		return util.hostRates().then(function (hr) {
+			d.rates = hr || {};
+			return d;
+		});
 	},
 
 	startPoll: function () {
@@ -306,7 +507,11 @@ return view.extend({
 		this._polling = true;
 
 		poll.add(L.bind(function () {
+			this._round = (this._round || 0) + 1;
+
 			return util.load().then(L.bind(function (d) {
+				return this.enrich(d, this._round % 6 !== 1);
+			}, this)).then(L.bind(function (d) {
 				this.applyLive(d);
 			}, this));
 		}, this), 10);
@@ -314,7 +519,9 @@ return view.extend({
 		/* Prime a second sample shortly after load so the traffic rate appears
 		   within a few seconds instead of waiting for the first full poll. */
 		setTimeout(L.bind(function () {
-			util.load().then(L.bind(this.applyLive, this)).catch(function () {});
+			util.load().then(L.bind(function (d) {
+				return this.enrich(d);
+			}, this)).then(L.bind(this.applyLive, this)).catch(function () {});
 		}, this), 3000);
 	},
 
@@ -544,6 +751,70 @@ return view.extend({
 		var lanNode = document.querySelector('[data-live=hero-lan]');
 		if (lanNode)
 			lanNode.textContent = lan ? util.ip4(lan) : '–';
+
+		this.updateRates(data.rates);
+		this.drawTalkers(data);
+	},
+
+	updateRates: function (rates) {
+		var hosts = (rates && rates.rates) || {};
+
+		Object.keys(hosts).forEach(function (ip) {
+			var el = document.querySelector('[data-live=hr-' + ip.replace(/\./g, '-') + ']');
+			var text = rateText(hosts[ip]);
+
+			if (!el || el.textContent === text)
+				return;
+
+			el.textContent = text;
+			el.classList.remove('ltc-flash');
+			void el.offsetWidth;
+			el.classList.add('ltc-flash');
+		});
+	},
+
+	drawTalkers: function (data) {
+		var box = document.querySelector('[data-talkers]');
+		var hint = document.querySelector('[data-talkers-hint]');
+		var rates = (data.rates && data.rates.rates) || {};
+		var hosts = util.hosts(data.hints, data.leases);
+		var byIp = {};
+
+		if (!box)
+			return;
+
+		hosts.forEach(function (h) {
+			(h.ips || []).forEach(function (ip) { byIp[ip] = h; });
+		});
+
+		var list = Object.keys(rates).map(function (ip) {
+			return { ip: ip, r: rates[ip] || {} };
+		}).sort(function (a, b) {
+			return (b.r.rx_rate + b.r.tx_rate) - (a.r.rx_rate + a.r.tx_rate);
+		}).slice(0, 6);
+
+		var peak = list.length ? Math.max(list[0].r.rx_rate + list[0].r.tx_rate, 1) : 1;
+
+		box.textContent = '';
+
+		list.forEach(function (e) {
+			var h = byIp[e.ip] || {};
+			var name = h.name || e.ip;
+			var total = e.r.rx_rate + e.r.tx_rate;
+
+			box.appendChild(E('li', { 'class': 'ltc-talker', 'title': '%s · %s'.format(name, e.ip) }, [
+				E('span', { 'class': 'who' }, name),
+				E('i', { 'class': 'bar' }, E('u', { 'style': 'width:%d%%'.format(Math.min(100, Math.round(total * 100 / peak))) })),
+				E('b', { 'class': 'val' }, rateText(e.r)),
+				e.r.age > 20 ? E('small', { 'class': 'age' }, _('%ds ago').format(e.r.age)) : ''
+			]));
+		});
+
+		if (hint)
+			hint.textContent = list.length ? ''
+				: (data.rates && !data.rates.enabled
+					? _('Enable per-device accounting in Appearance to see which hosts are busy.')
+					: _('No traffic has been counted yet.'));
 	},
 
 	drawSpark: function () {
@@ -1014,6 +1285,8 @@ return view.extend({
 		stack.push(kpis);
 		if (ds.topo !== '0')
 			stack.push(pathCard(data, wan, lan, wifi, hostname));
+		if (data.rates && Number(data.rates.enabled) === 1)
+			stack.push(talkersCard(data));
 		if (ds.trend !== '0')
 			stack.push(sparkCard());
 		stack.push(

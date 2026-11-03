@@ -1030,3 +1030,96 @@ msgstr "当前账号没有可见的菜单项"
 
 msgid "Logout"
 msgstr "退出登录"
+
+msgid "Top talkers"
+msgstr "流量排行"
+
+msgid "Per-device rates"
+msgstr "每设备速率"
+
+msgid "Rate"
+msgstr "速率"
+
+msgid "Bridge"
+msgstr "桥接"
+
+msgid "Other links"
+msgstr "其他链路"
+
+msgid "port unknown"
+msgstr "端口未知"
+
+msgid "No bridge ports were reported."
+msgstr "未读到桥接端口。"
+
+msgid "radio"
+msgstr "射频"
+
+msgid "idle"
+msgstr "空闲"
+
+msgid "no address"
+msgstr "无地址"
+
+msgid "live"
+msgstr "实时"
+
+msgid "accounting off"
+msgstr "统计未开启"
+
+msgid "active"
+msgstr "在线"
+
+msgid "devices"
+msgstr "台设备"
+
+msgid "%ds ago"
+msgstr "%d 秒前"
+
+msgid "%dm ago"
+msgstr "%d 分钟前"
+
+msgid "%dh ago"
+msgstr "%d 小时前"
+
+msgid "No traffic has been counted yet."
+msgstr "暂时还没有统计到流量。"
+
+msgid "Enable per-device accounting in Appearance to see which hosts are busy."
+msgstr "在「外观」设置里开启每设备统计后，才能看到哪些主机正在占用带宽。"
+
+msgid "Per-device traffic is being counted from the connection tracking table."
+msgstr "正在从连接跟踪表统计每台设备的流量。"
+
+msgid "Per-device rates are off: they need conntrack accounting, which costs a little CPU per flow."
+msgstr "每设备速率当前是关闭的：它需要连接跟踪记账，会为每条连接增加少量 CPU 开销。"
+
+msgid "Enable"
+msgstr "开启"
+
+msgid "Turning on…"
+msgstr "正在开启…"
+
+msgid "Per-device accounting enabled"
+msgstr "已开启每设备统计"
+
+msgid "The router refused the change"
+msgstr "路由器拒绝了这次修改"
+
+msgid "Conntrack accounting will be turned on"
+msgstr "将开启连接跟踪记账"
+
+msgid "Conntrack accounting will be turned off"
+msgstr "将关闭连接跟踪记账"
+
+msgid "The network path card also draws the LAN branches: bridge ports, their negotiated speed and the hosts learned on each."
+msgstr "网络路径卡片还会画出内网分叉：桥接端口、端口的协商速率，以及每个端口上学到的设备。"
+
+msgid "Lets the devices page and the top talkers card show each host’s live down/up rate and how long it has been silent. It turns on kernel connection tracking accounting, which costs a little CPU per connection and is reset by a reboot — the theme re-enables it while this stays on."
+msgstr "开启后，设备页与流量排行卡片会显示每台设备的实时上下行速率，以及它已经静默多久。原理是打开内核连接跟踪记账：每条连接会多花一点 CPU，重启后内核会把它清掉——只要这里保持开启，主题就会自动重新打开。"
+
+msgid "Unsplash"
+msgstr "Unsplash"
+
+msgid "Wallhaven"
+msgstr "Wallhaven"

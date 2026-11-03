@@ -543,6 +543,221 @@ overview() {
 	json_cleanup
 }
 
+# ------------------------------------------------------- per-host traffic
+# Realtime per-device rates without a daemon or firewall rules: conntrack can
+# account bytes per flow (nf_conntrack_acct), so summing the two tuples of each
+# entry per inner IP and diffing against the previous snapshot gives down/up
+# rate, flow count and how long a host has been silent.
+HOSTCUR="/tmp/lucent-host.cur"
+HOSTPREV="/tmp/lucent-host.prev"
+
+lan_prefixes() {
+	local ip mask bits o1 o2 o3 rest
+	ip=$(uci -q get network.lan.ipaddr 2>/dev/null)
+	mask=$(uci -q get network.lan.netmask 2>/dev/null)
+	[ -n "$ip" ] || return 0
+	bits=24
+	case "$mask" in
+		255.255.255.255) bits=32 ;;
+		255.255.255.0) bits=24 ;;
+		255.255.0.0) bits=16 ;;
+		255.0.0.0) bits=8 ;;
+	esac
+	o1=${ip%%.*}
+	rest=${ip#*.}
+	o2=${rest%%.*}
+	rest=${rest#*.}
+	o3=${rest%%.*}
+	case "$bits" in
+		8) echo "$o1." ;;
+		16) echo "$o1.$o2." ;;
+		*) echo "$o1.$o2.$o3." ;;
+	esac
+}
+
+host_rates() {
+	local want cur now total pfx
+	want=$(uci -q get lucent.main.acct 2>/dev/null)
+	cur=$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)
+
+	if [ "$want" = "1" ] && [ "$cur" != "1" ]; then
+		echo 1 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null || true
+		cur=$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)
+	fi
+
+	now=$(date +%s 2>/dev/null); case "$now" in ''|*[!0-9]*) now=0 ;; esac
+
+	json_init
+	json_add_int wanted "$([ "$want" = "1" ] && echo 1 || echo 0)"
+
+	if [ "$cur" != "1" ] || [ ! -r /proc/net/nf_conntrack ]; then
+		json_add_int enabled 0
+		json_dump
+		json_cleanup
+		return
+	fi
+	json_add_int enabled 1
+
+	# RFC1918 plus the actual LAN subnet counts as "inner". [.] keeps the
+	# pattern free of backslashes, which awk -v would otherwise unescape.
+	pfx="^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|$(lan_prefixes | sed 's/[.]/[.]/g'))"
+
+	awk -v P="$pfx" '
+		{
+			ns=0; nd=0; nb=0; s1=""; d1=""; s2=""; d2=""; b1=-1; b2=-1
+			for (i = 1; i <= NF; i++) {
+				t = $i
+				if (t ~ /^src=/)  { ns++; v = substr(t, 5); if (ns == 1) s1 = v; else if (ns == 2) s2 = v }
+				else if (t ~ /^dst=/) { nd++; v = substr(t, 5); if (nd == 1) d1 = v; else if (nd == 2) d2 = v }
+				else if (t ~ /^bytes=/) { nb++; v = substr(t, 7) + 0; if (nb == 1) b1 = v; else if (nb == 2) b2 = v }
+			}
+			if (s1 == "" || b1 < 0) next
+			if (s1 ~ P)      { h = s1; rx = (b2 < 0 ? 0 : b2); tx = b1 }
+			else if (d1 ~ P) { h = d1; rx = b1; tx = (b2 < 0 ? 0 : b2) }
+			else next
+			RX[h] += rx; TX[h] += tx; FL[h]++
+		}
+		END { for (h in RX) printf "%s %d %d %d\n", h, RX[h], TX[h], FL[h] }
+	' /proc/net/nf_conntrack > "$HOSTCUR" 2>/dev/null
+
+	total=$(wc -l < "$HOSTCUR" 2>/dev/null); total=${total:-0}
+
+	json_add_int hosts "$total"
+	json_add_int seconds "$now"
+	json_add_object "rates"
+
+	if [ "$total" -gt 0 ]; then
+		# prev rows are "host rx tx last-seen"; the same pass writes the next
+		# snapshot, so the baseline always carries a real timestamp
+		awk -v now="$now" -v prev="$HOSTPREV" -v snap="$HOSTPREV.new" '
+			BEGIN {
+				t0 = 0
+				if ((getline line < prev) > 0) {
+					split(line, p, " "); t0 = p[2] + 0
+					while ((getline line < prev) > 0) {
+						split(line, a, " ")
+						pr[a[1]] = a[2] + 0; pt[a[1]] = a[3] + 0; pl[a[1]] = a[4] + 0
+					}
+					close(prev)
+				}
+				dt = t0 ? now - t0 : 0
+				if (dt < 1) dt = 1
+				print "ts " now > snap
+			}
+			{
+				h = $1; rx = $2 + 0; tx = $3 + 0
+				if (t0 == 0) { rr = 0; rt = 0; last = now }
+				else {
+					drx = rx - pr[h]; dtx = tx - pt[h]
+					if (drx < 0) drx = 0
+					if (dtx < 0) dtx = 0
+					rr = int(drx / dt); rt = int(dtx / dt)
+					last = (rx > pr[h] + 0 || tx > pt[h] + 0) ? now : (pl[h] + 0 ? pl[h] + 0 : t0)
+				}
+				printf "%s %d %d %d %d %d\n", h, rr, rt, rx, tx, (last > 0 ? now - last : -1)
+				printf "%s %d %d %d\n", h, rx, tx, last > snap
+			}
+		' "$HOSTCUR" > "${HOSTCUR}.rates" 2>/dev/null
+
+		while read -r ip rxr txt rxt xtt age; do
+			[ -n "$ip" ] || continue
+			json_add_object "$ip"
+			json_add_int rx_rate "${rxr:-0}"
+			json_add_int tx_rate "${txt:-0}"
+			json_add_int rx_total "${rxt:-0}"
+			json_add_int tx_total "${xtt:-0}"
+			json_add_int age "${age:--1}"
+			json_close_object
+		done < "${HOSTCUR}.rates"
+	fi
+
+	json_close_object
+
+	mv -f "$HOSTPREV.new" "$HOSTPREV" 2>/dev/null
+	rm -f "${HOSTCUR}.rates" "$HOSTCUR"
+	json_dump
+	json_cleanup
+}
+
+# ---------------------------------------------------------------- topology
+# Which physical and wireless links sit under the LAN bridge, at what speed,
+# and which MAC learned on which port — enough to draw a branching tree.
+topology() {
+	local br p dev st sp dx wl mac label
+	br=""
+	for p in /sys/class/net/*/brif; do
+		[ -d "$p" ] || continue
+		br=${p%/brif}; br=${br##*/}
+		break
+	done
+
+	json_init
+	json_add_string bridge "$br"
+	json_add_string wan_device "$(uci -q get network.wan.device 2>/dev/null)"
+	json_add_string wan_iface "$(uci -q get network.wan.ifname 2>/dev/null)"
+	json_add_string lan_device "$(uci -q get network.lan.device 2>/dev/null)"
+	json_add_string lan_ifname "$(uci -q get network.lan.ifname 2>/dev/null)"
+
+	json_add_array ports
+	if [ -n "$br" ]; then
+		for p in /sys/class/net/$br/brif/*; do
+			[ -d "$p" ] || continue
+			dev=${p##*/}
+			st=$(cat "$p/operstate" 2>/dev/null)
+			sp=$(cat "$p/speed" 2>/dev/null)
+			dx=$(cat "$p/duplex" 2>/dev/null)
+			mac=$(cat "$p/address" 2>/dev/null)
+			label=""
+			[ -r "$p/phys_port_name" ] && label=$(cat "$p/phys_port_name" 2>/dev/null)
+			wl=0
+			[ -e "$p/wireless" ] && wl=1
+			[ -d "$p/ieee80211" ] && wl=1
+
+			json_add_object
+			json_add_string device "$dev"
+			json_add_string state "${st:-unknown}"
+			json_add_int wireless "$wl"
+			case "$sp" in ''|*[!0-9]*) ;; *) json_add_int speed "$sp" ;; esac
+			[ -n "$dx" ] && json_add_string duplex "$dx"
+			[ -n "$mac" ] && json_add_string mac "$mac"
+			[ -n "$label" ] && json_add_string label "$label"
+			json_close_object
+		done
+	fi
+	json_close_array
+
+	# learned MACs per port; iproute2 is present on stock images, and an
+	# absent or unreadable fdb simply means "port unknown"
+	json_add_array fdb
+	if [ -n "$br" ] && command -v ip >/dev/null 2>&1; then
+		ip -o fdb show br "$br" 2>/dev/null | awk '
+			{
+				mac = ""; port = ""
+				for (i = 1; i <= NF; i++) {
+					if ($i == "lladdr") mac = $(i + 1)
+					else if ($i == "destination") port = $(i + 1)
+					else if (port == "" && $i == "dev") port = $(i + 1)
+				}
+				if (mac == "" || port == "") next
+				if (mac !~ /^[0-9a-f][0-9a-f][:]([0-9a-f][0-9a-f][:]){4,5}/) next
+				if (port ~ /^br-/) next
+				print mac, port
+			}
+		' | head -n 200 > /tmp/lucent-fdb.txt
+		while read -r mac p; do
+			[ -n "$mac" ] || continue
+			json_add_object
+			json_add_string mac "$mac"
+			json_add_string port "$p"
+			json_close_object
+		done < /tmp/lucent-fdb.txt
+		rm -f /tmp/lucent-fdb.txt
+	fi
+	json_close_array
+	json_dump
+	json_cleanup
+}
+
 # ------------------------------------------------------------------ updates
 # All download/mirror/install logic lives in the bundled install.sh; the
 # browser only ever triggers a fixed action, never supplies a URL or version.
@@ -693,6 +908,8 @@ list)
 	json_add_object "plugin_status"; json_close_object
 	json_add_object "storage"; json_close_object
 	json_add_object "overview"; json_close_object
+	json_add_object "topology"; json_close_object
+	json_add_object "host_rates"; json_close_object
 	json_add_object "pkg_updates"; json_close_object
 	json_add_object "theme_check"; json_close_object
 	json_add_object "theme_update"; json_close_object
@@ -712,6 +929,8 @@ call)
 		plugin_status) plugin_status ;;
 		storage) storage ;;
 		overview) overview ;;
+		topology) topology ;;
+		host_rates) host_rates ;;
 		pkg_updates) pkg_updates ;;
 		theme_check) theme_check ;;
 		theme_update) theme_update ;;

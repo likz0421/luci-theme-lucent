@@ -3,6 +3,72 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.0 — 2026-11-03
+
+### Added
+
+- **Branching topology tree.** The network path card now draws the LAN as a
+  tree instead of a straight line: bridge → each port → the hosts learned on
+  that port. Wired ports come from the bridge FDB, wireless ones from the
+  driver's association list, so a phone lands under the radio it actually
+  associates with rather than in a flat list. Each port shows its negotiated
+  speed and state (a down port is dimmed and its branch stops pulsing), each
+  host leaf shows address and live rate, and every leaf links to the devices
+  page. Hosts the FDB cannot place stay visible under an "Other links"
+  branch, so the tree never silently drops a device.
+- **Per-device realtime rates.** New `host_rates` helper method reads
+  `/proc/net/nf_conntrack`, sums both tuples of every entry per inner IP and
+  diffs the result against the previous snapshot in `/tmp`, which yields a
+  real down/up rate **and** a last-seen age per host — no daemon, no firewall
+  rules, no tc classifiers. It is driven by `lucent.main.acct`: when the
+  option is on, the helper re-enables `nf_conntrack_acct` (the kernel clears
+  it on reboot). Off by default because accounting costs a little CPU per
+  connection.
+- **Top talkers card** on the dashboard: the six heaviest hosts right now,
+  with proportional bars that animate between polls and an age tag for hosts
+  that have gone quiet. Only rendered when accounting is enabled.
+- **Devices page gains a Rate column** (sortable, default ordering untouched)
+  with down/up figures, a small load bar and the last-seen timestamp, plus an
+  inline banner that explains the feature and can turn accounting on without
+  leaving the page.
+- **Appearance → Home page gains a "Per-device rates" switch**, with the cost
+  stated honestly in the help text.
+
+### Fixed
+
+- **The right RPC for stations.** Current LuCI exposes the association list as
+  the `iwinfo.assoclist` ubus method (`luci-rpc.getWirelessAssocList` is the
+  legacy wrapper); the theme now tries `iwinfo` first and falls back, so the
+  wireless branches work on both new and older builds.
+- Wireless ports are labelled with their SSID by matching the netdev against
+  several field names the wireless dump uses across builds (`ifname`, the
+  object key, `section`), instead of assuming one shape.
+
+### Changed
+
+- The dashboard's structure fetch (topology + stations) runs with the view and
+  refreshes every 6th poll; per-device rates refresh on every poll, since that
+  is the part that moves.
+
+### Verified
+
+- Browser harness (`tests/harness.html`) now mocks `luci.lucent.topology`,
+  `luci.lucent.host_rates` and `iwinfo.assoclist`: 42 assertions pass,
+  including four bridge ports with the negotiated speed shown, a dimmed down
+  port, SSIDs on both radios, the phone placed under its radio and the laptop
+  under `lan1` via the FDB, unknown MACs still rendered, no catch-all needed
+  when everything is placed, top talkers ordered heaviest-first with a 100 %
+  bar, the devices table's seventh column populated, and the tree's rate cell
+  changing between two poll rounds. Checked at 1600 px and 500 px.
+- The rpcd helper's three awk programs are tested against realistic fixtures
+  (`mock-check/test-helper-awk.js`): tuple direction and totals, rate deltas,
+  silence age, the baseline handed to the next call, cold start without a
+  baseline, and FDB mac/port extraction across `dev`/`destination` forms.
+- Two real bugs came out of that harness run and are fixed above: the
+  catch-all branch was computed before the ports placed their hosts (duplicate
+  leaves), and the SSID lookup was handed the summarised wireless state
+  instead of the raw dump.
+
 ## 3.9.0 — 2026-11-03
 
 ### Fixed

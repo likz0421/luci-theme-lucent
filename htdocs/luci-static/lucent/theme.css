@@ -618,8 +618,61 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-wire.down i{background:repeating-linear-gradient(90deg,var(--bad) 0 5px,transparent 5px 10px);opacity:.65}
 .ltc-wire em{font-size:10px;color:var(--text-3);font-style:normal;margin-top:7px;white-space:nowrap}
 
-.ltc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:13px 10px;padding-top:14px;border-top:1px solid var(--line-2);margin-top:auto}
-.ltc-facts:only-child{margin-top:0;flex:1;align-content:space-evenly}
+/* ------------------------------------------------------------ LAN tree */
+.ltc-tree{list-style:none;display:flex;flex-direction:column;gap:6px;margin:14px 0 0;padding:0}
+.ltc-tree ul{list-style:none;margin:0;padding:0}
+.ltc-tree li{position:relative;min-width:0;padding-left:20px}
+.ltc-tree li::before{content:"";position:absolute;left:7px;top:0;bottom:0;width:1px;background:var(--line)}
+.ltc-tree li::after{content:"";position:absolute;left:7px;top:19px;width:12px;height:1px;background:var(--line)}
+.ltc-tree li:last-child::before{bottom:auto;height:19px}
+.ltc-tree>li{padding-left:0}
+.ltc-tree>li::before,.ltc-tree>li::after{display:none}
+/* a live branch pulses, so the shape of the LAN reads at a glance */
+.ltc-tree li:has(> .ltc-tnode.up)::after{background:linear-gradient(90deg,var(--accent),transparent);animation:ltc-branch 2.8s var(--ease) infinite}
+@keyframes ltc-branch{0%{opacity:.2}55%{opacity:1}100%{opacity:.2}}
+.ltc-tkids{display:flex;flex-direction:column;gap:5px;margin:5px 0 8px}
+.ltc-tnode{
+	display:flex;align-items:center;gap:8px;min-width:0;padding:7px 10px;border:1px solid var(--line);
+	border-radius:11px;background:var(--card);color:inherit;text-decoration:none!important;font-size:12.5px;
+	transition:background .18s,border-color .18s,transform .18s;
+}
+a.ltc-tnode:hover{background:var(--tint);border-color:var(--accent);transform:translateX(2px)}
+.ltc-tnode .ic{flex:none;width:22px;height:22px;display:grid;place-items:center;border-radius:8px;background:var(--card-2);color:var(--text-2)}
+.ltc-tnode .ic svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ltc-tnode .tname{min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltc-tnode .tmeta{margin-left:auto;max-width:54%;color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltc-tnode .tcount{flex:none;min-width:19px;padding:1px 6px;border-radius:99px;background:var(--tint);color:var(--text-2);font:600 10.5px var(--mono);text-align:center}
+.ltc-tnode .trate{margin-left:auto;font:500 10.5px var(--mono);color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ltc-tnode.root{background:var(--card-2)}
+.ltc-tnode.root .ic{background:var(--accent);color:var(--on-accent)}
+.ltc-tnode.up .ic{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.ltc-tnode.wifi .ic{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent-2)}
+.ltc-tnode.down{opacity:.62}
+.ltc-tnode.down .ic{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad)}
+.ltc-tnode.leaf{padding:5px 9px;font-size:12px}
+.ltc-tree-empty{padding:10px 0;font-size:12px}
+
+/* top talkers */
+.ltc-talkers{display:flex;flex-direction:column;gap:7px;list-style:none;margin:0;padding:0}
+.ltc-talker{display:grid;grid-template-columns:minmax(64px,1fr) minmax(0,2fr) auto;align-items:center;gap:9px;font-size:12px;animation:ltc-rise .35s var(--ease) backwards}
+.ltc-talker .who{min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltc-talker .bar{display:block;height:6px;overflow:hidden;border-radius:99px;background:var(--card-2)}
+.ltc-talker .bar u{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .7s var(--ease)}
+.ltc-talker .val{font:500 11px var(--mono);color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ltc-talker .age{grid-column:3;color:var(--text-3);font-size:10.5px;white-space:nowrap}
+
+/* per-device rate cell */
+.ltc-rate{display:flex;flex-direction:column;gap:1px;font:500 11px var(--mono);color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ltc-rate.none{color:var(--text-3)}
+.ltc-ratebar{display:block;height:4px;min-width:46px;margin-top:3px;overflow:hidden;border-radius:99px;background:var(--card-2)}
+.ltc-ratebar u{display:block;height:100%;background:var(--accent);transition:width .6s var(--ease)}
+.ltc-acctnote{
+	display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;
+	padding:9px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--text-3);font-size:11.5px;
+}
+.ltc-acctnote.on{border-style:solid;border-color:color-mix(in srgb,var(--ok) 35%,var(--line));background:color-mix(in srgb,var(--ok) 7%,transparent)}
+
+.ltc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:13px 10px;padding-top:14px;border-top:1px solid var(--line-2);margin-top:auto}.ltc-facts:only-child{margin-top:0;flex:1;align-content:space-evenly}
 .ltc-facts div{min-width:0}
 .ltc-facts small{display:block;color:var(--text-3);font-size:11px;margin-bottom:2px}
 .ltc-facts b{display:block;font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
@@ -839,6 +892,14 @@ body:has(.ltc-login){background:var(--bg)}
 	.ltc-node .ic{width:40px;height:40px}
 	.ltc-node .ic svg{width:21px;height:21px}
 	.ltc-wire{min-width:6px}
+	.ltc-tree li{padding-left:15px}
+	.ltc-tree li::before,.ltc-tree li::after{left:5px}
+	.ltc-tree li::after{width:9px}
+	.ltc-tnode{padding:6px 9px}
+	.ltc-tnode .tmeta{max-width:46%}
+	.ltc-talker{grid-template-columns:minmax(56px,1fr) auto;gap:7px}
+	.ltc-talker .bar{display:none}
+	.ltc-talker .age{grid-column:2}
 	.ltc-content{padding-left:14px;padding-right:14px}
 	.ltc-bar{padding-left:14px;padding-right:14px}
 	.ltc-hero{grid-template-columns:minmax(0,1fr);padding:18px}
