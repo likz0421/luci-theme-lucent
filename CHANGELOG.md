@@ -8,6 +8,49 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.2 — 2026-11-05
+
+Found from a real router's transcript, not from the test bench.
+
+### Fixed
+
+- **Two packages owned the same translation files.** `luci.mk` generates
+  `luci-i18n-lucent-zh-cn` from `po/`, and `Build/Prepare` also bundled the
+  compiled `.lmo` into the theme itself. apk then refused to install the theme
+  (`trying to overwrite usr/lib/lua/luci/i18n/lucent.zh-cn.lmo`) and refused to
+  remove it (`luci-theme-lucent: luci-i18n-lucent-zh-cn`). The theme's `postrm`
+  no longer deletes files that belong to the language package.
+- **Uninstall reported success while the package record survived.** The manual
+  `rm` pass hid the fact that apk had declined the removal, so the machine was
+  left with a registered package whose files were gone — which made the *next*
+  install collide again. Removal now:
+  - drops the language sub-package in the same transaction, since apk refuses
+    to remove a package that something else still depends on;
+  - checks the **package database**, not just the filesystem, in its self-audit
+    and exits non-zero naming the record that is still there.
+- **Install resolves file conflicts by owner instead of bulldozing.** When apk
+  reports `trying to overwrite`, the installer asks apk who owns the path. If
+  it is one of our own `luci-i18n-lucent-*` packages, that package is removed
+  and the install retried — `--force-overwrite` would have left the other
+  package's file tracking broken. `--force-overwrite` is now only used when the
+  conflicting files belong to nobody, which is the actual file-copy leftover
+  case.
+- **The menu prompt printed `[1]` twice** (`ask "  请选择 [1]" "1"` — the hint
+  was in both the message and the default).
+- **A download that is not a package now says what to do**, naming the
+  release-asset command, instead of just "已中止".
+
+### Verified
+
+- `sh tests/uninstall-audit.sh`: new scenario runs the real uninstaller against
+  a simulated apk database that refuses to remove the theme while the language
+  package depends on it — asserts both records are gone and the audit exits 0.
+- `sh tests/install-apk-retry.sh`: new scenario where the conflicting `.lmo` is
+  owned by `luci-i18n-lucent-zh-cn` — asserts the installer removes that
+  package and retries **without** `--force-overwrite`.
+- `sh tests/install-logic.sh` (35) and `node tests/run-harness.js`
+  (15 scenarios / 844 assertions) remain clean.
+
 ## 0.1 — 2026-11-04
 
 Restart of the version line. Everything below is what this release contains.

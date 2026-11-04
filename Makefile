@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=0.1
+PKG_VERSION:=0.2
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard
@@ -39,7 +39,7 @@ define Package/luci-theme-lucent/postrm
 	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/
 	rm -rf /usr/share/lucent /www/luci-static/resources/lucent \
 		/www/luci-static/resources/view/lucent /usr/share/ucode/luci/template/themes/lucent
-	rm -f /etc/config/lucent /usr/lib/lua/luci/i18n/lucent*.lmo \
+	rm -f /etc/config/lucent \
 		/usr/share/luci/menu.d/luci-theme-lucent.json \
 		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
 		/usr/libexec/rpcd/luci.lucent \

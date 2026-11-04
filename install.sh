@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="0.1-r1"
-LUCENT_TAG_DEFAULT="v0.1"
+LUCENT_VERSION_DEFAULT="0.2-r1"
+LUCENT_TAG_DEFAULT="v0.2"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -417,6 +417,16 @@ activate_theme() {
 }
 
 # ---- 安装 ------------------------------------------------------------------
+# 冲突文件到底属于谁。apk 的报错给的是相对路径，逐个反查所属包。
+apk_conflict_owners() {
+	grep -o 'trying to overwrite [^ ]*' "$1" 2>/dev/null |
+	sed 's/^trying to overwrite //' |
+	while read -r rel; do
+		[ -n "$rel" ] || continue
+		apk info -W "/$rel" 2>/dev/null | head -n1
+	done | sort -u | tr -d ' \r'
+}
+
 do_install() {
 	[ "$(id -u)" = "0" ] || { log "请用 root 运行。" >&2; exit 1; }
 	[ -f /etc/openwrt_release ] || { log "这不是 OpenWrt 系统。" >&2; exit 1; }
@@ -489,7 +499,8 @@ do_install() {
 	# answers 200 with an HTML error page would otherwise be fed to the package
 	# manager as an installable file.
 	if ! is_gzip "$TMP/$PKGFILE"; then
-		log "下载到的内容不是安装包（可能是登录门户或镜像错误页），已中止。" >&2
+		log "下载到的内容不是安装包（可能是登录门户、镜像错误页，或该版本已被删除）。" >&2
+		log "用最新发布版的地址重装即可：wget -qO- https://github.com/$LUCENT_REPO/releases/latest/download/lucent-install.sh | sh" >&2
 		exit 1
 	fi
 
@@ -500,17 +511,34 @@ do_install() {
 			INSTALLED=1; log "  apk: 完成"
 		else
 			cat "$TMP/pkg.log"
-			# 早先用文件方式（tar.gz / 离线包）装过的机器，磁盘上会留着不属于
-			# 任何包的 /usr/lib/lua/luci/i18n/*.lmo 等文件；apk 升级时不会覆盖
-			# 无主文件，直接报 "trying to overwrite" 并失败。这些文件本来就归本
-			# 主题所有，所以识别到该错误就显式覆盖重试一次。
-			if grep -q 'trying to overwrite' "$TMP/pkg.log" 2>/dev/null; then
-				log "  与旧版残留文件冲突，使用 --force-overwrite 重试…"
-				if apk add --allow-untrusted --force-overwrite --no-network \
-					"$TMP/$PKGFILE" >"$TMP/pkg2.log" 2>&1; then
-					INSTALLED=1; log "  apk: 完成（已覆盖旧残留文件）"
+			# 同一条 .lmo 路径可能被两个包声明：本主题包，以及 luci.mk 从
+			# po/ 自动生成的 luci-i18n-lucent-zh-cn。apk 不肯覆盖别人拥有的
+			# 文件，所以先反查属主 —— 是我们自己的语言包就把它移除后重装，
+			# 而不是 --force-overwrite 把那个包的文件跟踪打残。
+			OWNERS=$(apk_conflict_owners "$TMP/pkg.log")
+			OURS=""
+			for o in $OWNERS; do
+				case "$o" in
+					luci-i18n-lucent*) OURS="$OURS $o" ;;
+				esac
+			done
+			if [ -n "$OURS" ]; then
+				log "  冲突文件属于本主题早前的语言包分包：$OURS"
+				log "  先移除它再安装…"
+				apk del $OURS >"$TMP/pkgdel.log" 2>&1 || cat "$TMP/pkgdel.log"
+				if apk add --allow-untrusted --no-network "$TMP/$PKGFILE" >"$TMP/pkg2.log" 2>&1; then
+					INSTALLED=1; log "  apk: 完成（已替换旧语言包）"
 				else
 					cat "$TMP/pkg2.log"
+				fi
+			elif grep -q 'trying to overwrite' "$TMP/pkg.log" 2>/dev/null; then
+				# 属主不是我们的包：多半是文件方式安装留下的无主文件，显式覆盖
+				log "  与旧版残留文件冲突，使用 --force-overwrite 重试…"
+				if apk add --allow-untrusted --force-overwrite --no-network \
+					"$TMP/$PKGFILE" >"$TMP/pkg3.log" 2>&1; then
+					INSTALLED=1; log "  apk: 完成（已覆盖旧残留文件）"
+				else
+					cat "$TMP/pkg3.log"
 				fi
 			fi
 		fi
@@ -563,10 +591,26 @@ do_uninstall() {
 	log "→ 卸载 Lucent…"
 
 	if have apk; then
-		apk info -e "$PKG_NAME" >/dev/null 2>&1 && \
-			{ apk del "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"; }
+		if apk info -e "$PKG_NAME" >/dev/null 2>&1; then
+			# 有包依赖主题时 apk 会拒绝删除，而本主题早前的语言包分包正是这种
+			# 依赖。把它们放进同一次事务，否则包记录会留在数据库里，下次安装又
+			# 报文件所有权冲突。
+			DEPS=$(apk info -D "$PKG_NAME" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+			if [ -n "$DEPS" ]; then
+				log "  一并移除依赖主题的语言包：$DEPS"
+				apk del $DEPS "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+			else
+				apk del "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+			fi
+		fi
 	elif have opkg; then
-		opkg remove "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+		IDEPS=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+		if [ -n "$IDEPS" ]; then
+			log "  一并移除依赖主题的语言包：$IDEPS"
+			opkg remove $IDEPS "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+		else
+			opkg remove "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+		fi
 	fi
 
 	rm -rf /www/luci-static/lucent /www/luci-static/resources/lucent \
@@ -624,6 +668,20 @@ do_uninstall() {
 	done
 	if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
 		LEFT="$LEFT luci.themes.Lucent"
+	fi
+	# 包记录没删掉比文件没删掉更坑：下次安装会再次撞上文件所有权冲突。
+	if have apk; then
+		for p in "$PKG_NAME" $(apk info 2>/dev/null | grep '^luci-i18n-lucent' || true); do
+			if apk info -e "$p" >/dev/null 2>&1; then
+				LEFT="$LEFT 包记录:$p"
+			fi
+		done
+	elif have opkg; then
+		for p in "$PKG_NAME" $(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true); do
+			if opkg status "$p" >/dev/null 2>&1; then
+				LEFT="$LEFT 包记录:$p"
+			fi
+		done
 	fi
 	if [ -n "$LEFT" ]; then
 		log "！卸载未清干净，仍然存在：$LEFT" >&2
@@ -707,7 +765,7 @@ menu() {
     2) 卸载主题并恢复 Bootstrap
     0) 退出
 EOF
-	ask "  请选择 [1]" "1"
+	ask "  请选择" "1"
 	case "$ANSWER" in
 		1) do_install ;;
 		2) do_uninstall ;;

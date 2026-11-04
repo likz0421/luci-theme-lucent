@@ -155,5 +155,86 @@ for src in uninstall.sh install.sh scripts/onekey-template.sh; do
 	[ -z "$missing" ] && ok "$src removes every installed file" || no "$src removes every installed file" "missing:$missing"
 done
 
+echo "--- the language sub-package must go with the theme"
+# apk refuses to remove the theme while luci-i18n-lucent-zh-cn depends on it.
+# The old script printed "卸载完成" anyway, leaving a package record whose
+# files had just been deleted by hand — which is what made the next install
+# collide on file ownership again.
+FAKE=$(mktemp -d)
+BIN="$FAKE/bin"
+mkdir -p "$BIN" "$FAKE/etc/crontabs" "$FAKE/usr/lib/lua/luci/i18n" "$FAKE/tmp" "$FAKE/var/run"
+mkdir -p "$FAKE/usr/libexec/rpcd" "$FAKE/usr/share/lucent" "$FAKE/www/luci-static/lucent"
+touch "$FAKE/usr/lib/lua/luci/i18n/lucent.zh-cn.lmo"
+
+printf 'luci-theme-lucent\nluci-i18n-lucent-zh-cn\n' > "$FAKE/db"
+{
+	echo '#!/bin/sh'
+	echo 'db="'"$FAKE"'/db"'
+	cat <<'SHEOF'
+case "$1" in
+  info)
+    shift
+    case "$1" in
+      -e) if [ -n "$2" ] && grep -qx "$2" "$db"; then exit 0; else exit 1; fi ;;
+      -D) if grep -qx 'luci-i18n-lucent-zh-cn' "$db"; then echo "luci-i18n-lucent-zh-cn"; fi; exit 0 ;;
+      info) cat "$db"; exit 0 ;;
+    esac ;;
+  del)
+    # apk only refuses when the theme is named on its own while the dependent
+    # is still installed; one transaction naming both succeeds.
+    if grep -qx 'luci-i18n-lucent-zh-cn' "$db"; then
+      wants_i18n=0
+      for q in "$@"; do
+        [ "$q" = "luci-i18n-lucent-zh-cn" ] && wants_i18n=1
+      done
+      for q in "$@"; do
+        if [ "$q" = "luci-theme-lucent" ] && [ "$wants_i18n" = "0" ]; then
+          echo "World updated, but the following packages are not removed due to:"
+          echo "  luci-theme-lucent: luci-i18n-lucent-zh-cn" >&2
+          exit 1
+        fi
+      done
+    fi
+    for p in "$@"; do
+      case "$p" in del|-*) continue ;; esac
+      # grep exits 1 when nothing survives the filter, which must still write
+      # the now-empty database back
+      grep -vx "$p" "$db" > "$db.tmp" || true
+      mv -f "$db.tmp" "$db"
+    done
+    exit 0 ;;
+esac
+exit 0
+SHEOF
+} > "$BIN/apk"
+# uci: nothing is registered after a successful removal
+printf '#!/bin/sh\n[ "$1" = "-q" ] && shift\ncase "$1" in get) exit 1 ;; *) exit 0 ;; esac\n' > "$BIN/uci"
+chmod +x "$BIN"/*
+
+sed -e 's|/www/|@F@/www/|g' -e 's|/usr/|@F@/usr/|g' -e 's|/etc/|@F@/etc/|g' \
+	-e 's|/tmp/|@F@/tmp/|g' -e 's|/var/|@F@/var/|g' \
+	"$ROOT/uninstall.sh" | sed "s|@F@|$FAKE|g" > "$FAKE/script.sh"
+PATH="$BIN:$PATH"
+OUT3=$(sh "$FAKE/script.sh" 2>&1)
+RC3=$?
+
+if grep -qx 'luci-i18n-lucent-zh-cn' "$FAKE/db"; then
+	no "language package removed" "$(tr '\n' ' ' < "$FAKE/db")"
+else
+	ok "language package removed with the theme"
+fi
+if grep -qx 'luci-theme-lucent' "$FAKE/db"; then
+	no "theme package removed" "$(tr '\n' ' ' < "$FAKE/db")"
+else
+	ok "theme package removed"
+fi
+if [ "$RC3" = "0" ]; then
+	ok "audit passes once the database is clear"
+else
+	no "audit passes" "rc=$RC3: $(printf '%s' "$OUT3" | tail -2 | tr '\n' ' ')"
+fi
+
+rm -rf "$FAKE"
+
 echo
 [ "$fails" = 0 ] && echo "uninstall is clean" || { echo "$fails FAILED"; exit 1; }

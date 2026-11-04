@@ -94,5 +94,55 @@ esac
 
 rm -rf "$FAKE"
 
+echo "--- conflict owned by our own language sub-package"
+# luci.mk generates luci-i18n-lucent-zh-cn from po/, and Build/Prepare also
+# bundles the same .lmo into the theme: two packages, one path. The installer
+# must remove the language package and reinstall, not --force-overwrite a
+# package that still exists.
+FAKE=$(mktemp -d)
+BIN="$FAKE/bin"
+mkdir -p "$BIN" "$FAKE/etc" "$FAKE/tmp" "$FAKE/usr/share/ucode/luci"
+printf 'VERSION="25.12.0"\n' > "$FAKE/etc/openwrt_release"
+printf '#!/bin/sh\n[ "$1" = -u ] && echo 0 && exit 0\nexit 0\n' > "$BIN/id"
+printf '#!/bin/sh\nexit 0\n' > "$BIN/uci"
+cat > "$BIN/wget" <<EOF
+#!/bin/sh
+out=""; prev=""
+for a in "\$@"; do [ "\$prev" = "-O" ] && out="\$a"; prev="\$a"; done
+case "\$*" in *latest.txt*) printf 'x\n' > "\$out" ;; *) printf '\037\213fake' > "\$out" ;; esac
+exit 0
+EOF
+cat > "$BIN/apk" <<EOF
+#!/bin/sh
+{ echo "apk \$*"; } >> "$FAKE/apk.log"
+case "\$*" in
+	"info -e luci-theme-lucent") exit 0 ;;
+	"info -e -v luci-theme-lucent") echo "luci-theme-lucent-0.1-r1"; exit 0 ;;
+	"info -W /usr/lib/lua/luci/i18n/lucent.zh-cn.lmo") echo "luci-i18n-lucent-zh-cn"; exit 0 ;;
+	add*)
+		if grep -q "apk del luci-i18n-lucent" "$FAKE/apk.log" 2>/dev/null; then exit 0; fi
+		echo "ERROR: luci-theme-lucent-0.2-r1: trying to overwrite usr/lib/lua/luci/i18n/lucent.zh-cn.lmo" >&2
+		exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "$BIN"/*
+PATH="$BIN:$PATH"
+sed -e 's|/www/|@F@/www/|g' -e 's|/usr/|@F@/usr/|g' -e 's|/etc/|@F@/etc/|g' \
+	-e 's|/tmp/|@F@/tmp/|g' -e 's|/var/|@F@/var/|g' \
+	"$ROOT/install.sh" | sed "s|@F@|$FAKE|g" > "$FAKE/install.sh"
+
+OUT3=$(LUCENT_VERSION=0.2-r1 sh "$FAKE/install.sh" install 2>&1)
+RC3=$?
+grep -q "apk del luci-i18n-lucent-zh-cn" "$FAKE/apk.log" && ok "the stray language package is removed" || no "language package removed" "$(cat "$FAKE/apk.log")"
+case "$OUT3" in
+	*"已替换旧语言包"*) ok "reinstall after removing it succeeds" ;;
+	*) no "reinstall after removing it" "$(printf '%s' "$OUT3" | tail -3 | tr '\n' ' ')" ;;
+esac
+grep -q -- "--force-overwrite" "$FAKE/apk.log" && no "no force-overwrite when the owner still exists" "forced over a live package" || ok "no force-overwrite when the owner still exists"
+[ "$RC3" = "0" ] && ok "install completes" || no "install completes" "rc=$RC3"
+
+rm -rf "$FAKE"
+
 echo
 [ "$fails" = 0 ] && echo "apk retry behaves" || { echo "$fails FAILED"; exit 1; }

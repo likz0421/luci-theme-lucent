@@ -13,12 +13,27 @@ set -e
 PKG=luci-theme-lucent
 
 # ---- 1. package record -----------------------------------------------------
+# A language sub-package depends on the theme, and apk then refuses to remove
+# it, leaving the record behind — which makes the next install trip over file
+# ownership again. Drop our own dependents in the same transaction.
 if command -v apk >/dev/null 2>&1 && apk info -e "$PKG" >/dev/null 2>&1; then
-	echo "→ apk remove $PKG"
-	apk del "$PKG" >/dev/null 2>&1 || true
+	DEPS=$(apk info -D "$PKG" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+	if [ -n "$DEPS" ]; then
+		echo "→ apk del $DEPS $PKG（语言包分包依赖主题）"
+		apk del $DEPS "$PKG" >/dev/null 2>&1 || true
+	else
+		echo "→ apk del $PKG"
+		apk del "$PKG" >/dev/null 2>&1 || true
+	fi
 elif command -v opkg >/dev/null 2>&1 && opkg status "$PKG" >/dev/null 2>&1; then
-	echo "→ opkg remove $PKG"
-	opkg remove "$PKG" >/dev/null 2>&1 || true
+	DEPS=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+	if [ -n "$DEPS" ]; then
+		echo "→ opkg remove $DEPS $PKG"
+		opkg remove $DEPS "$PKG" >/dev/null 2>&1 || true
+	else
+		echo "→ opkg remove $PKG"
+		opkg remove "$PKG" >/dev/null 2>&1 || true
+	fi
 fi
 
 # ---- 2. files --------------------------------------------------------------
@@ -96,6 +111,21 @@ if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
 fi
 if [ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ]; then
 	LEFT="$LEFT mediaurlbase"
+fi
+# a surviving package record is worse than a surviving file: the next install
+# trips over file ownership again
+if command -v apk >/dev/null 2>&1; then
+	for p in "$PKG" $(apk info 2>/dev/null | grep '^luci-i18n-lucent' || true); do
+		if apk info -e "$p" >/dev/null 2>&1; then
+			LEFT="$LEFT 包记录:$p"
+		fi
+	done
+elif command -v opkg >/dev/null 2>&1; then
+	for p in "$PKG" $(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true); do
+		if opkg status "$p" >/dev/null 2>&1; then
+			LEFT="$LEFT 包记录:$p"
+		fi
+	done
 fi
 
 if [ -n "$LEFT" ]; then

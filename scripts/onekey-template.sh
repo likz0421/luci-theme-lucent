@@ -291,10 +291,22 @@ do_uninstall() {
 
 	if command -v apk >/dev/null 2>&1; then
 		if apk info -e "$PKG_NAME" >/dev/null 2>&1; then
-			apk del "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+			DEPS=$(apk info -D "$PKG_NAME" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+			if [ -n "$DEPS" ]; then
+				echo "  一并移除依赖主题的语言包：$DEPS"
+				apk del $DEPS "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+			else
+				apk del "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+			fi
 		fi
 	elif command -v opkg >/dev/null 2>&1; then
-		opkg remove "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+		IDEPS=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+		if [ -n "$IDEPS" ]; then
+			echo "  一并移除依赖主题的语言包：$IDEPS"
+			opkg remove $IDEPS "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+		else
+			opkg remove "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
+		fi
 	fi
 
 	rm -rf /www/luci-static/lucent
