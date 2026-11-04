@@ -45,7 +45,7 @@ body.show-report #report{display:block}
 		<main id="root" class="ltc-content">
 			<div id="view"><div style="padding:40px">loading…</div></div>
 			<footer class="ltc-foot">
-				<span>Lucent 3.10.11-r1 · OpenWrt 25.12.6</span>
+				<span>Lucent 3.10.12-r1 · OpenWrt 25.12.6</span>
 				<span>OpenWrt test</span>
 			</footer>
 		</main>
@@ -309,9 +309,11 @@ async function mod(path) {
 	if (res === undefined)
 		throw new Error('%s → %d %d bytes, body starts %s'.format(path, resp.status, src.length, JSON.stringify(src.slice(0, 60))));
 
-	/* LuCI's require instantiates baseclass modules, which runs __init. */
-	if (typeof res.__init === 'function')
-		res.__init();
+	/* LuCI's require() does `new _class()`, and Class calls `__init__` — with
+	   trailing underscores. Calling anything else here is how the harness stayed
+	   green for weeks while the real page never ran the module's constructor. */
+	if (typeof res.__init__ === 'function')
+		res.__init__();
 
 	return res;
 }
@@ -336,7 +338,7 @@ var menuNoStore = /#menu-nostore/.test(FLAGS);
 try {
 	localStorage.clear();
 	if (menuCache)
-		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 11, d: JSON.stringify(MENU) }));
+		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 12, d: JSON.stringify(MENU) }));
 } catch (e) {}
 
 if (menuNoStore) {
@@ -428,7 +430,7 @@ if (menuNoStore) {
 		return c.load().then(function (cd) {
 			document.getElementById('view').appendChild(c.render(cd));
 		});
-	}).then(function () { return wait(menuSkip ? 19000 : 1300); }).then(function () {
+	}).then(function () { return wait(menuSkip ? 19000 : (menuFail ? 11000 : 1300)); }).then(function () {
 		/* sidebar traffic: two more samples with moved counters */
 		MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1260000000, tx_bytes: 357000000 } };
 		side._n = 3;
@@ -472,7 +474,7 @@ if (menuNoStore) {
 		   to name the source even when everything worked */
 		var marker = (document.querySelector('.ltc-foot [data-ltc-menu]') || {}).textContent || '';
 		var want = menuSkip ? 'builtin' : (menuCache ? 'cache' : (menuFail ? 'builtin' : 'tree'));
-		var owner = menuSkip ? '#core' : '#menu11';
+		var owner = menuSkip ? '#core' : '#menu12';
 
 		check('footer names the menu source', marker.indexOf('menu:' + want) === 0,
 			marker || 'no marker');
@@ -531,7 +533,7 @@ if (menuNoStore) {
 		if (!menuFail && !menuNoStore) {
 			var stored = null;
 			try { stored = JSON.parse(localStorage.getItem('lucent.menu.anon')); } catch (e) {}
-			check('menu cached for the next page', !!stored && stored.b === 11 && !!stored.d,
+			check('menu cached for the next page', !!stored && stored.b === 12 && !!stored.d,
 				stored ? (stored.d.length + ' bytes') : 'nothing stored');
 		}
 		if (/#manyports/.test(FLAGS)) {

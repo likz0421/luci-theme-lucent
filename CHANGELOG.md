@@ -3,6 +3,44 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.12 — 2026-11-04
+
+### Fixed
+
+- **`menu-lucent.js` never ran on a real router.** LuCI's `require()` does
+  `new _class()` and invokes the constructor hook named **`__init__`** — with
+  trailing underscores (`luci.js:2554`, `luci.js:69`). The theme defined
+  `__init`, so the entire menu builder — cache restore, tree load, every
+  fallback — was dead code on every page, and the sidebar was drawn only by
+  the `core.js` watchdog at 7 s, or by the static menu at 16 s. This is the
+  real reason the menu was slow, came back blank after every click, and why
+  the 3.10.9 cache appeared to do nothing: the code that reads it had never
+  been called.
+- **The harness could not have caught this, because it repeated the mistake.**
+  It instantiated modules by calling `res.__init()` — the same wrong name — so
+  fourteen green scenarios were testing a constructor LuCI never invokes. It
+  now calls `__init__`.
+- **The source deadlines were cutting off a healthy request.**
+  `ui.menu.load()` was abandoned after 2.5 s and re-requested through
+  `admin/menu`, so a menu answering in 2.5–4 s took ~8 s to appear — the
+  double-fetch penalty was measured in the real shell. The deadlines are now
+  anti-hang guards (8 s each) rather than a race, and `admin/menu` gets 9 s of
+  XHR timeout; with the cache painting first, nobody waits on them.
+
+### Verified
+
+- A local **real-LuCI simulation** — upstream `luci.js`, `ui.js` and `cbi.js`
+  served beside the theme, with a fake router whose `admin/menu` answers after
+  a configurable delay — driven through four genuine page loads in one browser
+  profile, recording when `#topmenu` actually gains entries. Before this fix:
+  every page painted at ~7.9 s, from the watchdog, with the cache never read.
+  After: page 1 `menu:tree 1337ms`, pages 2–4 `menu:cache+tree ~960→990ms` —
+  the cached menu paints at module-instantiation time and the router confirms
+  it ~30 ms later. (Headless virtual time makes those numbers relative, not
+  wall clock; the ordering is the point.)
+- Fourteen harness scenarios still 0 failures; the failure scenarios now wait
+  out the 8 s deadlines instead of asserting against the old 2.5 s ones.
+
 ## 3.10.11 — 2026-11-04
 
 ### Added

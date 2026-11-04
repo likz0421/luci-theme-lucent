@@ -100,9 +100,10 @@ async function run(port) {
 		const base = flag === '#base' ? '' : flag;
 		const narrow = base === '#drawer';
 		const opt = {
-			/* #menu-noload deliberately waits 19 s for the core.js watchdog, so it
-			   needs the most virtual time — not the most wall clock */
-			budget: base === '#menu-noload' ? 34000 : 13000,
+			/* #menu-noload waits 19 s for the core.js watchdog and the other menu
+			   scenarios wait out the 8 s source deadlines — that is virtual time,
+			   not wall clock */
+			budget: base === '#menu-noload' ? 34000 : (/^#menu-/.test(base) ? 24000 : 13000),
 			width: narrow ? 390 : 1500,
 			height: narrow ? 844 : 900
 		};

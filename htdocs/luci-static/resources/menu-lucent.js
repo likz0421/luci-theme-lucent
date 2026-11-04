@@ -27,7 +27,7 @@
 /* Bumped whenever this module changes materially: the sidebar note prints it,
    so "am I actually running the new JS?" has a visible answer. It also keys
    the cache, so an upgrade cannot repaint an obsolete structure. */
-var BUILD = 11;
+var BUILD = 12;
 var CACHE = 'lucent.menu';
 
 
@@ -115,11 +115,17 @@ function cacheKey() {
 }
 
 return baseclass.extend({
-	/* Nothing here may throw. A synchronous error at instantiation time makes
-	   L.require('menu-lucent') reject, which means not one line of the fallback
-	   logic below ever runs — and the sidebar shows neither a menu nor a reason,
-	   which is exactly what a stripped ONT build produced. */
-	__init: function () {
+	/* LuCI instantiates the module with `new _class()` and runs the hook named
+	   `__init__` — with trailing underscores. A `__init` here is silently dead
+	   code: the sidebar would then only ever be drawn by the core.js watchdog
+	   seconds later, which is exactly what "the menu is slow and disappears on
+	   every click" turned out to be.
+
+	   Nothing here may throw either: a synchronous error at instantiation time
+	   makes L.require('menu-lucent') reject, and then not one line of the
+	   fallback logic below runs — no menu and no reason, which is what a
+	   stripped ONT build produced. */
+	__init__: function () {
 		var self = this;
 
 		this.reason = '';
@@ -213,13 +219,17 @@ return baseclass.extend({
 	/* Three sources, in order of trust: LuCI's menu class, then the raw
 	   endpoint it reads from, so a broken cache or a forked wrapper cannot
 	   blank the sidebar. */
+	/* Deadlines are anti-hang guards, not a race: cutting `ui.menu.load()` off
+	   early made the theme fire a second request that took just as long, so a
+	   2.5 s menu turned into 8 s of empty sidebar. The visible menu is already
+	   painted from cache, so the reconcile is allowed to be patient. */
 	loadTree: function () {
 		var self = this;
 
 		if (ui.menu && typeof ui.menu.load === 'function') {
-			return withTimeout(ui.menu.load(), 2500, 'ui.menu.load()').catch(function (err) {
+			return withTimeout(ui.menu.load(), 8000, 'ui.menu.load()').catch(function (err) {
 				self.reason = 'ui.menu: ' + String(err && err.message || err);
-				return withTimeout(self.fetchTree(), 5000, 'admin/menu').catch(function (err2) {
+				return withTimeout(self.fetchTree(), 8000, 'admin/menu').catch(function (err2) {
 					self.reason += '; ' + String(err2 && err2.message || err2);
 					return null;
 				});
@@ -227,7 +237,7 @@ return baseclass.extend({
 		}
 
 		this.reason = _('This LuCI build exposes no menu class');
-		return withTimeout(this.fetchTree(), 5000, 'admin/menu').catch(function (err) {
+		return withTimeout(this.fetchTree(), 8000, 'admin/menu').catch(function (err) {
 			self.reason += '; ' + String(err && err.message || err);
 			return null;
 		});
@@ -241,7 +251,7 @@ return baseclass.extend({
 			var req = new XMLHttpRequest();
 
 			req.open('GET', url, true);
-			req.timeout = 6000;
+			req.timeout = 9000;
 			req.onload = function () {
 				if (req.status === 401 || req.status === 403) {
 					self.forget();
