@@ -3,6 +3,33 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.11 — 2026-11-04
+
+### Added
+
+- **The marker now also says whether this browser allows storage at all.**
+  `cache:off` is appended to the menu marker and `window.__lucentMenu.store`
+  reports `on`/`off`. Private mode — and several embedded browsers on ONTs —
+  refuses `localStorage` outright, which silently disables the instant paint
+  from 3.10.9 and looks *exactly* like a broken cache from the outside. Now
+  the page distinguishes "the cache is not being used" from "the cache cannot
+  be used here".
+- The probe is a single `setItem`/`removeItem` pair in `util.storageWorks()`,
+  so the watchdog's marker carries the same field even when `menu-lucent.js`
+  never ran.
+
+### Changed
+
+- Build marker is `#menu11`; the localStorage menu cache is keyed to it, so
+  upgrading never repaints a structure from an older builder.
+
+### Verified
+
+- Fourteen harness scenarios, 0 failures (44–62 checks each). New
+  `#menu-nostore`: `localStorage.setItem` throws, and the run asserts the menu
+  still renders from the router's tree, the marker reads `cache:off`, and
+  `__lucentMenu.store === 'off'`.
+
 ## 3.10.10 — 2026-11-04
 
 ### Added

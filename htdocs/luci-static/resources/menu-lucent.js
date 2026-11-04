@@ -27,7 +27,7 @@
 /* Bumped whenever this module changes materially: the sidebar note prints it,
    so "am I actually running the new JS?" has a visible answer. It also keys
    the cache, so an upgrade cannot repaint an obsolete structure. */
-var BUILD = 10;
+var BUILD = 11;
 var CACHE = 'lucent.menu';
 
 
@@ -125,6 +125,7 @@ return baseclass.extend({
 		this.reason = '';
 		this.busy = false;
 		this.live = '';
+		this.storeErr = '';
 
 		try {
 			/* paint before anything is awaited: on every page after the first
@@ -376,7 +377,12 @@ return baseclass.extend({
 			});
 
 			localStorage.setItem(key, JSON.stringify({ b: BUILD, d: json }));
-		} catch (e) {}
+		} catch (e) {
+			/* private mode and a few stripped-down embedded browsers refuse
+			   localStorage outright; then the instant paint can never happen and
+			   every page waits for the router — so the marker has to say so */
+			this.storeErr = String(e && e.message || e);
+		}
 	},
 
 	forget: function () {
@@ -401,6 +407,7 @@ return baseclass.extend({
 		try {
 			raw = localStorage.getItem(this.key());
 		} catch (e) {
+			this.storeErr = String(e && e.message || e);
 			return false;
 		}
 
@@ -477,7 +484,7 @@ return baseclass.extend({
 		if (this.first == null)
 			this.first = now;
 
-		state = util.markMenu(src, '#menu' + BUILD, this.first);
+		state = util.markMenu(src, '#menu' + BUILD, this.first, this.storeErr ? 'cache:off' : '');
 		state.build = BUILD;
 		state.reason = this.reason;
 	},

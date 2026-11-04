@@ -26,7 +26,7 @@ const TYPES = {
 };
 
 const ALL = ['#base', '#menu-reject', '#menu-empty', '#menu-noclass', '#menu-throw',
-	'#menu-noload', '#menu-nomatch', '#menu-hang', '#menu-cache', '#manyports',
+	'#menu-noload', '#menu-nomatch', '#menu-hang', '#menu-cache', '#menu-nostore', '#manyports',
 	'#tree-noisy', '#rail', '#drawer'];
 
 const wantShot = process.argv.includes('--shot');

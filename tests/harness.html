@@ -45,7 +45,7 @@ body.show-report #report{display:block}
 		<main id="root" class="ltc-content">
 			<div id="view"><div style="padding:40px">loading…</div></div>
 			<footer class="ltc-foot">
-				<span>Lucent 3.10.10-r1 · OpenWrt 25.12.6</span>
+				<span>Lucent 3.10.11-r1 · OpenWrt 25.12.6</span>
 				<span>OpenWrt test</span>
 			</footer>
 		</main>
@@ -332,11 +332,19 @@ var FLAGS = location.hash || '';
    failure runs paint from it and hide the very fallback being tested.
    #menu-cache is the exception: it seeds the copy on purpose. */
 var menuCache = /#menu-cache/.test(FLAGS);
+var menuNoStore = /#menu-nostore/.test(FLAGS);
 try {
 	localStorage.clear();
 	if (menuCache)
-		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 10, d: JSON.stringify(MENU) }));
+		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 11, d: JSON.stringify(MENU) }));
 } catch (e) {}
+
+if (menuNoStore) {
+	/* private mode, and a few embedded browsers, refuse localStorage outright:
+	   then the instant paint can never happen on any page, and that has to be
+	   visible instead of looking like a broken cache */
+	localStorage.setItem = function () { throw new Error('QuotaExceededError (mock private mode)'); };
+}
 
 (async function () {
 	registry.util = await mod(base + 'lucent/util.js');
@@ -464,7 +472,7 @@ try {
 		   to name the source even when everything worked */
 		var marker = (document.querySelector('.ltc-foot [data-ltc-menu]') || {}).textContent || '';
 		var want = menuSkip ? 'builtin' : (menuCache ? 'cache' : (menuFail ? 'builtin' : 'tree'));
-		var owner = menuSkip ? '#core' : '#menu10';
+		var owner = menuSkip ? '#core' : '#menu11';
 
 		check('footer names the menu source', marker.indexOf('menu:' + want) === 0,
 			marker || 'no marker');
@@ -474,8 +482,14 @@ try {
 			marks[0].textContent === marks[marks.length - 1].textContent && marks[0].textContent !== '',
 			marks.length + ' markers: ' + Array.prototype.map.call(marks, function (m) { return m.textContent; }).join(' / '));
 		check('menu state readable from the console',
-			!!(window.__lucentMenu && window.__lucentMenu.items >= 6 && window.__lucentMenu.navH > 20),
+			!!(window.__lucentMenu && window.__lucentMenu.items >= 6 && window.__lucentMenu.navH > 20 &&
+				window.__lucentMenu.store === (menuNoStore ? 'off' : 'on')),
 			JSON.stringify(window.__lucentMenu || {}));
+		if (menuNoStore) {
+			check('blocked storage is named in the marker', /cache:off/.test(marker), marker || 'no marker');
+			check('the menu works without storage',
+				document.querySelectorAll('#topmenu > li:not(.ltc-nav-note)').length >= 6, marker);
+		}
 		check('submenu groups', groups.length >= 3, groups.length + ' groups');
 		check('nav icons injected',
 			document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length >= document.querySelectorAll('#topmenu > li > a').length,
@@ -514,10 +528,10 @@ try {
 			check('reload did not stack a second menu', live === paintNow,
 				paintNow + ' painted, ' + live + ' now');
 		}
-		if (!menuFail) {
+		if (!menuFail && !menuNoStore) {
 			var stored = null;
 			try { stored = JSON.parse(localStorage.getItem('lucent.menu.anon')); } catch (e) {}
-			check('menu cached for the next page', !!stored && stored.b === 10 && !!stored.d,
+			check('menu cached for the next page', !!stored && stored.b === 11 && !!stored.d,
 				stored ? (stored.d.length + ' bytes') : 'nothing stored');
 		}
 		if (/#manyports/.test(FLAGS)) {

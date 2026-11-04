@@ -255,10 +255,25 @@ var BUILTIN_MENU = [
    told apart from the outside. It is written wherever a `[data-ltc-menu]`
    host exists: the footer on every page, and the Updates card on the home
    page, which is the one place users already look at and screenshot. */
+/* Whether this browser will let us keep anything at all. Private mode, and a
+   few stripped embedded browsers, refuse localStorage outright — and then the
+   instant menu paint can never happen, which looks exactly like a broken
+   cache unless the page says so. */
+function storageWorks() {
+	try {
+		localStorage.setItem('lucent.probe', '1');
+		localStorage.removeItem('lucent.probe');
+		return true;
+	} catch (e) {
+		return false;
+	}
+}
+
 function paintMenu(el, st) {
 	var span = (st.first != null && st.first !== st.ms) ? '%d→%d'.format(st.first, st.ms) : String(st.ms);
 
-	el.textContent = 'menu:%s %sms%s'.format(st.src, span, st.owner ? ' ' + st.owner : '');
+	el.textContent = 'menu:%s %sms%s%s'.format(st.src, span,
+		st.owner ? ' ' + st.owner : '', st.note ? ' ' + st.note : '');
 }
 
 function menuMark() {
@@ -270,7 +285,7 @@ function menuMark() {
 	return el;
 }
 
-function markMenu(src, owner, first) {
+function markMenu(src, owner, first, note) {
 	var foot = document.querySelector('.ltc-foot');
 	var host = foot ? (foot.querySelector('span') || foot) : null;
 	var nav = document.querySelector('.ltc-nav');
@@ -278,6 +293,8 @@ function markMenu(src, owner, first) {
 	var st = {
 		src: src,
 		owner: owner || '',
+		note: note || '',
+		store: (note === 'cache:off' || !storageWorks()) ? 'off' : 'on',
 		ms: now,
 		first: first != null ? first : now,
 		items: document.querySelectorAll('#topmenu > li:not(.ltc-nav-note)').length,
