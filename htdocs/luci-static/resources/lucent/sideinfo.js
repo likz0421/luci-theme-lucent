@@ -148,6 +148,18 @@ return baseclass.extend({
 		var foot = side.querySelector('.ltc-side-foot') || side;
 		var open = '1';
 
+		/* On phones the drawer is short: an always-open 400px panel squeezed the
+		   menu into a few rows and the rest of it fell out of sight. There the
+		   panel starts collapsed unless the user chose otherwise. */
+		if (window.innerWidth <= 980)
+			open = '0';
+
+		try {
+			var stored = localStorage.getItem('lucent.sideinfo');
+			if (stored === '0' || stored === '1')
+				open = stored;
+		} catch (e) {}
+
 		try {
 			if (localStorage.getItem('lucent.sideinfo') === '0')
 				open = '0';

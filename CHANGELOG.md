@@ -3,6 +3,44 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.5 — 2026-11-04
+
+### Fixed
+
+- **On phones the menu was pushed out of the drawer.** The live status panel
+  added in 3.9.0 kept its desktop height inside the drawer, so at 500 px the
+  navigation got only 233 px of the viewport — roughly six of eight entries
+  visible and the rest behind an easy-to-miss internal scroll. It read as
+  "the sidebar menu is missing", because the entries you wanted were below the
+  fold while a status panel you did not ask for held half the screen.
+  - The panel now **starts collapsed on viewports ≤980 px**: one row with the
+    live dot, the clock, refresh and an expand button. Tap it when you want
+    the readings; the menu owns the space otherwise. An explicit choice
+    (stored in `localStorage`) always wins, on phones too.
+  - The drawer gives the navigation at least 45% of the viewport height
+    (`min-height:45vh`) and caps the panel at 34%, and the menu scroll no
+    longer chains to the page (`overscroll-behavior:contain`).
+  - Measured effect at 500×900: navigation 233 px → **575 px**, panel
+    386 px → 44 px.
+
+### Added
+
+- The harness now **measures painted geometry instead of only counting DOM
+  nodes** — this is the check that was missing since 3.9.0 and the reason the
+  problem took five releases to find. Four new assertions per run: the nav has
+  real height (≥40% of the viewport, min 220 px), the first menu item is
+  actually painted (`height > 20px`, `opacity:1`), the panel stays under 45%
+  of the drawer on phones, it starts collapsed there, and every top-level item
+  is reachable within the nav's own scroll coordinates.
+
+### Verified
+
+- 47 checks pass at 1600×1000, 500×900 with the drawer open, 390×780 with the
+  drawer open, and 1600×1000 in the collapsed rail.
+- Screenshot at 390 px confirms the full menu (Home, Devices, Status, Network,
+  Services, VPN, System with its four children, Logout) with the panel
+  reduced to a single row at the bottom.
+
 ## 3.10.4 — 2026-11-04
 
 ### Fixed

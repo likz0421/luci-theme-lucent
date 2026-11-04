@@ -505,6 +505,38 @@ var FLAGS = location.hash || '';
 		check('devices rate cells filled', rateCells.length >= 2 && /↓/.test(rateCells[0].textContent),
 			rateCells.length + ' cells');
 
+		/* Being in the DOM is not the same as being visible: measure pixels. */
+		var navEl = document.querySelector('.ltc-nav');
+		var navBox = navEl && navEl.getBoundingClientRect();
+		var first = document.querySelector('#topmenu > li');
+		var firstBox = first && first.getBoundingClientRect();
+		var firstOp = first ? getComputedStyle(first).opacity : '0';
+		var panelEl = document.querySelector('.ltc-side-info');
+		var panelBox = panelEl && panelEl.getBoundingClientRect();
+
+		check('nav has real height', !!navBox && navBox.height >= Math.min(220, innerHeight * 0.4),
+			navBox ? Math.round(navBox.height) + 'px (viewport ' + innerWidth + 'x' + innerHeight + ')' : 'no nav');
+		check('first menu item painted', !!firstBox && firstBox.height > 20 && firstOp === '1',
+			firstBox ? Math.round(firstBox.height) + 'px opacity=' + firstOp + ' top=' + Math.round(firstBox.top) : 'no item');
+		check('panel does not eat the drawer', innerWidth > 980 || !panelBox || panelBox.height < innerHeight * 0.45,
+			panelBox ? Math.round(panelBox.height) + 'px of ' + innerHeight + ' at ' + innerWidth + 'px' : 'no panel');
+		check('panel collapsed by default on phones',
+			innerWidth > 980 || !panelEl || panelEl.dataset.open === '0',
+			panelEl ? 'open=' + panelEl.dataset.open + ' at ' + innerWidth + 'px' : 'no panel');
+		check('every top-level item reachable by the nav scroll', (function () {
+			var items = document.querySelectorAll('#topmenu > li');
+			var last = items[items.length - 1];
+
+			if (!last || !navEl)
+				return false;
+
+			/* offsetTop is relative to .ltc-side, not the scroller — measure
+			   inside the nav's own scroll coordinates instead */
+			var bottom = last.getBoundingClientRect().bottom - navEl.getBoundingClientRect().top + navEl.scrollTop;
+
+			return bottom <= navEl.scrollHeight + 1;
+		})(), navEl ? 'scrollHeight ' + navEl.scrollHeight : 'no nav');
+
 		return v.applyLive(dash);
 	}).then(function () {
 		/* second dashboard poll round, per the live-widget rule */
