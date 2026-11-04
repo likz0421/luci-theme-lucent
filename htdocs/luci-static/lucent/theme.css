@@ -339,6 +339,8 @@ a.ltc-si-row:hover b{color:var(--accent-2)}
 	color:var(--text-3);font-size:11.5px;
 }
 
+.ltc-foot i{font-style:normal;font:10.5px var(--mono);opacity:.75}
+
 /* ---------------------------------------------------------------- buttons */
 .ltc-btn,.btn,.cbi-button{
 	display:inline-flex;align-items:center;justify-content:center;gap:7px;
@@ -532,6 +534,7 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-hero-side{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:0}
 .ltc-hero-line{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2);min-width:0}
 .ltc-hero-line b{font-weight:600;color:var(--text);min-width:0;overflow-wrap:anywhere}
+.ltc-heromenu{font-style:normal;font:10.5px var(--mono);color:var(--text-3);white-space:nowrap}
 .ltc-hero .ltc-badge{white-space:normal;max-width:100%}
 .ltc-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 

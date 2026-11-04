@@ -42,7 +42,13 @@ body.show-report #report{display:block}
 				<div id="indicators"></div>
 			</div>
 		</header>
-		<main id="root" class="ltc-content"><div style="padding:40px">loading…</div></main>
+		<main id="root" class="ltc-content">
+			<div id="view"><div style="padding:40px">loading…</div></div>
+			<footer class="ltc-foot">
+				<span>Lucent 3.10.10-r1 · OpenWrt 25.12.6</span>
+				<span>OpenWrt test</span>
+			</footer>
+		</main>
 		<div id="tabmenu" class="ltc-tabmenu"></div>
 	</div>
 </div>
@@ -329,7 +335,7 @@ var menuCache = /#menu-cache/.test(FLAGS);
 try {
 	localStorage.clear();
 	if (menuCache)
-		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 9, d: JSON.stringify(MENU) }));
+		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 10, d: JSON.stringify(MENU) }));
 } catch (e) {}
 
 (async function () {
@@ -405,14 +411,14 @@ try {
 	v.load().then(function (d) {
 		dash = d;
 		var el = v.render(d);
-		document.getElementById('root').textContent = '';
-		document.getElementById('root').appendChild(el);
+		document.getElementById('view').textContent = '';
+		document.getElementById('view').appendChild(el);
 		window.__home = v;
 		return wait(1500);
 	}).then(function () {
 		var c = Object.create(clients);
 		return c.load().then(function (cd) {
-			document.getElementById('root').appendChild(c.render(cd));
+			document.getElementById('view').appendChild(c.render(cd));
 		});
 	}).then(function () { return wait(menuSkip ? 19000 : 1300); }).then(function () {
 		/* sidebar traffic: two more samples with moved counters */
@@ -453,6 +459,23 @@ try {
 		document.title = 'HARNESS_READY';
 		check('pathname patched', pathOk, location.pathname);
 		check('menu entries', top.length >= 6, top.length + ' top level');
+
+		/* the footer marker is what the user can read off a screenshot, so it has
+		   to name the source even when everything worked */
+		var marker = (document.querySelector('.ltc-foot [data-ltc-menu]') || {}).textContent || '';
+		var want = menuSkip ? 'builtin' : (menuCache ? 'cache' : (menuFail ? 'builtin' : 'tree'));
+		var owner = menuSkip ? '#core' : '#menu10';
+
+		check('footer names the menu source', marker.indexOf('menu:' + want) === 0,
+			marker || 'no marker');
+		check('footer names who drew it', marker.indexOf(owner) > 0, marker || 'no marker');
+		var marks = document.querySelectorAll('[data-ltc-menu]');
+		check('the home card repeats it', marks.length >= 2 &&
+			marks[0].textContent === marks[marks.length - 1].textContent && marks[0].textContent !== '',
+			marks.length + ' markers: ' + Array.prototype.map.call(marks, function (m) { return m.textContent; }).join(' / '));
+		check('menu state readable from the console',
+			!!(window.__lucentMenu && window.__lucentMenu.items >= 6 && window.__lucentMenu.navH > 20),
+			JSON.stringify(window.__lucentMenu || {}));
 		check('submenu groups', groups.length >= 3, groups.length + ' groups');
 		check('nav icons injected',
 			document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length >= document.querySelectorAll('#topmenu > li > a').length,
@@ -494,7 +517,7 @@ try {
 		if (!menuFail) {
 			var stored = null;
 			try { stored = JSON.parse(localStorage.getItem('lucent.menu.anon')); } catch (e) {}
-			check('menu cached for the next page', !!stored && stored.b === 9 && !!stored.d,
+			check('menu cached for the next page', !!stored && stored.b === 10 && !!stored.d,
 				stored ? (stored.d.length + ' bytes') : 'nothing stored');
 		}
 		if (/#manyports/.test(FLAGS)) {

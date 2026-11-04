@@ -134,13 +134,28 @@ return baseclass.extend({
 		setTimeout(function () {
 			var ul = document.querySelector('#topmenu');
 
-			if (!ul || ul.children.length)
+			if (!ul)
 				return;
 
-			util.builtinMenu(ul, {
-				reason: _('The sidebar menu could not be loaded.') + ' · #core',
-				onRetry: function () { location.reload(); }
-			});
+			if (!ul.children.length) {
+				util.builtinMenu(ul, {
+					reason: _('The sidebar menu could not be loaded.') + ' · #core',
+					owner: '#core',
+					onRetry: function () { location.reload(); }
+				});
+				return;
+			}
+
+			/* entries exist but occupy no pixels: that is a layout failure, not a
+			   menu failure, and from the outside the two look identical — so name
+			   which one it is rather than let everyone debug the wrong layer */
+			if (ul.getBoundingClientRect().height < 8 && !ul.querySelector('.ltc-nav-note')) {
+				ul.appendChild(E('li', { 'class': 'ltc-nav-note' }, [
+					E('span', {}, _('The menu is in the page but not visible.')),
+					E('small', {}, '%d items · %dpx · #core'.format(ul.children.length,
+						Math.round(ul.getBoundingClientRect().height)))
+				]));
+			}
 		}, 16000);
 	},
 

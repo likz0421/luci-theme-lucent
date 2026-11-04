@@ -51,6 +51,9 @@ stylesheets, scripts or package metadata with them.
 - The menu is painted from a per-session copy the moment a page opens, then
   reconciled with the router, so clicking around never leaves an empty column
   while `admin/menu` is still answering
+- The sidebar tells you who drew it: `menu:cache+tree 312→1204ms #menu10` on
+  the home page and in the footer, so a blank or slow menu can be pinned to a
+  layer — router, cache, fallback, or stale JS — without a developer console
 - Live status panel docked in the sidebar on every page: animated CPU and
   memory rings, a WAN throughput curve with down/up rates, WAN/LAN addresses,
   uptime, online devices, Wi-Fi, temperature, a storage meter and load /

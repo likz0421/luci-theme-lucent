@@ -1139,6 +1139,9 @@ msgstr "菜单接口未返回 JSON"
 msgid "This menu is restored from this browser; the router did not answer."
 msgstr "这份菜单来自本浏览器保存的副本；路由器没有应答。"
 
+msgid "The menu is in the page but not visible."
+msgstr "菜单已经写进页面，但没有显示出来。"
+
 msgid "Cannot reach"
 msgstr "无法访问"
 

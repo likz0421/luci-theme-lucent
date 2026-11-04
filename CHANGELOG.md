@@ -3,6 +3,45 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.10 — 2026-11-04
+
+### Added
+
+- **The menu now says who drew it, and when.** Next to *Installed version* on
+  the home page — and in the footer on every page — Lucent prints
+  `menu:<source> <ms>ms <owner>`:
+  - `menu:tree 659ms #menu10` — the router's tree, and how long it took;
+  - `menu:cache 312ms #menu10` — painted from this browser's copy;
+    `menu:cache+tree 312→1204ms` — painted instantly, then confirmed by the
+    router;
+  - `menu:builtin … #menu10` — the static fallback, whose reason is in the
+    sidebar note;
+  - `… #core` — the `core.js` watchdog drew it, meaning `menu-lucent.js`
+    itself never ran;
+  - **no marker at all** — the browser is still executing pre-3.10.10 JS.
+
+  Every "still the same" report so far needed a console to tell these apart,
+  which is why the fixes kept aiming at the wrong layer. `window.__lucentMenu`
+  carries the same fields plus the entry count and the nav's measured pixel
+  height.
+- **The watchdog now separates the two failures that look identical from the
+  outside.** No entries at all → it draws the static menu as before; entries
+  that occupy zero pixels → it says so, with the item count and the measured
+  height, because that is a layout failure and debugging the menu would find
+  nothing wrong.
+
+### Changed
+
+- Build marker is `#menu10`; the localStorage menu cache is keyed to it, so an
+  upgrade repaints from a fresh structure rather than an obsolete one.
+
+### Verified
+
+- Thirteen harness scenarios, 0 failures (52–62 checks each). Each one now
+  asserts the marker names the right source *and* the right owner — `#menu10`
+  for the builder, `#core` for the watchdog — and that the home card and the
+  footer agree.
+
 ## 3.10.9 — 2026-11-04
 
 ### Fixed

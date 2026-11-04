@@ -249,8 +249,53 @@ var BUILTIN_MENU = [
 	{ title: 'Logout', path: 'admin/logout' }
 ];
 
+/* One line says which code drew the sidebar menu and when, so a plain
+   screenshot answers "is the new JS running?", "did the tree ever load here?"
+   and "how long did it actually take?" — the three things that could not be
+   told apart from the outside. It is written wherever a `[data-ltc-menu]`
+   host exists: the footer on every page, and the Updates card on the home
+   page, which is the one place users already look at and screenshot. */
+function paintMenu(el, st) {
+	var span = (st.first != null && st.first !== st.ms) ? '%d→%d'.format(st.first, st.ms) : String(st.ms);
+
+	el.textContent = 'menu:%s %sms%s'.format(st.src, span, st.owner ? ' ' + st.owner : '');
+}
+
+function menuMark() {
+	var el = E('i', { 'class': 'ltc-heromenu', 'data-ltc-menu': '1' });
+
+	if (window.__lucentMenu)
+		paintMenu(el, window.__lucentMenu);
+
+	return el;
+}
+
+function markMenu(src, owner, first) {
+	var foot = document.querySelector('.ltc-foot');
+	var host = foot ? (foot.querySelector('span') || foot) : null;
+	var nav = document.querySelector('.ltc-nav');
+	var now = Math.round(window.performance && performance.now ? performance.now() : 0);
+	var st = {
+		src: src,
+		owner: owner || '',
+		ms: now,
+		first: first != null ? first : now,
+		items: document.querySelectorAll('#topmenu > li:not(.ltc-nav-note)').length,
+		navH: nav ? Math.round(nav.getBoundingClientRect().height) : -1
+	};
+
+	window.__lucentMenu = st;
+
+	if (host && !host.querySelector('[data-ltc-menu]'))
+		host.appendChild(E('i', { 'data-ltc-menu': '1' }));
+
+	document.querySelectorAll('[data-ltc-menu]').forEach(function (el) { paintMenu(el, st); });
+
+	return st;
+}
+
 /* Same markup as the live menu, so icons, the accordion, the drawer and the
-   command palette keep working. opts: { reason, onRetry } */
+   command palette keep working. opts: { reason, onRetry, owner } */
 function builtinMenu(ul, opts) {
 	if (!ul)
 		return;
@@ -286,6 +331,9 @@ function builtinMenu(ul, opts) {
 			kids.length ? E('ul', { 'class': 'dropdown-menu' }, kids) : ''
 		]));
 	});
+
+	if (opts.owner)
+		markMenu('builtin', opts.owner);
 }
 
 function hostsFrom(hints, leases) {
@@ -550,6 +598,8 @@ return baseclass.extend({
 		});
 	},
 	builtinMenu: builtinMenu,
+	markMenu: markMenu,
+	menuMark: menuMark,
 	stations: stationsOf,
 	fdbMap: fdbMap,
 	ip4: ip4,

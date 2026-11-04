@@ -1135,7 +1135,7 @@ return view.extend({
 
 		return card(_('Updates'), null, E('div', { 'class': 'ltc-update' }, [
 			E('div', { 'class': 'ltc-row', 'style': 'gap:10px;flex-wrap:wrap;align-items:center' }, [
-				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Installed version')), verLabel]),
+				E('div', { 'class': 'ltc-hero-line' }, [E('small', {}, _('Installed version')), verLabel, util.menuMark()]),
 				pkgTag,
 				E('div', { 'class': 'grow' }),
 				checkBtn, updBtn

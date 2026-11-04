@@ -27,7 +27,7 @@
 /* Bumped whenever this module changes materially: the sidebar note prints it,
    so "am I actually running the new JS?" has a visible answer. It also keys
    the cache, so an upgrade cannot repaint an obsolete structure. */
-var BUILD = 9;
+var BUILD = 10;
 var CACHE = 'lucent.menu';
 
 
@@ -345,18 +345,21 @@ return baseclass.extend({
 	   rather than leave a ghost menu standing. */
 	commit: function (tree) {
 		var json = this.preflight(tree);
+		var src = this.fromCache ? 'cache+tree' : 'tree';
 
 		if (!json)
 			return false;
 
 		if (json === this.live) {
 			this.slots = null;
+			this.report(src);
 			return true;
 		}
 
 		this.commitSlots();
 		this.live = json;
 		this.save(json);
+		this.report(src);
 
 		return true;
 	},
@@ -430,6 +433,8 @@ return baseclass.extend({
 			return false;
 		}
 
+		this.report('cache');
+
 		return true;
 	},
 
@@ -458,6 +463,23 @@ return baseclass.extend({
 		}, _('Retry')));
 
 		ul.appendChild(note);
+	},
+
+	/* The footer line is the only place on the router that can answer "which
+	   code drew this menu, and when" without a developer console — so it says
+	   it even when everything worked. `cache` / `tree` / `builtin` plus the
+	   time of that paint is what separates "the router is slow" from "this
+	   browser never got the new JS" from "the tree never loads here". */
+	report: function (src) {
+		var now = Math.round(window.performance && performance.now ? performance.now() : 0);
+		var state;
+
+		if (this.first == null)
+			this.first = now;
+
+		state = util.markMenu(src, '#menu' + BUILD, this.first);
+		state.build = BUILD;
+		state.reason = this.reason;
 	},
 
 	render: function (tree) {
@@ -600,5 +622,7 @@ return baseclass.extend({
 				this.build();
 			}, this)
 		});
+
+		this.report('builtin');
 	}
 });
