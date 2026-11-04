@@ -444,6 +444,9 @@ var FLAGS = location.hash || '';
 			document.querySelectorAll('.ltc-nav svg.ltc-nav-ic').length + ' icons / ' + document.querySelectorAll('#topmenu > li > a').length + ' links');
 		if (menuFail) {
 			check('fallback note shown', !!document.querySelector('.ltc-nav-note'));
+			var noteSmall = document.querySelector('.ltc-nav-note small');
+			check('note carries the JS build marker', !!noteSmall && noteSmall.textContent.indexOf(menuSkip ? '#core' : '#menu') >= 0,
+				noteSmall ? noteSmall.textContent.slice(0, 70) : 'no small');
 			check('retry button present', !!document.querySelector('.ltc-nav-note .ltc-btn'));
 			check('fallback keeps groups', document.querySelectorAll('#topmenu > li.dropdown').length >= 3);
 		}

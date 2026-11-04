@@ -1,6 +1,21 @@
 {%
 	const vraw = ubus.call('file', 'read', { path: '/usr/share/lucent/version' });
-	const lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
+	let lver = (type(vraw) == 'object' && type(vraw.content) == 'array') ? trim('' + vraw.content[0]) : '';
+
+	/* LuCI appends ?v=<resource_version> to every module URL, and that string
+	   comes from luci.js — upgrading the theme does not change it, so browsers
+	   kept serving the previous theme's JS and every fix stayed invisible.
+	   Point it at our own version instead. */
+	if (lver == '') {
+		try {
+			const fsmod = require('fs');
+			const st = fsmod.stat('/www' + (media ?? '/luci-static/lucent') + '/theme.css');
+			if (st && st.mtime != null)
+				lver = 'm' + st.mtime;
+		} catch (e) {}
+	}
+	if (lver == '')
+		lver = 'l' + (version?.luciversion ?? '0');
 -%}
 	{% if (!blank_page): %}
 				<footer class="ltc-foot">
@@ -30,6 +45,11 @@
 		</a>
 	</nav>
 
+	<script>
+		/* must run before any L.require so our modules get a per-release URL */
+		if (window.L && L.env)
+			L.env.resource_version = {{ sprintf('%J', lver) }};
+	</script>
 	<script>
 		L.require('menu-lucent').catch(function () {
 			return L.require('menu-bootstrap').catch(function () {});

@@ -138,7 +138,7 @@ return baseclass.extend({
 				return;
 
 			util.builtinMenu(ul, {
-				reason: _('The sidebar menu could not be loaded.'),
+				reason: _('The sidebar menu could not be loaded.') + ' · #core',
 				onRetry: function () { location.reload(); }
 			});
 		}, 16000);

@@ -3,6 +3,47 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.8 — 2026-11-04
+
+### Fixed
+
+- **Theme upgrades did not invalidate the browser's copy of the theme's JS.**
+  LuCI builds every module URL as `<resource>/<name>.js?v=<resource_version>`,
+  and `resource_version` comes from **luci.js**, i.e. the LuCI package version
+  (`luci.js`:2474). Upgrading Lucent does not change it, so after an upgrade
+  the browser kept serving the previous release's `menu-lucent.js`,
+  `lucent/core.js`, `lucent/sideinfo.js` … — which is why several fixes were
+  invisible on real devices no matter what shipped. The footer now sets
+  `L.env.resource_version` to the theme's own version (the `/usr/share/lucent/
+  version` marker, falling back to the stylesheet mtime, then to the LuCI
+  version) before any `L.require`, so every theme module gets a per-release
+  URL.
+- **A synchronous throw inside `ui.menu.load()` could still leave the sidebar
+  silent.** `__init`, `build()` and `render()` are each wrapped, `withTimeout()`
+  tolerates a non-promise return, and missing `L.env.dispatchpath` /
+  `requestpath` are handled — all of which a stripped ONT build can hit.
+- **The built-in menu is no longer locked inside the module that usually
+  draws it.** It moved to `lucent.util.js` (`util.builtinMenu()`), used by both
+  the menu builder and the `core.js` watchdog, so a missing or broken
+  `menu-lucent.js` still yields a usable menu rather than an apology.
+
+### Added
+
+- **The sidebar note now says which code drew it**: `… · #menu8` when the menu
+  builder fell back, `The sidebar menu could not be loaded. · #core` when the
+  watchdog did. "Am I running the new JS?" finally has a visible answer, and
+  the two cases imply different fixes — so the next report can be acted on
+  without guessing.
+
+### Verified
+
+- Ten harness scenarios, 0 failures: healthy tree (47), `ui.menu.load()`
+  throwing synchronously (51), hanging (53), **module never loaded — watchdog
+  produces a usable menu and marks it `#core` (54)**, requestpath matching no
+  root child (47), rejecting (51), empty tree (51), no `ui.menu` class (51),
+  15-port bridge (50), simulated FTTR ONU (39). Each fallback case asserts the
+  note carries the right build marker.
+
 ## 3.10.7 — 2026-11-04
 
 ### Fixed

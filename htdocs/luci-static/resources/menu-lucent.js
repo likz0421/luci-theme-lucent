@@ -17,6 +17,10 @@
  */
 
 
+/* Bumped whenever this module changes materially: the sidebar note prints it,
+   so "am I actually running the new JS?" has a visible answer. */
+var BUILD = 8;
+
 function childrenOf(tree) {
 	if (ui.menu && typeof ui.menu.getChildren === 'function') {
 		try {
@@ -310,7 +314,7 @@ return baseclass.extend({
 	   the command palette all keep working. */
 	renderBuiltin: function () {
 		util.builtinMenu(document.querySelector('#topmenu'), {
-			reason: this.reason,
+			reason: (this.reason ? this.reason + ' · ' : '') + '#menu' + BUILD,
 			onRetry: L.bind(function () {
 				if (ui.menu && typeof ui.menu.flushCache === 'function') {
 					try { ui.menu.flushCache(); } catch (e) {}
