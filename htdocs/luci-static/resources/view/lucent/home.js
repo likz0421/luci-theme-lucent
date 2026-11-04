@@ -351,10 +351,32 @@ function treeSection(data, wifi) {
 			byMac[h.mac] = h;
 	});
 
+	/* Appends nodes to a branch and, past the limit, one row that reveals the
+	   rest on tap. Keeps a 22-port ONU from reading as a wall of noise. */
+	function fillBranch(parent, nodes, limit, label) {
+		var hidden = nodes.length > limit ? nodes.slice(limit) : [];
+
+		nodes.slice(0, limit).forEach(function (n) { parent.appendChild(n); });
+
+		if (!hidden.length)
+			return;
+
+		var more = E('li', {}, E('div', { 'class': 'ltc-tnode more', 'role': 'button', 'tabindex': '0' }, [
+			E('span', { 'class': 'ic' }, util.icon('chev')),
+			E('span', { 'class': 'tname' }, '%d %s'.format(hidden.length, label))
+		]));
+
+		more.firstChild.addEventListener('click', function () {
+			hidden.forEach(function (n) { parent.insertBefore(n, more); });
+			more.remove();
+		});
+
+		parent.appendChild(more);
+	}
+
 	function leaf(mac) {
 		var h = byMac[mac] || {};
 		var ip = (h.ips && h.ips[0]) || '';
-		var key = 'hr-' + String(ip || mac).replace(/[.:]/g, '-');
 
 		placed[mac] = true;
 
@@ -365,20 +387,23 @@ function treeSection(data, wifi) {
 		}, [
 			E('span', { 'class': 'ic' }, util.icon('devices')),
 			E('span', { 'class': 'tname' }, h.name || mac),
-			E('small', { 'class': 'tmeta' }, ip || _('no address')),
-			E('b', { 'class': 'trate', 'data-live': key }, ip ? rateText(rates[ip]) : '–')
+			ip ? E('small', { 'class': 'tmeta' }, ip) : '',
+			ip ? E('b', { 'class': 'trate', 'data-live': 'hr-' + ip.replace(/\./g, '-') },
+				rates[ip] ? rateText(rates[ip]) : '') : ''
 		]));
 	}
 
-	function portNode(p) {
-		var stations = p.wireless ? (assoc[p.device] || []) : [];
-		var macs = p.wireless
-			? stations.map(function (s) { return s.mac; })
+	function macsOf(p) {
+		var list = p.wireless
+			? (assoc[p.device] || []).map(function (s) { return s.mac; })
 			: Object.keys(fdb).filter(function (mac) { return fdb[mac] === p.device; });
 
-		macs = macs.filter(function (m, i) { return macs.indexOf(m) === i && !placed[m]; });
+		return list.filter(function (m, i) { return list.indexOf(m) === i && !placed[m]; });
+	}
 
+	function portNode(p, macs) {
 		var meta = [];
+
 		if (p.wireless) {
 			var ssid = ssidForNetdev(wifi, p.device);
 			if (ssid)
@@ -386,20 +411,26 @@ function treeSection(data, wifi) {
 		}
 		if (p.speed)
 			meta.push('%d Mb/s'.format(p.speed));
-		if (p.state && p.state !== 'up' && p.state !== 'unknown')
-			meta.push(p.state);
+		if (p.state === 'down')
+			meta.push(_('down'));
+
+		var kids = macs.map(leaf);
+		var ul = kids.length ? E('ul', { 'class': 'ltc-tkids' }) : null;
+
+		if (ul)
+			fillBranch(ul, kids, 6, _('more devices'));
 
 		return E('li', {}, [
 			E('div', {
 				'class': 'ltc-tnode port ' + (p.state === 'up' ? 'up' : 'down') + (p.wireless ? ' wifi' : ''),
-				'title': '%s · %s'.format(p.label || p.device, meta.join(' · ') || p.state || '–')
+				'title': '%s · %s'.format(p.label || p.device, meta.join(' · ') || '–')
 			}, [
 				E('span', { 'class': 'ic' }, util.icon(p.wireless ? 'wifi' : 'network')),
 				E('span', { 'class': 'tname' }, p.label || p.device),
-				E('small', { 'class': 'tmeta' }, meta.join(' · ') || (p.wireless ? _('radio') : _('idle'))),
+				meta.length ? E('small', { 'class': 'tmeta' }, meta.join(' · ')) : '',
 				macs.length ? E('b', { 'class': 'tcount' }, String(macs.length)) : ''
 			]),
-			macs.length ? E('ul', { 'class': 'ltc-tkids' }, macs.map(leaf)) : ''
+			ul || ''
 		]);
 	}
 
@@ -407,27 +438,50 @@ function treeSection(data, wifi) {
 	if (!ports.length)
 		return E('div', { 'class': 'ltc-muted ltc-tree-empty' }, _('No bridge ports were reported.'));
 
-	/* leaf() records what it placed, so the catch-all has to be computed after
-	   the port branches exist, not before */
-	var kids = ports.map(portNode);
+	/* leaf() marks what it placed, so the split has to run before the
+	   catch-all is computed */
+	var entries = ports.map(function (p) { return { p: p, macs: macsOf(p) }; });
+	var active = entries.filter(function (e) { return e.macs.length || e.p.state === 'up' || e.p.speed; });
+	var quiet = entries.filter(function (e) { return !e.macs.length && e.p.state !== 'up' && !e.p.speed; });
 
-	/* ONUs and DSA boards can expose dozens of bridge members; show the first
-	   screenful and let the user open the rest */
-	var LIMIT = 12;
-	var hidden = [];
+	var branch = E('ul', { 'class': 'ltc-tkids' });
 
-	if (kids.length > LIMIT) {
-		hidden = kids.slice(LIMIT);
-		kids = kids.slice(0, LIMIT);
+	fillBranch(branch, active.map(function (e) { return portNode(e.p, e.macs); }), 8, _('more ports'));
+
+	/* dozens of unconnected FTTR ports collapse into one line */
+	if (quiet.length) {
+		var quietNode = E('li', {}, [
+			E('div', { 'class': 'ltc-tnode other', 'title': '%d %s'.format(quiet.length, _('idle ports')) }, [
+				E('span', { 'class': 'ic' }, util.icon('info')),
+				E('span', { 'class': 'tname' }, _('Idle ports')),
+				E('small', { 'class': 'tmeta' }, _('no link, no device')),
+				E('b', { 'class': 'tcount' }, String(quiet.length))
+			]),
+			E('ul', { 'class': 'ltc-tkids', 'style': 'display:none' })
+		]);
+
+		quietNode.firstChild.addEventListener('click', function () {
+			var hiddenUl = quietNode.lastElementChild;
+
+			if (hiddenUl.style.display === 'none') {
+				fillBranch(hiddenUl, quiet.map(function (e) { return portNode(e.p, []); }), 12, _('more ports'));
+				hiddenUl.style.display = '';
+			}
+			else {
+				hiddenUl.style.display = 'none';
+			}
+		});
+
+		branch.appendChild(quietNode);
 	}
 
 	var stray = hosts.filter(function (h) { return h.mac && !placed[h.mac]; });
 
-	var branch = E('ul', { 'class': 'ltc-tkids' });
-
-	kids.forEach(function (n) { branch.appendChild(n); });
-
 	if (stray.length) {
+		var strayUl = E('ul', { 'class': 'ltc-tkids' });
+
+		fillBranch(strayUl, stray.map(function (h) { return leaf(h.mac); }), 6, _('more devices'));
+
 		branch.appendChild(E('li', {}, [
 			E('div', { 'class': 'ltc-tnode other', 'title': _('Hosts the bridge forwarding table could not place') }, [
 				E('span', { 'class': 'ic' }, util.icon('info')),
@@ -435,22 +489,8 @@ function treeSection(data, wifi) {
 				E('small', { 'class': 'tmeta' }, _('port unknown')),
 				E('b', { 'class': 'tcount' }, String(stray.length))
 			]),
-			E('ul', { 'class': 'ltc-tkids' }, stray.map(function (h) { return leaf(h.mac); }))
+			strayUl
 		]));
-	}
-
-	if (hidden.length) {
-		var more = E('li', {}, E('div', { 'class': 'ltc-tnode more', 'role': 'button', 'tabindex': '0' }, [
-			E('span', { 'class': 'ic' }, util.icon('chev')),
-			E('span', { 'class': 'tname' }, '%d %s'.format(hidden.length, _('more ports')))
-		]));
-
-		more.firstChild.addEventListener('click', function () {
-			hidden.forEach(function (n) { branch.insertBefore(n, more); });
-			more.remove();
-		});
-
-		branch.appendChild(more);
 	}
 
 	return E('ul', { 'class': 'ltc-tree' }, [

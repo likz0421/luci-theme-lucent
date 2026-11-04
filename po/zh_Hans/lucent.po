@@ -1163,5 +1163,20 @@ msgstr "个其他端口"
 msgid "Hosts the bridge forwarding table could not place"
 msgstr "桥接转发表无法定位这些主机所在的端口"
 
+msgid "Idle ports"
+msgstr "空闲端口"
+
+msgid "idle ports"
+msgstr "个空闲端口"
+
+msgid "no link, no device"
+msgstr "未连线、无设备"
+
+msgid "more devices"
+msgstr "台其他设备"
+
+msgid "down"
+msgstr "未连线"
+
 msgid "timed out"
 msgstr "超时"

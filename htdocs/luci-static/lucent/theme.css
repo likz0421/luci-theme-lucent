@@ -621,41 +621,45 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-wire em{font-size:10px;color:var(--text-3);font-style:normal;margin-top:7px;white-space:nowrap}
 
 /* ------------------------------------------------------------ LAN tree */
-.ltc-tree{list-style:none;display:flex;flex-direction:column;gap:6px;margin:14px 0 0;padding:0}
+.ltc-tree{list-style:none;display:flex;flex-direction:column;gap:8px;margin:16px 0 0;padding:0}
 .ltc-tree ul{list-style:none;margin:0;padding:0}
-.ltc-tree li{position:relative;min-width:0;padding-left:20px}
-.ltc-tree li::before{content:"";position:absolute;left:7px;top:0;bottom:0;width:1px;background:var(--line)}
-.ltc-tree li::after{content:"";position:absolute;left:7px;top:19px;width:12px;height:1px;background:var(--line)}
-.ltc-tree li:last-child::before{bottom:auto;height:19px}
+.ltc-tree li{position:relative;min-width:0;padding-left:22px;animation:ltc-rise .3s var(--ease) backwards}
+.ltc-tree li::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:1px;background:var(--line)}
+.ltc-tree li::after{content:"";position:absolute;left:8px;top:22px;width:13px;height:1px;background:var(--line)}
+.ltc-tree li:last-child::before{bottom:auto;height:22px}
 .ltc-tree>li{padding-left:0}
 .ltc-tree>li::before,.ltc-tree>li::after{display:none}
 /* a live branch pulses, so the shape of the LAN reads at a glance */
 .ltc-tree li:has(> .ltc-tnode.up)::after{background:linear-gradient(90deg,var(--accent),transparent);animation:ltc-branch 2.8s var(--ease) infinite}
 @keyframes ltc-branch{0%{opacity:.2}55%{opacity:1}100%{opacity:.2}}
-.ltc-tkids{display:flex;flex-direction:column;gap:5px;margin:5px 0 8px}
+.ltc-tkids{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px}
 .ltc-tnode{
-	display:flex;align-items:center;gap:8px;min-width:0;padding:7px 10px;border:1px solid var(--line);
-	border-radius:11px;background:var(--card);color:inherit;text-decoration:none!important;font-size:12.5px;
-	transition:background .18s,border-color .18s,transform .18s;
+	display:flex;align-items:center;gap:9px;min-width:0;min-height:38px;padding:8px 11px;border:1px solid var(--line);
+	border-radius:12px;background:var(--card);color:inherit;text-decoration:none!important;font-size:12.5px;
+	transition:background .2s,border-color .2s,transform .2s,box-shadow .2s;
 }
-a.ltc-tnode:hover{background:var(--tint);border-color:var(--accent);transform:translateX(2px)}
-.ltc-tnode .ic{flex:none;width:22px;height:22px;display:grid;place-items:center;border-radius:8px;background:var(--card-2);color:var(--text-2)}
+a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--tint);border-color:var(--accent);transform:translateX(3px);box-shadow:0 6px 16px -12px var(--accent)}
+.ltc-tnode .ic{flex:none;width:24px;height:24px;display:grid;place-items:center;border-radius:9px;background:var(--card-2);color:var(--text-2);transition:background .2s,color .2s}
 .ltc-tnode .ic svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ltc-tnode .tname{min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ltc-tnode .tmeta{margin-left:auto;max-width:54%;color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ltc-tnode .tcount{flex:none;min-width:19px;padding:1px 6px;border-radius:99px;background:var(--tint);color:var(--text-2);font:600 10.5px var(--mono);text-align:center}
+.ltc-tnode .tcount{flex:none;min-width:20px;padding:2px 6px;border-radius:99px;background:var(--tint);color:var(--text-2);font:600 10.5px var(--mono);text-align:center}
 .ltc-tnode .trate{margin-left:auto;font:500 10.5px var(--mono);color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ltc-tnode .trate:empty{display:none}
 .ltc-tnode.root{background:var(--card-2)}
 .ltc-tnode.root .ic{background:var(--accent);color:var(--on-accent)}
 .ltc-tnode.up .ic{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
 .ltc-tnode.wifi .ic{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent-2)}
-.ltc-tnode.down{opacity:.62}
-.ltc-tnode.down .ic{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad)}
-.ltc-tnode.leaf{padding:5px 9px;font-size:12px}
-.ltc-tnode.more{cursor:pointer;border-style:dashed;background:none;color:var(--text-3);font-size:11.5px}
-.ltc-tnode.more:hover{border-color:var(--accent);color:var(--text)}
-.ltc-tnode.more .ic svg{transform:rotate(-90deg)}
+.ltc-tnode.down{opacity:.55}
+.ltc-tnode.down:hover{opacity:1}
+.ltc-tnode.leaf{padding:6px 10px;font-size:12px;min-height:32px}
+.ltc-tnode.leaf .ic{width:20px;height:20px;border-radius:7px}
+.ltc-tnode.leaf .ic svg{width:13px;height:13px}
 .ltc-tree-empty{padding:10px 0;font-size:12px}
+.ltc-tnode.more{cursor:pointer;border-style:dashed;background:none;color:var(--text-3);font-size:11.5px;min-height:32px}
+.ltc-tnode.other{cursor:pointer}
+.ltc-tnode.other .ic{background:var(--card-2)}
+.ltc-tnode.more .ic svg{transform:rotate(-90deg)}
 
 /* top talkers */
 .ltc-talkers{display:flex;flex-direction:column;gap:7px;list-style:none;margin:0;padding:0}

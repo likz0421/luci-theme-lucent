@@ -326,12 +326,16 @@ var FLAGS = location.hash || '';
 
 	/* menu failure scenarios: the sidebar must never end up blank */
 	var menuFail = /#menu-(reject|empty|noclass|hang)/.test(FLAGS);
+	var noisy = /#tree-noisy/.test(FLAGS);
 	if (/#menu-reject/.test(FLAGS))
 		ui.menu.load = function () { return Promise.reject(new Error('mock session failure')); };
 	if (/#menu-empty/.test(FLAGS))
 		ui.menu.load = function () { return Promise.resolve({ children: {} }); };
 	if (/#menu-noclass/.test(FLAGS))
 		ui.menu = null;
+	/* a forked build whose requestpath matches no root child */
+	if (/#menu-nomatch/.test(FLAGS))
+		window.L.env.requestpath = ['notadmin'];
 	/* a request that never answers must still fall back, on a deadline */
 	if (/#menu-hang/.test(FLAGS))
 		ui.menu.load = function () { return new Promise(function () {}); };
@@ -343,6 +347,26 @@ var FLAGS = location.hash || '';
 		MOCK['luci.lucent.topology'].ports = [{ device: 'wlan0', state: 'up', wireless: 1, label: 'wlan0' },
 			{ device: 'wlan1', state: 'up', wireless: 1, label: 'wlan1' }].concat(extra);
 		MOCK['luci.lucent.topology'].fdb = [];
+	}
+
+	/* what the ONU actually reports: 22 unconnected FTTR ports and a pile of
+	   hosts the forwarding table cannot place */
+	if (/#tree-noisy/.test(FLAGS)) {
+		var fttr = [];
+		for (var fi = 1; fi <= 22; fi++)
+			fttr.push({ device: 'fttr' + fi, wireless: 0 });
+		MOCK['luci.lucent.topology'].ports = fttr;
+		MOCK['luci.lucent.topology'].fdb = [];
+
+		var leases = [], hints = {};
+		for (var hi = 1; hi <= 15; hi++) {
+			var mac = '0E:DD:BC:4D:F7:' + (hi < 16 ? '0' : '') + hi.toString(16);
+			leases.push({ macaddr: mac, hostname: 'node' + hi, ipaddr: '192.168.1.' + (100 + hi), expires: NOW + 3600 });
+			hints[mac] = { mac: mac, name: 'node' + hi, ipaddrs: ['192.168.1.' + (100 + hi)] };
+		}
+		MOCK['luci-rpc.getDHCPLeases'].dhcp_leases = leases;
+		MOCK['luci-rpc.getHostHints'] = hints;
+		ASSOC = {};
 	}
 
 	var menu = await mod(base + 'menu-lucent.js');
@@ -424,7 +448,7 @@ var FLAGS = location.hash || '';
 		if (/#manyports/.test(FLAGS)) {
 			var shown = document.querySelectorAll('.ltc-tnode.port').length;
 			var moreBtn = document.querySelector('.ltc-tnode.more');
-			check('ports capped', shown === 12, shown + ' shown');
+			check('ports capped', shown === 8, shown + ' shown');
 			check('more toggle present', !!moreBtn, moreBtn && moreBtn.textContent);
 			if (moreBtn) {
 				moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -475,24 +499,26 @@ var FLAGS = location.hash || '';
 		var portText = Array.prototype.map.call(ports, function (n) { return n.textContent; }).join(' | ');
 
 		check('tree rendered', !!tree && !!document.querySelector('.ltc-tnode.root'));
-		check('all bridge ports', ports.length >= 4, ports.length + ' ports');
-		check('wired port speed shown', /1000 Mb\/s/.test(portText), portText.slice(0, 70));
-		check('down port marked', !!document.querySelector('.ltc-tnode.down'));
-		check('ssid on radio node', /MyHome-2\.4G/.test(portText));
-		check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
-		check('phone placed under radio', /phone/.test(leafText), leafText.slice(0, 90));
-		check('laptop placed under lan1', /laptop/.test(leafText));
-		check('every host placed on a branch',
-			/#manyports/.test(FLAGS) || !/Other links/.test(portText),
-			/#manyports/.test(FLAGS) ? 'skipped: fdb emptied on purpose' : 'no catch-all needed');
-		check('per-host rate in tree', !!document.querySelector('[data-live=hr-192-168-1-30]'),
-			document.querySelector('[data-live=hr-192-168-1-30]') && document.querySelector('[data-live=hr-192-168-1-30]').textContent);
+		if (!noisy) {
+			/* an unconnected port belongs in the idle summary, not in the list */
+			check('active ports shown', ports.length >= 3, ports.length + ' port rows');
+			check('wired port speed shown', /1000 Mb\/s/.test(portText), portText.slice(0, 70));
+			check('ssid on radio node', /MyHome-2\.4G/.test(portText));
+			check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
+			check('phone placed under radio', /phone/.test(leafText), leafText.slice(0, 90));
+			check('laptop placed under lan1', /laptop/.test(leafText));
+			check('every host placed on a branch', !/Other links/.test(leafText + portText), 'no catch-all needed');
+			check('per-host rate in tree', !!document.querySelector('[data-live=hr-192-168-1-30]'),
+				document.querySelector('[data-live=hr-192-168-1-30]') && document.querySelector('[data-live=hr-192-168-1-30]').textContent);
+		}
+		check('idle ports collapsed', !!document.querySelector('.ltc-tnode.other'),
+			document.querySelectorAll('.ltc-tnode.other').length + ' summary rows');
 
 		/* ---- top talkers ---- */
 		var talkers = document.querySelectorAll('[data-talkers] li');
 		var first = talkers[0];
-		check('talkers listed', talkers.length >= 2, talkers.length + ' rows');
-		check('heaviest first', !!first && /phone/.test(first.querySelector('.who').textContent),
+		if (!noisy) check('talkers listed', talkers.length >= 2, talkers.length + ' rows');
+		if (!noisy) check('heaviest first', !!first && /phone/.test(first.querySelector('.who').textContent),
 			first && first.querySelector('.who').textContent);
 		check('talker bar scaled', !!first && /width:100%/.test(first.querySelector('.bar u').getAttribute('style')));
 		check('talker rates formatted', !!first && /↓/.test(first.querySelector('.val').textContent),
@@ -502,7 +528,7 @@ var FLAGS = location.hash || '';
 		var heads = document.querySelectorAll('.ltc-content .table .table-titles .th');
 		var rateCells = document.querySelectorAll('.ltc-rate');
 		check('devices table has rate column', heads.length >= 7, heads.length + ' columns');
-		check('devices rate cells filled', rateCells.length >= 2 && /↓/.test(rateCells[0].textContent),
+		if (!noisy) check('devices rate cells filled', rateCells.length >= 2 && /↓/.test(rateCells[0].textContent),
 			rateCells.length + ' cells');
 
 		/* Being in the DOM is not the same as being visible: measure pixels. */
@@ -537,6 +563,26 @@ var FLAGS = location.hash || '';
 			return bottom <= navEl.scrollHeight + 1;
 		})(), navEl ? 'scrollHeight ' + navEl.scrollHeight : 'no nav');
 
+		if (/#tree-noisy/.test(FLAGS)) {
+			var tRows = document.querySelectorAll('.ltc-tnode').length;
+			var tPorts = document.querySelectorAll('.ltc-tnode.port').length;
+			var tOther = document.querySelectorAll('.ltc-tnode.other').length;
+			var tLeaves = document.querySelectorAll('.ltc-tnode.leaf').length;
+
+			check('idle ports collapsed', tPorts === 0 && tOther === 2, tPorts + ' port rows, ' + tOther + ' summary rows');
+			check('tree stays short', tRows <= 12, tRows + ' rows for 22 ports + 15 hosts');
+			check('stray hosts capped at 6', tLeaves === 6, tLeaves + ' leaves before expanding');
+			var tMore = document.querySelector('.ltc-tnode.more');
+			if (tMore) {
+				tMore.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+				check('more reveals the rest', document.querySelectorAll('.ltc-tnode.leaf').length === 15,
+					document.querySelectorAll('.ltc-tnode.leaf').length + ' leaves after click');
+			}
+			else {
+				check('more reveals the rest', false, 'no toggle found');
+			}
+		}
+
 		return v.applyLive(dash);
 	}).then(function () {
 		/* second dashboard poll round, per the live-widget rule */
@@ -548,7 +594,7 @@ var FLAGS = location.hash || '';
 		var before = cell ? cell.textContent : '';
 		v.applyLive(d2);
 		var after = cell ? cell.textContent : '';
-		check('tree rate refreshed', before !== after, before + ' → ' + after);
+		if (!noisy) check('tree rate refreshed', before !== after, before + ' → ' + after);
 		return wait(400);
 	}).then(function () {
 		var live = document.querySelector('[data-live=spark-now]');

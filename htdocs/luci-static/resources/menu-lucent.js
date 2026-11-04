@@ -185,20 +185,45 @@ return baseclass.extend({
 	},
 
 	render: function (tree) {
+		this.renderModeMenu(tree);
+
+		/* renderModeMenu only builds the sidebar for the root child whose name
+		   equals requestpath[0]. Forked builds key that differently (or leave
+		   the path empty), and then nothing matched and the menu stayed blank
+		   even though the tree was fine — so render the first root child that
+		   actually has entries. */
+		if (!document.querySelector('#topmenu li')) {
+			var roots = childrenOf(tree);
+
+			for (var i = 0; i < roots.length; i++) {
+				this.renderMainMenu(roots[i], roots[i].name);
+				if (document.querySelector('#topmenu li'))
+					break;
+			}
+
+			if (roots.length)
+				this.reason = 'matched no root branch (requestpath=%s, roots=%s)'.format(
+					(L.env.requestpath || []).join('/') || '∅',
+					roots.map(function (r) { return r.name; }).join(','));
+		}
+
+		this.renderTabs(tree);
+	},
+
+	renderTabs: function (tree) {
 		var node = tree;
 		var url = '';
 
-		this.renderModeMenu(tree);
+		if (L.env.dispatchpath.length < 3)
+			return;
 
-		if (L.env.dispatchpath.length >= 3) {
-			for (var i = 0; i < 3 && node; i++) {
-				node = (node.children || {})[L.env.dispatchpath[i]];
-				url += (url ? '/' : '') + L.env.dispatchpath[i];
-			}
-
-			if (node)
-				this.renderTabMenu(node, url);
+		for (var i = 0; i < 3 && node; i++) {
+			node = (node.children || {})[L.env.dispatchpath[i]];
+			url += (url ? '/' : '') + L.env.dispatchpath[i];
 		}
+
+		if (node)
+			this.renderTabMenu(node, url);
 	},
 
 	renderTabMenu: function (tree, url, level) {

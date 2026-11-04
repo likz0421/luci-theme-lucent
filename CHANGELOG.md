@@ -3,6 +3,47 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.6 — 2026-11-04
+
+### Fixed
+
+- **The sidebar could still render no menu at all when the tree was fine.**
+  The menu is built from the root child whose name equals `requestpath[0]` —
+  the same rule upstream uses. On builds where that does not match (forked
+  luci-base, an empty request path), nothing matched and the sidebar stayed
+  empty even though the menu tree had loaded. The builder now falls back to
+  the first root child that actually has entries, and records the mismatch
+  (`requestpath=… roots=…`) for the note.
+- **The LAN tree buried the useful rows.** On an FTTR ONU the bridge reports
+  22 members, 21 of them unconnected, and the forwarding table cannot place
+  most hosts — so the card was a wall of `空闲` rows above a flat list of
+  unknown MACs. The tree now classifies members: a port is shown when it has
+  attached hosts, is linked up, or reports a speed; everything else collapses
+  into one "Idle ports" row that expands on tap. Hosts per branch are capped
+  at 6 with a "N more devices" row, and 22 ports + 15 hosts now render as
+  ~12 rows instead of ~37.
+- **Rows carried filler text.** `无地址` and a bare `–` rate took space on
+  every host without an address or traffic; both are omitted now (the rate
+  slot still exists so a later poll can fill it).
+
+### Added
+
+- Softer list interaction, as asked: roomier rows (38 px, 12 px radius, wider
+  gaps), a gentle hover that shifts the row, tints it and lifts a faint accent
+  shadow, icon chips that fade colour with it, a short entrance for newly
+  revealed rows, and dimmed down-ports that return to full opacity on hover.
+
+### Verified
+
+- Eight harness scenarios, 0 failures: healthy tree (47 checks), `ui.menu.load()`
+  rejecting (50), hanging (52), **requestpath matching no root child (47 — the
+  menu now renders anyway)**, empty tree (50), no `ui.menu` class (50),
+  15-port bridge (50 — 8 rows + toggle, 15 after expanding), and a **simulated
+  FTTR ONU: 22 unconnected ports + 15 unplaceable hosts (39 checks — asserts
+  zero port rows, exactly two summary rows, ≤12 total rows, 6 leaves before
+  the toggle and 15 after)**.
+- Screenshots of both the ONU-shaped tree and a normal tree at 1280 px.
+
 ## 3.10.5 — 2026-11-04
 
 ### Fixed
