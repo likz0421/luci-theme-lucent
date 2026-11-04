@@ -14,12 +14,22 @@
  * theme must never show. So the builder tries three sources in order and
  * falls back to a static menu of the nodes every stock LuCI registers, while
  * saying out loud which step failed.
+ *
+ * LuCI reloads the whole document on every menu click, so each page had to
+ * wait for the menu RPC again before the sidebar showed anything — seconds of
+ * empty column on a loaded device, which reads as "the menu disappeared".
+ * The tree is therefore kept in localStorage under the session id and painted
+ * synchronously on the next page load, then reconciled with the network.
+ * Nothing clears the sidebar until a replacement tree is already rendered.
  */
 
 
 /* Bumped whenever this module changes materially: the sidebar note prints it,
-   so "am I actually running the new JS?" has a visible answer. */
-var BUILD = 8;
+   so "am I actually running the new JS?" has a visible answer. It also keys
+   the cache, so an upgrade cannot repaint an obsolete structure. */
+var BUILD = 9;
+var CACHE = 'lucent.menu';
+
 
 function childrenOf(tree) {
 	if (ui.menu && typeof ui.menu.getChildren === 'function') {
@@ -71,6 +81,39 @@ function pathOf(list) {
 	return Array.isArray(list) ? list : [];
 }
 
+/* top-level entries, ignoring the explanatory note so a fallback menu still
+   counts as "the sidebar is not empty" */
+function entries(el) {
+	var n = 0;
+
+	if (el) {
+		for (var i = 0; i < el.children.length; i++) {
+			if (!el.children[i].classList || !el.children[i].classList.contains('ltc-nav-note'))
+				n++;
+		}
+	}
+
+	return n;
+}
+
+/* The menu tree is filtered by the caller's ACL, so it is cached per session
+   and dies with that session — a different user never sees it. */
+function cacheKey() {
+	var sid = '';
+
+	try {
+		sid = String((L.env && L.env.sessionid) ||
+			(L.session && typeof L.session.getID === 'function' ? L.session.getID() : '') || '');
+	} catch (e) {
+		sid = '';
+	}
+
+	if (!sid || /^0+$/.test(sid))
+		sid = 'anon';
+
+	return '%s.%s'.format(CACHE, sid);
+}
+
 return baseclass.extend({
 	/* Nothing here may throw. A synchronous error at instantiation time makes
 	   L.require('menu-lucent') reject, which means not one line of the fallback
@@ -80,13 +123,20 @@ return baseclass.extend({
 		var self = this;
 
 		this.reason = '';
+		this.busy = false;
+		this.live = '';
 
 		try {
+			/* paint before anything is awaited: on every page after the first
+			   this is what keeps the sidebar from going blank */
+			this.fromCache = this.restore();
+
 			this.build();
 		} catch (e) {
 			this.reason = 'init: ' + String(e && e.message || e);
 			try {
-				this.renderBuiltin();
+				if (!entries(document.querySelector('#topmenu')))
+					this.renderBuiltin();
 			} catch (e2) {}
 			return;
 		}
@@ -95,47 +145,67 @@ return baseclass.extend({
 		   menu here means something else cleared it. Rebuild once, no more. */
 		setTimeout(function () {
 			try {
-				if (!self._retried && !document.querySelector('#topmenu li')) {
-					self._retried = true;
+				if (!self.retried && !entries(document.querySelector('#topmenu'))) {
+					self.retried = true;
+					self.busy = false;
 					self.build();
 				}
 			} catch (e) {}
 		}, 12000);
 	},
 
+	/* One build at a time: the watchdog and the last-resort timer must not
+	   start a second chain that then races the first over the sidebar. */
 	build: function () {
 		var self = this;
-		var ul = document.querySelector('#topmenu');
 
-		if (!ul)
+		if (!document.querySelector('#topmenu') || this.busy)
 			return;
 
-		/* retries must not stack menus on top of a failed attempt */
-		ul.textContent = '';
-		var modes = document.querySelector('#modemenu');
-		if (modes)
-			modes.textContent = '';
-		var tabs = document.querySelector('#tabmenu');
-		if (tabs)
-			tabs.textContent = '';
-
-		this.reason = '';
+		this.busy = true;
 
 		this.loadTree().then(function (tree) {
-			try {
-				if (tree)
-					self.render(tree);
-			} catch (e) {
-				self.reason = 'render: ' + String(e && e.message || e);
+			self.busy = false;
+
+			if (tree) {
+				try {
+					if (self.commit(tree))
+						return;
+
+					/* the router answered, and what it answered with has no sidebar in
+					   it: that outranks whatever this browser remembered */
+					self.reason = self.reason || _('The menu service returned no entries');
+					self.forget();
+					self.fromCache = false;
+					self.renderBuiltin();
+					return;
+				} catch (e) {
+					self.reason = 'render: ' + String(e && e.message || e);
+
+					if (self.fromCache) {
+						self.annotate(self.reason);
+						return;
+					}
+				}
 			}
 
-			if (!document.querySelector('#topmenu li')) {
+			/* no source answered: the static menu if there is nothing else, otherwise
+			   the cached menu stays put and simply admits it is no longer fresh */
+			if (!entries(document.querySelector('#topmenu'))) {
 				self.reason = self.reason || _('The menu service returned no entries');
 				self.renderBuiltin();
 			}
-		}).catch(function (err) {
+			else if (self.fromCache)
+				self.annotate(self.reason);
+		}, function (err) {
+			self.busy = false;
 			self.reason = String(err && err.message || err);
-			self.renderBuiltin();
+
+			/* a menu already on screen stays — it is simply no longer fresh */
+			if (!entries(document.querySelector('#topmenu')))
+				self.renderBuiltin();
+			else if (self.fromCache)
+				self.annotate(self.reason);
 		});
 	},
 
@@ -146,9 +216,9 @@ return baseclass.extend({
 		var self = this;
 
 		if (ui.menu && typeof ui.menu.load === 'function') {
-			return withTimeout(ui.menu.load(), 4000, 'ui.menu.load()').catch(function (err) {
+			return withTimeout(ui.menu.load(), 2500, 'ui.menu.load()').catch(function (err) {
 				self.reason = 'ui.menu: ' + String(err && err.message || err);
-				return withTimeout(self.fetchTree(), 6000, 'admin/menu').catch(function (err2) {
+				return withTimeout(self.fetchTree(), 5000, 'admin/menu').catch(function (err2) {
 					self.reason += '; ' + String(err2 && err2.message || err2);
 					return null;
 				});
@@ -156,7 +226,7 @@ return baseclass.extend({
 		}
 
 		this.reason = _('This LuCI build exposes no menu class');
-		return withTimeout(this.fetchTree(), 6000, 'admin/menu').catch(function (err) {
+		return withTimeout(this.fetchTree(), 5000, 'admin/menu').catch(function (err) {
 			self.reason += '; ' + String(err && err.message || err);
 			return null;
 		});
@@ -164,13 +234,19 @@ return baseclass.extend({
 
 	fetchTree: function () {
 		var url = L.url('admin/menu');
+		var self = this;
 
 		return new Promise(function (resolve, reject) {
 			var req = new XMLHttpRequest();
 
 			req.open('GET', url, true);
-			req.timeout = 8000;
+			req.timeout = 6000;
 			req.onload = function () {
+				if (req.status === 401 || req.status === 403) {
+					self.forget();
+					reject(new Error('%s → HTTP %d'.format(url, req.status)));
+					return;
+				}
 				if (req.status < 200 || req.status >= 400) {
 					reject(new Error('%s → HTTP %d'.format(url, req.status)));
 					return;
@@ -188,6 +264,202 @@ return baseclass.extend({
 		});
 	},
 
+	/* Rendered into detached containers first, so a tree that turns out to be
+	   empty cannot leave the sidebar blanker than it was before. */
+	openSlots: function () {
+		this.slots = {
+			top: E('ul'),
+			mode: E('ul'),
+			tabs: E('div')
+		};
+	},
+
+	slot: function (name) {
+		return (this.slots && this.slots[name]) || document.querySelector(
+			name === 'top' ? '#topmenu' : name === 'mode' ? '#modemenu' : '#tabmenu');
+	},
+
+	commitSlots: function () {
+		var targets = { top: '#topmenu', mode: '#modemenu', tabs: '#tabmenu' };
+		var self = this;
+
+		Object.keys(targets).forEach(function (k) {
+			var live = document.querySelector(targets[k]);
+			var src = self.slots[k];
+
+			if (!live || !src)
+				return;
+
+			live.textContent = '';
+
+			while (src.firstChild)
+				live.appendChild(src.firstChild);
+
+			live.style.display = src.style.display;
+		});
+
+		this.slots = null;
+	},
+
+	/* Render into detached containers first and normalise the tree only after
+	   that: childrenOf() fills in the node names as it goes, so comparing the
+	   two trees in the same shape is what lets an unchanged menu stay perfectly
+	   still instead of replaying its entrance animation. */
+	preflight: function (tree) {
+		var json = '';
+
+		this.openSlots();
+
+		try {
+			this.render(tree);
+
+			if (entries(this.slots.top)) {
+				try {
+					json = JSON.stringify(tree);
+				} catch (e) {
+					json = '';
+				}
+			}
+		} finally {
+			if (!json)
+				this.slots = null;
+		}
+
+		return json;
+	},
+
+	paint: function (tree) {
+		var json = this.preflight(tree);
+
+		if (!json)
+			return false;
+
+		this.commitSlots();
+		this.live = json;
+
+		return true;
+	},
+
+	/* A tree that produces no sidebar is not "nothing changed" — it is the
+	   router contradicting the copy we painted, so the caller has to replace it
+	   rather than leave a ghost menu standing. */
+	commit: function (tree) {
+		var json = this.preflight(tree);
+
+		if (!json)
+			return false;
+
+		if (json === this.live) {
+			this.slots = null;
+			return true;
+		}
+
+		this.commitSlots();
+		this.live = json;
+		this.save(json);
+
+		return true;
+	},
+
+	save: function (json) {
+		var key = this.key();
+
+		try {
+			/* one copy per browser: entries left by earlier sessions would only
+			   grow the quota */
+			Object.keys(localStorage).forEach(function (k) {
+				if (k.indexOf(CACHE + '.') === 0 && k !== key)
+					localStorage.removeItem(k);
+			});
+
+			localStorage.setItem(key, JSON.stringify({ b: BUILD, d: json }));
+		} catch (e) {}
+	},
+
+	forget: function () {
+		this.live = '';
+
+		try {
+			localStorage.removeItem(this.key());
+		} catch (e) {}
+	},
+
+	key: function () {
+		if (!this.cached)
+			this.cached = cacheKey();
+
+		return this.cached;
+	},
+
+	/* Returns true when the sidebar was repainted from this browser's copy. */
+	restore: function () {
+		var raw, rec;
+
+		try {
+			raw = localStorage.getItem(this.key());
+		} catch (e) {
+			return false;
+		}
+
+		if (!raw)
+			return false;
+
+		try {
+			rec = JSON.parse(raw);
+		} catch (e) {
+			this.forget();
+			return false;
+		}
+
+		if (!rec || rec.b !== BUILD || !rec.d) {
+			this.forget();
+			return false;
+		}
+
+		var tree;
+
+		try {
+			tree = JSON.parse(rec.d);
+		} catch (e) {
+			this.forget();
+			return false;
+		}
+
+		if (!this.paint(tree)) {
+			this.forget();
+			return false;
+		}
+
+		return true;
+	},
+
+	/* The cached menu stays useful even when the router stops answering, but it
+	   has to say so — otherwise a removed package keeps a ghost entry that nobody
+	   can explain. */
+	annotate: function (why) {
+		var ul = document.querySelector('#topmenu');
+		var self = this;
+
+		if (!ul || ul.querySelector('.ltc-nav-note'))
+			return;
+
+		var note = E('li', { 'class': 'ltc-nav-note' }, [
+			E('span', {}, _('This menu is restored from this browser; the router did not answer.')),
+			E('small', {}, '%s · #menu%d'.format(String(why || ''), BUILD))
+		]);
+
+		note.appendChild(E('button', {
+			'type': 'button', 'class': 'ltc-btn sm', 'style': 'margin-top:7px',
+			'click': function () {
+				self.forget();
+				self.busy = false;
+				self.build();
+			}
+		}, _('Retry')));
+
+		ul.appendChild(note);
+	},
+
 	render: function (tree) {
 		this.renderModeMenu(tree);
 
@@ -196,12 +468,12 @@ return baseclass.extend({
 		   the path empty), and then nothing matched and the menu stayed blank
 		   even though the tree was fine — so render the first root child that
 		   actually has entries. */
-		if (!document.querySelector('#topmenu li')) {
+		if (!entries(this.slot('top'))) {
 			var roots = childrenOf(tree);
 
 			for (var i = 0; i < roots.length; i++) {
 				this.renderMainMenu(roots[i], roots[i].name);
-				if (document.querySelector('#topmenu li'))
+				if (entries(this.slot('top')))
 					break;
 			}
 
@@ -232,7 +504,7 @@ return baseclass.extend({
 	},
 
 	renderTabMenu: function (tree, url, level) {
-		var container = document.querySelector('#tabmenu');
+		var container = this.slot('tabs');
 		var activeNode = null;
 		var items = [];
 
@@ -262,7 +534,7 @@ return baseclass.extend({
 
 	renderMainMenu: function (tree, url, level) {
 		var self = this;
-		var ul = level ? E('ul', { 'class': 'dropdown-menu' }) : document.querySelector('#topmenu');
+		var ul = level ? E('ul', { 'class': 'dropdown-menu' }) : this.slot('top');
 		var kids = childrenOf(tree);
 
 		if (!ul || !kids.length || level > 1)
@@ -287,7 +559,7 @@ return baseclass.extend({
 	},
 
 	renderModeMenu: function (tree) {
-		var ul = document.querySelector('#modemenu');
+		var ul = this.slot('mode');
 		var self = this;
 
 		if (!ul)
@@ -313,6 +585,8 @@ return baseclass.extend({
 	/* The static menu: same DOM as the real one, so icons, the accordion and
 	   the command palette all keep working. */
 	renderBuiltin: function () {
+		this.slots = null;
+
 		util.builtinMenu(document.querySelector('#topmenu'), {
 			reason: (this.reason ? this.reason + ' · ' : '') + '#menu' + BUILD,
 			onRetry: L.bind(function () {
@@ -320,6 +594,9 @@ return baseclass.extend({
 					try { ui.menu.flushCache(); } catch (e) {}
 				}
 				try { sessionStorage.clear(); } catch (e) {}
+				this.forget();
+				this.live = '';
+				this.busy = false;
 				this.build();
 			}, this)
 		});

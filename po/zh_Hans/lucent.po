@@ -1136,6 +1136,9 @@ msgstr "当前 LuCI 未提供菜单模块"
 msgid "The menu endpoint did not return JSON"
 msgstr "菜单接口未返回 JSON"
 
+msgid "This menu is restored from this browser; the router did not answer."
+msgstr "这份菜单来自本浏览器保存的副本；路由器没有应答。"
+
 msgid "Cannot reach"
 msgstr "无法访问"
 

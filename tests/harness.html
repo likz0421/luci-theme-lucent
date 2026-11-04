@@ -321,6 +321,17 @@ function wait(ms) {
 /* #rail and #drawer force the two sidebar modes so they can be screenshotted. */
 var FLAGS = location.hash || '';
 
+/* The menu is cached in localStorage per session, so every scenario starts
+   from a clean slate — otherwise a run of the healthy tree would let the
+   failure runs paint from it and hide the very fallback being tested.
+   #menu-cache is the exception: it seeds the copy on purpose. */
+var menuCache = /#menu-cache/.test(FLAGS);
+try {
+	localStorage.clear();
+	if (menuCache)
+		localStorage.setItem('lucent.menu.anon', JSON.stringify({ b: 9, d: JSON.stringify(MENU) }));
+} catch (e) {}
+
 (async function () {
 	registry.util = await mod(base + 'lucent/util.js');
 	registry.core = await mod(base + 'lucent/core.js');
@@ -328,7 +339,7 @@ var FLAGS = location.hash || '';
 	var clients = await mod(base + 'view/lucent/clients.js');
 
 	/* menu failure scenarios: the sidebar must never end up blank */
-	var menuFail = /#menu-(reject|empty|noclass|hang|throw|noload)/.test(FLAGS);
+	var menuFail = /#menu-(reject|empty|noclass|hang|throw|noload|cache)/.test(FLAGS);
 	var noisy = /#tree-noisy/.test(FLAGS);
 	if (/#menu-reject/.test(FLAGS))
 		ui.menu.load = function () { return Promise.reject(new Error('mock session failure')); };
@@ -346,7 +357,7 @@ var FLAGS = location.hash || '';
 	if (/#menu-nomatch/.test(FLAGS))
 		window.L.env.requestpath = ['notadmin'];
 	/* a request that never answers must still fall back, on a deadline */
-	if (/#menu-hang/.test(FLAGS))
+	if (/#menu-(hang|cache)/.test(FLAGS))
 		ui.menu.load = function () { return new Promise(function () {}); };
 
 	if (/#manyports/.test(FLAGS)) {
@@ -379,6 +390,10 @@ var FLAGS = location.hash || '';
 	}
 
 	var menu = menuSkip ? null : await mod(base + 'menu-lucent.js');
+	/* menu-lucent paints from its own copy inside __init, which is synchronous:
+	   measuring here is what proves the sidebar is filled before any answer */
+	var paintNow = document.querySelectorAll('#topmenu > li:not(.ltc-nav-note)').length;
+	var noteNow = !!document.querySelector('#topmenu .ltc-nav-note');
 	var side = await mod(base + 'lucent/sideinfo.js');
 
 	side.init();
@@ -457,12 +472,30 @@ var FLAGS = location.hash || '';
 			check('watchdog menu is usable', document.querySelectorAll('#topmenu > li.dropdown').length >= 3,
 				document.querySelectorAll('#topmenu > li').length + ' entries, ' + document.querySelectorAll('#topmenu > li.dropdown').length + ' groups');
 		}
-		if (/#menu-hang/.test(FLAGS)) {
+		if (/#menu-(hang|cache)/.test(FLAGS)) {
 			var why = document.querySelector('.ltc-nav-note small');
 			check('hanging menu hits its deadline', !!why && /timed out/.test(why.textContent),
 				why && why.textContent.slice(0, 80));
 			check('hang still yields a menu', document.querySelectorAll('#topmenu > li').length >= 7,
 				document.querySelectorAll('#topmenu > li').length + ' entries');
+		}
+		if (menuCache) {
+			var live = document.querySelectorAll('#topmenu > li:not(.ltc-nav-note)').length;
+			var spoken = document.querySelector('.ltc-nav-note span');
+			check('cached menu painted before any answer', paintNow >= 6, paintNow + ' entries at require time');
+			check('nothing wiped while the request was in flight', !noteNow && paintNow >= 6,
+				'note=' + noteNow + ' items=' + paintNow);
+			check('a failed reload keeps it', live >= 6, live + ' entries after the deadline');
+			check('and says so', !!spoken && /restored from this browser/.test(spoken.textContent),
+				spoken && spoken.textContent.slice(0, 60));
+			check('reload did not stack a second menu', live === paintNow,
+				paintNow + ' painted, ' + live + ' now');
+		}
+		if (!menuFail) {
+			var stored = null;
+			try { stored = JSON.parse(localStorage.getItem('lucent.menu.anon')); } catch (e) {}
+			check('menu cached for the next page', !!stored && stored.b === 9 && !!stored.d,
+				stored ? (stored.d.length + ' bytes') : 'nothing stored');
 		}
 		if (/#manyports/.test(FLAGS)) {
 			var shown = document.querySelectorAll('.ltc-tnode.port').length;

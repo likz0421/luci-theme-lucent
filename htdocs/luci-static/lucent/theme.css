@@ -184,7 +184,7 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 @property --val{syntax:'<number>';inherits:false;initial-value:0}
 
 .ltc-side-info{
-	flex:none;max-height:58%;overflow:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:7px;
+	flex:none;max-height:42%;overflow:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:7px;
 	padding:9px 8px;border:1px solid var(--line);border-radius:var(--r-md);
 	background:color-mix(in srgb,var(--card-2) 55%,transparent);
 }

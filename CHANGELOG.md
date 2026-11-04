@@ -3,6 +3,67 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.9 — 2026-11-04
+
+### Fixed
+
+- **The sidebar no longer waits for the router on every page.** LuCI reloads
+  the whole document when a menu entry is clicked, and the menu was rebuilt
+  from scratch each time — so after the first paint the column went empty
+  again for as long as `ui.menu.load()` / `admin/menu` took. On a loaded ONT
+  that is seconds per click, which reads exactly as "the menu comes out
+  slowly and disappears when I navigate". The tree is now kept in
+  `localStorage` **under the session id**, painted synchronously when
+  `menu-lucent.js` is instantiated, and reconciled with the network
+  afterwards. A different user never repaints someone else's ACL-filtered
+  menu, and only one copy is ever stored.
+- **Nothing clears the sidebar before a replacement is in hand.** The menu is
+  rendered into detached containers and swapped in only once it has produced
+  entries, so a slow, empty or failing response can no longer blank a working
+  column. `build()` is also single-flight now: the 7 s watchdog and the 12 s
+  last-resort rebuild cannot start a second chain that wipes what the first
+  one already painted.
+- **An unchanged tree is not repainted.** Trees are compared after rendering
+  (the node names are filled in while rendering), so a reconcile that returns
+  the same menu leaves the DOM — and the entrance animation — untouched
+  instead of flickering.
+- **A stale menu now admits it.** If the reload fails while the visible menu
+  came from this browser, the sidebar says so with the reason and a Retry
+  that drops the copy; if the router answers with a tree that has no sidebar
+  in it, that answer wins and the cached copy is discarded rather than left
+  standing as a ghost of a removed package or a revoked ACL.
+
+### Changed
+
+- `ui.menu.load()` deadline 4000 → 2500 ms and `admin/menu` 6000 → 5000 ms;
+  with the cached first paint, reconcile latency is no longer something the
+  user waits behind.
+- The live status panel caps at 42% of the sidebar instead of 58%: at 808 px
+  of viewport the navigation was being squeezed to 210 px. The panel scrolls
+  internally, so nothing is lost — the menu is what has to stay readable.
+- Build marker is now `#menu9`, and the cache is keyed to it, so an upgrade
+  cannot repaint an obsolete structure.
+
+### Added
+
+- `tests/run-harness.js` runs every scenario in headless Edge and prints the
+  assertion report (`node tests/run-harness.js`, `--shot` for pictures) — the
+  check that used to be retyped by hand each release.
+- New `#menu-cache` scenario: the network never answers, the cached tree must
+  already be painted at module-init time, must survive the failure, must not
+  be stacked twice, and must be labelled as cached. Every other scenario now
+  starts from a cleared `localStorage`, so a healthy run cannot mask a
+  fallback.
+
+### Verified
+
+- Thirteen harness scenarios, 0 failures: healthy tree (48), rejecting (51),
+  empty (51), no `ui.menu` class (51), synchronous throw (51), module never
+  loaded (54), requestpath matching no root child (48), hanging (53),
+  **cached paint with a hanging network (58)**, 15-port bridge (51),
+  simulated FTTR ONU (40), rail (48), phone drawer (48). Desktop and phone
+  screenshots re-taken: menu painted, panel docked below it.
+
 ## 3.10.8 — 2026-11-04
 
 ### Fixed

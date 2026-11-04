@@ -2,3 +2,4 @@ dist/
 *.orig
 *.rej
 .DS_Store
+tests/shots/

@@ -48,6 +48,9 @@ stylesheets, scripts or package metadata with them.
 **Navigation**
 - Grouped sidebar with a mobile drawer, built by the theme itself — no
   dependency on `luci-theme-bootstrap` being installed
+- The menu is painted from a per-session copy the moment a page opens, then
+  reconciled with the router, so clicking around never leaves an empty column
+  while `admin/menu` is still answering
 - Live status panel docked in the sidebar on every page: animated CPU and
   memory rings, a WAN throughput curve with down/up rates, WAN/LAN addresses,
   uptime, online devices, Wi-Fi, temperature, a storage meter and load /
