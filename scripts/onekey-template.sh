@@ -204,6 +204,15 @@ do_uninstall() {
 	rm -f /usr/lib/lua/luci/i18n/lucent-zh-*.zh-cn.lmo
 	rm -f /etc/uci-defaults/30_luci-theme-lucent
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
+	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
+		/tmp/lucent-check.sh /tmp/lucent-update.sh
+
+	# The daily wallpaper job lives in root's crontab, not in the package.
+	if [ -w /etc/crontabs/root ]; then
+		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null || true
+		/etc/init.d/cron restart >/dev/null 2>&1 || true
+	fi
 
 	uci -q delete luci.themes.Lucent || true
 	if [ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ]; then

@@ -36,7 +36,7 @@ mkdir -p "$C"
 cat > "$C/control" <<CTL
 Package: $NAME
 Version: $VER
-Depends: libc, luci-base
+Depends: libc, luci-base, rpcd-mod-file
 Source: https://github.com/likz0421/luci-theme-lucent
 SourceName: $NAME
 License: Apache-2.0

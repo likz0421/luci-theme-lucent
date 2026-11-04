@@ -27,8 +27,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.11.0-r1"
-LUCENT_TAG_DEFAULT="v3.11.0"
+LUCENT_VERSION_DEFAULT="3.11.1-r1"
+LUCENT_TAG_DEFAULT="v3.11.1"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -79,6 +79,13 @@ fetch() {
 		return 1
 	fi
 	[ -s "$out" ]
+}
+
+# apk/ipk/tar.gz are gzip containers, so the first two bytes tell a real package
+# from a portal page or an HTML error body.
+is_gzip() {
+	[ -f "$1" ] || return 1
+	[ "$(od -An -tx1 -N2 "$1" 2>/dev/null | tr -d ' \n')" = "1f8b" ]
 }
 
 # 构造候选下载地址列表（release 资源）
@@ -199,6 +206,14 @@ sanitize() { printf '%s' "$1" | tr -cd 'A-Za-z0-9._-'; }
 # 3.6.0-r1 -> 0003.0006.0000.0001（定宽，便于字符串比较）
 vkey() {
 	printf '%s' "$1" | sed 's/[-.rR]/ /g' | awk '{printf "%06d.%06d.%06d.%06d", $1+0, $2+0, $3+0, $4+0}'
+}
+
+# ver_newer <a> <b> -> true when a sorts above b. Equality alone is not enough:
+# a stale mirror pointer would otherwise let "update" install an older build.
+ver_newer() {
+	local a b
+	a=$(vkey "$1"); b=$(vkey "$2")
+	[ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort | tail -n1)" = "$a" ]
 }
 
 get_current() {
@@ -338,6 +353,14 @@ do_install() {
 		exit 1
 	fi
 
+	# apk/ipk/tar.gz are all gzip containers. A captive portal or a mirror that
+	# answers 200 with an HTML error page would otherwise be fed to the package
+	# manager as an installable file.
+	if ! is_gzip "$TMP/$PKGFILE"; then
+		log "下载到的内容不是安装包（可能是登录门户或镜像错误页），已中止。" >&2
+		exit 1
+	fi
+
 	INSTALLED=0
 	if have apk; then
 		log "→ 使用 apk 安装…"
@@ -403,6 +426,16 @@ do_uninstall() {
 		/usr/lib/lua/luci/i18n/lucent-zh-*.zh-cn.lmo \
 		/etc/uci-defaults/30_luci-theme-lucent
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
+	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
+		/tmp/lucent-check.sh /tmp/lucent-update.sh
+
+	# The daily wallpaper job is written into root's crontab, not into the
+	# package, so it survives an uninstall unless we drop it here.
+	if [ -w /etc/crontabs/root ]; then
+		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null || true
+		/etc/init.d/cron restart >/dev/null 2>&1 || true
+	fi
 
 	uci -q delete luci.themes.Lucent || true
 	[ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ] && \
@@ -452,7 +485,7 @@ do_check() {
 	[ -n "$LATEST" ] || { printf '{"current":"%s","latest":"","available":false,"error":"no-source"}\n' "$CURRENT"; exit 0; }
 	if [ -z "$CURRENT" ]; then
 		AVAIL=true
-	elif [ "$(vkey "$LATEST")" != "$(vkey "$CURRENT")" ]; then
+	elif ver_newer "$LATEST" "$CURRENT"; then
 		AVAIL=true
 	fi
 	printf '{"current":"%s","latest":"%s","available":%s,"via":"%s"}\n' "$CURRENT" "$LATEST" "$AVAIL" "${VIA:-unknown}"
@@ -470,7 +503,7 @@ do_update() {
 		log "无法连接更新源，请检查网络或改用镜像：LUCENT_CN=1 sh install.sh update" >&2
 		exit 1
 	fi
-	if [ -n "$CURRENT" ] && [ "$(vkey "$LATEST")" = "$(vkey "$CURRENT")" ]; then
+	if [ -n "$CURRENT" ] && ! ver_newer "$LATEST" "$CURRENT"; then
 		log "已是最新版本 $LATEST。"
 		exit 0
 	fi

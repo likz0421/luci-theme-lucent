@@ -16,7 +16,7 @@
 			<label class="ltc-field">
 				<span>{{ _('Username') }}</span>
 				<input name="luci_username" id="luci_username" type="text" autocomplete="username"
-				       value="{{ entityencode(duser, true) }}" spellcheck="false" autocapitalize="none">
+				       value="{{ entityencode(duser ?? '', true) }}" spellcheck="false" autocapitalize="none">
 			</label>
 			<label class="ltc-field">
 				<span>{{ _('Password') }}</span>

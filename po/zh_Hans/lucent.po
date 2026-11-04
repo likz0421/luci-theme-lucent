@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: luci-theme-lucent 3.4.0\n"
+"Project-Id-Version: luci-theme-lucent 3.11.1\n"
 "PO-Revision-Date: 2026-10-31 00:00+0800\n"
 "Last-Translator: likz0421\n"
 "Language-Team: Simplified Chinese\n"
@@ -208,8 +208,11 @@ msgstr "防火墙"
 msgid "Firmware"
 msgstr "固件"
 
-msgid "Five quiet colour families, each with light and dark readings."
-msgstr "五组低饱和度配色，均适配浅色与深色模式。"
+msgid "Seven quiet colour families, each with light and dark readings."
+msgstr "七组低饱和度配色，均适配浅色与深色模式。"
+
+msgid "Opacity and dimming take effect once a wallpaper is set."
+msgstr "设置壁纸后，透明度与压暗程度才会生效。"
 
 msgid "Glass"
 msgstr "玻璃效果"

@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=3.11.0
+PKG_VERSION:=3.11.1
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard
@@ -16,7 +16,7 @@ LUCI_DESCRIPTION:=An independent LuCI theme written from scratch for OpenWrt 23.
 	a dashboard with WAN, memory, load and device summaries, a devices view, \
 	a media library with magic-byte validated uploads, Bing/Unsplash/Wallhaven \
 	wallpapers and an allow-listed package installer. Requires ucode LuCI.
-LUCI_DEPENDS:=+luci-base
+LUCI_DEPENDS:=+luci-base +rpcd-mod-file
 LUCI_PKGARCH:=all
 
 PKG_LICENSE:=Apache-2.0

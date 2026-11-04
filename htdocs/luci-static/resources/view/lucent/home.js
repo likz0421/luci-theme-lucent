@@ -162,8 +162,29 @@ function deviceSub(online, wifiN) {
    sessionStorage would leave the trend card empty on every fresh page, which
    is the "half an empty card" the day-to-day complaint is about. Keyed by day
    so yesterday's curve does not stretch today's axis. */
+function dayKey() {
+	var d = new Date();
+
+	/* Local, not UTC: a UTC+8 router would otherwise roll "today" at 08:00 and
+	   reset the trend history and the daily peak mid-afternoon. */
+	return '%04d-%02d-%02d'.format(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
 function histKey() {
-	return 'lucent.hist.' + new Date().toISOString().slice(0, 10);
+	return 'lucent.hist.' + dayKey();
+}
+
+/* Yesterday's keys would otherwise pile up in localStorage forever. */
+function pruneDaily() {
+	try {
+		var drop = [];
+
+		Object.keys(localStorage).forEach(function (k) {
+			if (/^lucent\.(hist|peak|quote)\./.test(k) && k.slice(k.lastIndexOf('.') + 1) !== dayKey())
+				drop.push(k);
+		});
+		drop.forEach(function (k) { localStorage.removeItem(k); });
+	} catch (e) {}
 }
 
 function loadHist() {
@@ -184,6 +205,7 @@ function loadHist() {
 function saveHist(h) {
 	try {
 		localStorage.setItem(histKey(), JSON.stringify(h.slice(-120)));
+		pruneDaily();
 	} catch (e) {}
 }
 
@@ -350,6 +372,36 @@ function rateText(r) {
 	if (!r)
 		return '–';
 	return '↓ %s ↑ %s'.format(util.fmtRate(r.rx_rate), util.fmtRate(r.tx_rate));
+}
+
+/* netifd only puts `valid` on IPv6 address entries, so a DHCPv4 lease has to be
+   derived the way LuCI's own expiry widget does it: the lease time minus where
+   the current uptime falls inside that window. Without this the card reads "–"
+   on every DHCP router, which is most of them. */
+function leaseRemaining(data, wan) {
+	var a4 = util.arr(wan && wan['ipv4-address'])[0];
+	if (a4 && a4.valid != null)
+		return util.fmtDuration(a4.valid);
+
+	var lt = Number(wan && wan.leasetime), up = Number(wan && wan.uptime);
+	if (isFinite(lt) && lt > 0 && isFinite(up) && up >= 0)
+		return util.fmtDuration(lt - (up % lt));
+
+	/* PPPoE and static WANs have no v4 lease, so fall back to any upstream
+	   interface carrying a DHCPv6 binding, preferring the wan* naming. */
+	var v6 = data.ifaces.filter(function (i) {
+		return i && i.interface !== 'lan';
+	}).sort(function (a, b) {
+		return (/^wan/.test(b.interface) ? 1 : 0) - (/^wan/.test(a.interface) ? 1 : 0);
+	}).map(function (i) {
+		var a = util.arr(i['ipv6-address'])[0];
+		var p = util.arr(i['ipv6-prefix-assignment'])[0];
+		return (a && a.valid != null) ? a.valid : (p && p.valid != null ? p.valid : null);
+	}).filter(function (v) {
+		return v != null;
+	})[0];
+
+	return v6 != null ? util.fmtDuration(v6) + ' (v6)' : '–';
 }
 
 /* The wireless netdev behind an SSID differs per build (wlan0, radio0, ath0)
@@ -563,9 +615,11 @@ function talkersCard(data) {
 	return card(_('Top talkers'),
 		E('span', { 'class': 'ltc-badge ' + (enabled ? 'ok' : 'plain'), 'data-live': 'talkers-mode' },
 			enabled ? _('live') : _('accounting off')),
-		E('ul', { 'class': 'ltc-talkers', 'data-talkers': '' }),
-		E('div', { 'class': 'ltc-muted', 'data-talkers-hint': '' },
-			enabled ? '' : _('Enable per-device accounting in Appearance to see which hosts are busy.')));
+		E('div', {}, [
+			E('ul', { 'class': 'ltc-talkers', 'data-talkers': '' }),
+			E('div', { 'class': 'ltc-muted', 'data-talkers-hint': '' },
+				enabled ? '' : _('Enable per-device accounting in Appearance to see which hosts are busy.'))
+		]));
 }
 
 return view.extend({
@@ -632,7 +686,7 @@ return view.extend({
 				return this.enrich(d, this._round % 6 !== 1);
 			}, this)).then(L.bind(function (d) {
 				this.applyLive(d);
-			}, this));
+			}, this)).catch(function () {});
 		}, this), 10);
 
 		/* Prime a second sample shortly after load so the traffic rate appears
@@ -742,19 +796,11 @@ return view.extend({
 		set('[data-live=dns]', dnsv.length ? dnsv.slice(0, 2).join('  ') : '–');
 		if (wan && wan.uptime != null)
 			set('[data-live=wan-up]', util.fmtDuration(wan.uptime));
-		var liveAddr = util.arr(wan && wan['ipv4-address'])[0];
-		if (liveAddr && liveAddr.valid != null) {
-			set('[data-live=lease]', util.fmtDuration(liveAddr.valid));
-		}
-		else {
-			var live6 = data.ifaces.filter(function (i) { return i && i.interface === 'wan6'; })[0];
-			var la6 = util.arr(live6 && live6['ipv6-address'])[0];
-			var lp6 = util.arr(live6 && live6['ipv6-prefix-assignment'])[0];
-			var lv6 = (la6 && la6.valid != null) ? la6.valid : (lp6 && lp6.valid != null ? lp6.valid : null);
-			if (lv6 != null)
-				set('[data-live=lease]', util.fmtDuration(lv6) + ' (v6)');
-		}
-		setNum('[data-live=storage]', storage ? storage.percent : 0, '%');
+		var liveLease = leaseRemaining(data, wan);
+		if (liveLease !== '–')
+			set('[data-live=lease]', liveLease);
+		if (storage)
+			setNum('[data-live=storage]', storage.percent, '%');
 		set('[data-live=storage-sub]', storage
 			? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–');
 
@@ -1027,7 +1073,7 @@ return view.extend({
 		set('[data-live=tick-3]', labels[3]);
 
 		/* Persist the daily maximum beyond the in-tab history window. */
-		var dkey = 'lucent.peak.' + new Date().toISOString().slice(0, 10);
+		var dkey = 'lucent.peak.' + dayKey();
 		var dp = {};
 		try { dp = JSON.parse(localStorage.getItem(dkey) || '{}'); } catch (e) { dp = {}; }
 		if (!(dp.rx >= peakRx)) dp.rx = peakRx;
@@ -1158,6 +1204,8 @@ return view.extend({
 		}
 
 		function pollStatus() {
+			var tries = 0;
+
 			if (self._upTimer)
 				clearInterval(self._upTimer);
 			self._upSeen = false;
@@ -1172,9 +1220,18 @@ return view.extend({
 						return;
 					}
 					/* The detached job may not have registered yet; keep polling
-					 * until we either see it running or get a real exit code. */
-					if (!self._upSeen && (st.code == null || st.code < 0))
+					 * until we either see it running or get a real exit code, but
+					 * give up rather than ticking every 2s forever if rpcd died
+					 * mid-update and no status will ever come back. */
+					if (!self._upSeen && (st.code == null || st.code < 0)) {
+						if (++tries > 60) {
+							clearInterval(self._upTimer);
+							self._upTimer = null;
+							setBusy(false);
+							note(_('The update check failed.'), 'err');
+						}
 						return;
+					}
 					clearInterval(self._upTimer);
 					self._upTimer = null;
 					if (st.code === 0) {
@@ -1309,19 +1366,7 @@ return view.extend({
 			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage', storage ? storage.percent : null)
 		]);
 
-		var leaseRem = '–';
-		var addr4 = util.arr(wan && wan['ipv4-address'])[0];
-		if (addr4 && addr4.valid != null)
-			leaseRem = util.fmtDuration(addr4.valid);
-		else {
-			/* PPPoE has no v4 lease; fall back to the DHCPv6 upstream. */
-			var wan6i = data.ifaces.filter(function (i) { return i && i.interface === 'wan6'; })[0];
-			var a6 = util.arr(wan6i && wan6i['ipv6-address'])[0];
-			var p6 = util.arr(wan6i && wan6i['ipv6-prefix-assignment'])[0];
-			var v6 = (a6 && a6.valid != null) ? a6.valid : (p6 && p6.valid != null ? p6.valid : null);
-			if (v6 != null)
-				leaseRem = util.fmtDuration(v6) + ' (v6)';
-		}
+		var leaseRem = leaseRemaining(data, wan);
 		var wanUp = (wan && wan.uptime != null) ? util.fmtDuration(wan.uptime) : '–';
 
 		var facts = E('div', { 'class': 'ltc-facts' }, [

@@ -97,6 +97,7 @@ mkdir -p dist
 	--info "url:https://github.com/likz0421/luci-theme-lucent" \
 	--info "maintainer:likz0421" \
 	--info "depends:luci-base" \
+	--info "depends:rpcd-mod-file" \
 	--info "tags:openwrt:section=luci" \
 	--script "post-install:$S/post-install" \
 	--script "post-upgrade:$S/post-upgrade" \

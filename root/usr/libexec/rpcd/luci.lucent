@@ -65,6 +65,9 @@ magic() {
 download() {
 	local url="$1" out="$2"
 	rm -f "$out"
+	# URLs come back from remote APIs; a value starting with "-" would be eaten
+	# as a wget option and could write anywhere as root.
+	case "$url" in http://*|https://*) ;; *) return 1 ;; esac
 	if command -v uclient-fetch >/dev/null 2>&1; then
 		uclient-fetch -q -T 30 -O "$out" "$url" >/dev/null 2>&1
 	elif command -v wget >/dev/null 2>&1; then
@@ -254,8 +257,19 @@ plugin_installed() {
 	fi
 }
 
+installed_set() {
+	if command -v apk >/dev/null 2>&1; then
+		apk info 2>/dev/null
+	elif command -v opkg >/dev/null 2>&1; then
+		opkg list-installed 2>/dev/null | cut -d' ' -f1
+	fi
+}
+
 plugin_check() {
-	local name pkg
+	local name pkg list
+	# One package-database read, not eight: each extra opkg/adb scan here cost
+	# a second of the rpcd worker and stalled the whole settings page.
+	list=$(installed_set)
 	json_init
 	json_add_array "items"
 	for name in openclash passwall passwall2 ssrplus mosdns adguardhome dockerman smartdns; do
@@ -272,7 +286,7 @@ plugin_check() {
 		json_add_object
 		json_add_string name "$name"
 		json_add_string pkg "$pkg"
-		json_add_int installed "$(plugin_installed "$pkg" && echo 1 || echo 0)"
+		json_add_int installed "$(printf '%s\n' "$list" | grep -qx "$pkg" && echo 1 || echo 0)"
 		json_close_object
 	done
 	json_close_array
@@ -402,7 +416,7 @@ pkg_updates() {
 		body=$(sed -n '2p' "$PKGUPCACHE" 2>/dev/null)
 		case "$ts" in ''|*[!0-9]*) ts=0 ;; esac
 		case "$body" in
-			'{'*) [ $(( now - ts )) -lt 3600 ] && { printf '%s\n' "$body"; exit 0; } ;;
+			'{'*) [ $(( now - ts )) -ge 0 ] && [ $(( now - ts )) -lt 3600 ] && { printf '%s\n' "$body"; exit 0; } ;;
 		esac
 	fi
 
@@ -555,7 +569,15 @@ lan_prefixes() {
 	local ip mask bits o1 o2 o3 rest
 	ip=$(uci -q get network.lan.ipaddr 2>/dev/null)
 	mask=$(uci -q get network.lan.netmask 2>/dev/null)
-	[ -n "$ip" ] || return 0
+	# Anything but a dotted-quad would make the awk pattern match nothing, or
+	# worse, everything.
+	case "$ip" in
+		*[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
+		*) return 0 ;;
+	esac
+	case "$ip" in
+		*[!0-9.]*) return 0 ;;
+	esac
 	bits=24
 	case "$mask" in
 		255.255.255.255) bits=32 ;;
@@ -576,7 +598,7 @@ lan_prefixes() {
 }
 
 host_rates() {
-	local want cur now total pfx
+	local want cur now total pfx lanpfx
 	want=$(uci -q get lucent.main.acct 2>/dev/null)
 	cur=$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)
 
@@ -600,7 +622,12 @@ host_rates() {
 
 	# RFC1918 plus the actual LAN subnet counts as "inner". [.] keeps the
 	# pattern free of backslashes, which awk -v would otherwise unescape.
-	pfx="^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|$(lan_prefixes | sed 's/[.]/[.]/g'))"
+	# An empty alternative would match every address, so only add the LAN
+	# prefix when the router actually reports one.
+	lanpfx=$(lan_prefixes | sed 's/[.]/[.]/g')
+	pfx="^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]"
+	[ -n "$lanpfx" ] && pfx="$pfx|$lanpfx"
+	pfx="$pfx)"
 
 	awk -v P="$pfx" '
 		{
@@ -858,7 +885,7 @@ theme_check() {
 		ttl=900
 		case "$body" in *'"latest":""'*) ttl=60 ;; esac
 		case "$body" in
-			'{'*) [ $(( now - ts )) -lt "$ttl" ] && { printf '%s\n' "$body"; exit 0; } ;;
+			'{'*) [ $(( now - ts )) -ge 0 ] && [ $(( now - ts )) -lt "$ttl" ] && { printf '%s\n' "$body"; exit 0; } ;;
 		esac
 	fi
 

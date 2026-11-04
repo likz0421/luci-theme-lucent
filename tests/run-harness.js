@@ -25,7 +25,7 @@ const TYPES = {
 	'.lmo': 'application/octet-stream'
 };
 
-const ALL = ['#base', '#menu-reject', '#menu-empty', '#menu-noclass', '#menu-throw',
+const ALL = ['#base', '#dhcpwan', '#menu-reject', '#menu-empty', '#menu-noclass', '#menu-throw',
 	'#menu-noload', '#menu-nomatch', '#menu-hang', '#menu-cache', '#menu-nostore', '#manyports',
 	'#tree-noisy', '#rail', '#drawer'];
 

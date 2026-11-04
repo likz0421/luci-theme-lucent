@@ -23,25 +23,28 @@ function rateCell(r) {
 	if (!r)
 		return E('div', { 'class': 'ltc-rate none' }, '–');
 
-	var total = Math.max(r.rx_rate + r.tx_rate, 1);
+	var rx = Number(r.rx_rate) || 0, tx = Number(r.tx_rate) || 0;
+	var total = Math.max(rx + tx, 1);
 
 	return E('div', { 'class': 'ltc-rate' }, [
-		E('span', {}, '↓ ' + util.fmtRate(r.rx_rate)),
-		E('span', {}, '↑ ' + util.fmtRate(r.tx_rate)),
+		E('span', {}, '↓ ' + util.fmtRate(rx)),
+		E('span', {}, '↑ ' + util.fmtRate(tx)),
 		E('i', { 'class': 'ltc-ratebar' }, E('u', { 'style': 'width:' + Math.min(100, Math.round(total / 1024 / 1024 * 10)) + '%' }))
 	]);
 }
 
 function ageText(r) {
-	if (!r || r.age < 0)
+	var age = r ? Number(r.age) : NaN;
+
+	if (!isFinite(age) || age < 0)
 		return '';
-	if (r.age <= 2)
+	if (age <= 2)
 		return _('now');
-	if (r.age < 90)
-		return _('%ds ago').format(r.age);
-	if (r.age < 5400)
-		return _('%dm ago').format(Math.round(r.age / 60));
-	return _('%dh ago').format(Math.round(r.age / 3600));
+	if (age < 90)
+		return _('%ds ago').format(age);
+	if (age < 5400)
+		return _('%dm ago').format(Math.round(age / 60));
+	return _('%dh ago').format(Math.round(age / 3600));
 }
 
 /* Lightweight device-class guess from the advertised name. */
@@ -167,7 +170,7 @@ return view.extend({
 		]);
 
 		poll.add(L.bind(function () {
-			return this.refresh().then(L.bind(this.fill, this));
+			return this.refresh().then(L.bind(this.fill, this)).catch(function () {});
 		}, this), 15);
 
 		return E('div', { 'class': 'ltc-stack' }, [body]);

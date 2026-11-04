@@ -133,7 +133,10 @@ function dnsOf(iface) {
 }
 
 function storageOf(storage) {
-	var root = storage && (storage.overlay || storage['/']);
+	/* The helper reports mount points as "/" and "/overlay" — on squashfs the
+	   writable overlay is what actually fills up, so prefer it like LuCI's own
+	   free-space widget does. */
+	var root = storage && (storage['/overlay'] || storage['/']);
 	if (!root)
 		root = Object.keys(storage || {}).map(function (k) { return storage[k]; })
 			.filter(function (v) { return v && v.total != null; })[0];
@@ -369,7 +372,22 @@ function hostsFrom(hints, leases) {
 
 	Object.keys(hints || {}).forEach(function (key) {
 		var h = hints[key] || {};
-		var rec = get(h.mac || key);
+		/* getHostHints keys hosts-file and static entries by IP or name rather
+		   than by MAC. Merging those into a device we already know beats
+		   inventing a row whose MAC column shows an address. */
+		var rec = h.mac ? get(h.mac) : null;
+		if (!rec) {
+			var probe = arr(h.ipaddrs || h.ipv4).concat(arr(h.ip6addrs || h.ipv6), [key]);
+			rec = list.filter(function (d) {
+				if (!d)
+					return false;
+				if (h.name && d.name === h.name)
+					return true;
+				return arr(d.ips).concat(arr(d.v6)).some(function (ip) {
+					return probe.indexOf(ip) >= 0;
+				});
+			})[0];
+		}
 		if (!rec)
 			return;
 		if (h.name)
@@ -391,13 +409,15 @@ function hostsFrom(hints, leases) {
 		arr(l.ip6addrs || l.ip6addr).forEach(function (ip) { pushUnique(rec.v6, ip); });
 
 		/* dnsmasq/odhcpd report `expires` as an absolute epoch; false means
-		   a permanent (static) lease. */
-		if (l.expires === false) {
+		   a permanent (static) lease, and odhcpd uses 0 for the same thing.
+		   Some builds hand the number over as a string. */
+		var exp = (l.expires === false) ? false : Number(l.expires);
+		if (exp === false || exp === 0) {
 			rec.online = true;
 			rec.lease = '∞';
 		}
-		else if (typeof l.expires === 'number') {
-			var remaining = l.expires - Math.floor(Date.now() / 1000);
+		else if (isFinite(exp)) {
+			var remaining = exp - Math.floor(Date.now() / 1000);
 			if (remaining > 0) {
 				rec.online = true;
 				rec.lease = fmtDuration(remaining);

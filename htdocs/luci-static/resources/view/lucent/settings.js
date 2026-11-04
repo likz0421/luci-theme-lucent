@@ -54,6 +54,7 @@ var DEFAULTS = {
 	background: '',
 	logo_image: '',
 	wallpaper_auto: '0',
+	acct: '0',
 	update_cn: '0',
 	show_trend: '1',
 	show_topo: '1',
@@ -303,7 +304,10 @@ return view.extend({
 				function (v) { self.cfg.glass_alpha = v; save('glass_alpha', v); }),
 			range(_('Background dimming'), parseInt(self.cfg.bg_dim, 10) || 0, 0, 100, '%',
 				function (v) { document.documentElement.style.setProperty('--bg-dim', String(v)); },
-				function (v) { self.cfg.bg_dim = v; save('bg_dim', v); })
+				function (v) { self.cfg.bg_dim = v; save('bg_dim', v); }),
+			/* Both sliders act on the layer above a wallpaper; on a flat
+			   background there is nothing behind the surfaces to let through. */
+			E('p', { 'class': 'ltc-muted' }, _('Opacity and dimming take effect once a wallpaper is set.'))
 		]);
 
 		this.wallPreview = E('div', { 'class': 'ltc-preview' });
@@ -509,7 +513,7 @@ return view.extend({
 		return E('div', { 'class': 'ltc-stack' }, [
 			hero,
 			E('div', { 'class': 'ltc-grid' }, [
-				card(_('Palette'), _('Five quiet colour families, each with light and dark readings.'), paletteBody),
+				card(_('Palette'), _('Seven quiet colour families, each with light and dark readings.'), paletteBody),
 				card(_('Mode and density'), _('Auto follows the phone or desktop preference.'), modeBody)
 			]),
 			card(_('Glass'), _('Tune blur, surface opacity and how much the wallpaper is dimmed.'), glassBody),

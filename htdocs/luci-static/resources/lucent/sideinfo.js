@@ -130,6 +130,13 @@ return baseclass.extend({
 		this.bind();
 		this.tick();
 
+		/* Re-rendering must not stack another pair of intervals on top of the
+		   old ones: the closures keep the previous DOM alive forever. */
+		if (this._timer)
+			clearInterval(this._timer);
+		if (this._clock)
+			clearInterval(this._clock);
+
 		this._timer = setInterval(L.bind(function () {
 			if (!document.hidden)
 				this.tick();
@@ -138,10 +145,13 @@ return baseclass.extend({
 		this._clock = setInterval(L.bind(this.drawClock, this), 1000);
 		this.drawClock();
 
-		document.addEventListener('visibilitychange', L.bind(function () {
-			if (!document.hidden)
-				this.tick();
-		}, this));
+		if (!this._visibleBound) {
+			this._visibleBound = true;
+			document.addEventListener('visibilitychange', L.bind(function () {
+				if (!document.hidden)
+					this.tick();
+			}, this));
+		}
 	},
 
 	build: function (side) {
@@ -158,11 +168,6 @@ return baseclass.extend({
 			var stored = localStorage.getItem('lucent.sideinfo');
 			if (stored === '0' || stored === '1')
 				open = stored;
-		} catch (e) {}
-
-		try {
-			if (localStorage.getItem('lucent.sideinfo') === '0')
-				open = '0';
 		} catch (e) {}
 
 		this.root = E('section', { 'class': 'ltc-side-info', 'data-open': open }, [

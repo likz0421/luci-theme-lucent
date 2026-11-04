@@ -6,7 +6,7 @@ surfaces, a device list and an appearance panel — but shares no templates,
 stylesheets, scripts or package metadata with them.
 
 - Target: OpenWrt 25.12.x, LuCI 26.x (ucode)
-- Package: `luci-theme-lucent` 3.6.2
+- Package: `luci-theme-lucent` 3.11.0
 - Licence: Apache-2.0
 
 ## Screenshots
@@ -154,7 +154,7 @@ wget -qO /tmp/lucent-install.sh https://cdn.jsdelivr.net/gh/likz0421/luci-theme-
 sh /tmp/lucent-install.sh install
 ```
 
-### 主页在线更新（v3.6.2+）
+### 主页在线更新（v3.11.0+）
 
 安装后，登录 LuCI 进入 **首页**，右下角的 **更新** 卡片即可在线检查并升级主题：
 点 *检查更新* 对比当前版本与 GitHub 上的最新版（沿用与安装脚本相同的国内镜像
@@ -198,27 +198,30 @@ ssh root@192.168.1.1 'sh /tmp/lucent-offline-install.sh install'
 
 | 固件 | 文件 |
 | --- | --- |
-| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.6.2-r1.apk` |
-| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.6.2-r1_all.ipk` |
-| 任意（无包管理器） | `lucent-3.6.2.tar.gz`（解压后 `./install.sh`） |
+| OpenWrt 25.12 (apk) | `luci-theme-lucent-3.11.0-r1.apk` |
+| OpenWrt 23.05/24.10 (opkg) | `luci-theme-lucent_3.11.0-r1_all.ipk` |
+| 任意（无包管理器） | `lucent-3.11.0.tar.gz`（解压后 `./install.sh`） |
+
+> 文件名里的版本号以 [Releases](https://github.com/likz0421/luci-theme-lucent/releases/latest) 页面为准；
+> 不想手工挑文件就直接用下面的一键安装脚本，它会自动取最新版。
 
 apk:
 
 ```sh
-apk add --allow-untrusted ./luci-theme-lucent-3.6.2-r1.apk
+apk add --allow-untrusted ./luci-theme-lucent-3.11.0-r1.apk
 ```
 
 opkg:
 
 ```sh
-opkg install ./luci-theme-lucent_3.6.2-r1_all.ipk
+opkg install ./luci-theme-lucent_3.11.0-r1_all.ipk
 ```
 
 Manual:
 
 ```sh
-tar -xzf lucent-3.6.2.tar.gz -C /tmp
-cd /tmp/luci-theme-lucent-3.6.2 && ./install.sh
+tar -xzf lucent-3.11.0.tar.gz -C /tmp
+cd /tmp/luci-theme-lucent-3.11.0 && ./install.sh
 ```
 
 The package registers itself as `Lucent` in `/etc/config/luci` and selects

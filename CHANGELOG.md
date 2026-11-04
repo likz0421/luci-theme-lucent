@@ -3,6 +3,101 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.11.1 — 2026-11-04
+
+A full read-through of the codebase — frontend, rpcd helper, installers,
+packaging, CSS — with every finding re-checked against the source before it was
+changed.
+
+### Fixed
+
+- **Uninstalling could leave LuCI blank.** `uninstall.sh` runs under `set -e`,
+  and `uci delete luci.themes.Lucent` exits non-zero when that section was
+  never registered, so the script died after deleting the files but before
+  switching `mediaurlbase` back and clearing the caches. Every `uci` call in
+  the removal path now tolerates a missing section.
+- **The daily wallpaper job survived uninstall.** The cron line lives in
+  root's crontab rather than in the package, so all three uninstallers
+  (`uninstall.sh`, `install.sh uninstall`, the one-key script) now delete the
+  `# lucent-wallpaper` entry, restart cron, and drop the `/tmp` caches and
+  `/var/run` pid files the helper leaves behind.
+- **A wallpaper API could hand wget its own options.** URLs returned by
+  Unsplash and Wallhaven were passed straight to the downloader; a value
+  beginning with `-` would have been parsed as a wget option running as root.
+  `download()` now accepts only `http://` and `https://`.
+- **An update could downgrade the theme.** Both the check and the update path
+  treated "version differs" as "update available", so a stale mirror pointer
+  would have installed an older build over a newer one. Comparison is now
+  ordered, and a stale pointer reports "up to date" instead.
+- **A captive portal could pose as an installer.** Downloads were accepted on
+  size alone; the payload is now checked for the gzip magic that every apk,
+  ipk and tar.gz asset starts with.
+- **Lease remaining read "–" on every DHCP router.** netifd only puts a
+  countdown on IPv6 entries, so the remaining time is now derived the way
+  LuCI's own expiry widget derives it — lease time minus where the current
+  uptime falls inside it — with the IPv6 fallback widened past the literal
+  `wan6` name.
+- **Per-host rates blamed the LAN for everything.** When `network.lan.ipaddr`
+  was unset or not an address, the generated awk pattern ended in an empty
+  alternation, which matches every host. The LAN prefix is only added when it
+  parses as an address.
+- **`plugin_check` blocked the rpcd worker** behind eight sequential package
+  queries; one package-database read now answers all eight.
+- **Storage used the wrong mount.** The helper reports `/overlay`, but the
+  frontend looked for `overlay`, so squashfs routers showed the read-only root
+  instead of the writable area that actually fills up.
+- **Static and hosts-file entries invented phantom devices.** `getHostHints`
+  keys those by IP or name; using that key as a MAC added rows whose MAC
+  column showed an address. They now merge into the device they match.
+- **A permanent lease looked expired.** odhcpd reports infinite leases as
+  `0`, and some builds hand the epoch over as a string; both are now read
+  correctly.
+- **"Today" rolled at 08:00 in China.** The trend history and daily peak were
+  keyed by the UTC date while the greeting used the local one. Daily keys are
+  now local and yesterday's are pruned instead of accumulating forever.
+- **The Top talkers card dropped its own hint** and wrote
+  `class="ltc-card [object HTMLDivElement]"`, because the hint node was passed
+  where a class name belongs.
+- **The accounting switch always read "off"**, since `acct` was missing from
+  the defaults table that the settings loader copies from.
+- **Rate and age cells could render `width:NaN%`** and "NaNh ago" when a host
+  had no counters yet.
+- **An update could poll forever.** If the detached job never registered, the
+  status timer ticked every two seconds until the tab closed; it now gives up
+  after two minutes and says so.
+- **The sidebar status panel leaked an interval per render**, keeping the
+  previous page's DOM alive.
+
+### Changed
+
+- **The default palette is now genuinely Mist.** `:root` carried the Clay
+  values, so any page rendered without a `data-palette` attribute — or with an
+  unknown one — came out brown. The logo tile and favicon matched.
+- **Glass: Off now covers every blurred surface** (the sticky save bar, the
+  phone dock, the command palette, the login card).
+- **Status colours are legible in dark mode.** Green, amber and red were only
+  ever tuned for light surfaces and sat near 3:1 against dark cards.
+- **Keyboard focus is visible.** The focus ring was the 11%-alpha tint; it is
+  now built from the accent, and the search field no longer strips the outline
+  without replacing it.
+- **Phones lost the ~170px of dead space under the footer** (the footer and
+  its own container both reserved room for the dock), and the dock no longer
+  floats above an open menu drawer.
+- **Older engines keep the layout.** `100dvh` and `color-mix()` now have
+  `@supports` fallbacks, so a phone browser without them keeps its shell height
+  and opaque surfaces instead of painting text over the wallpaper.
+- The palette grid fills its row instead of leaving two empty cells, and the
+  Appearance copy says seven palettes, which is what it shows. The opacity and
+  dimming sliders now say plainly that they need a wallpaper to do anything.
+- The packages declare `rpcd-mod-file`, which the wallpaper upload needs; the
+  README's version numbers match the current release.
+
+### Verified
+
+- `node tests/run-harness.js`: 15 scenarios, 844 assertions, no failures —
+  including a new `#dhcpwan` scenario that asserts a DHCP router reports both
+  a lease countdown and a gateway read from the 21.02-style route field.
+
 ## 3.11.0 — 2026-11-04
 
 ### Fixed
