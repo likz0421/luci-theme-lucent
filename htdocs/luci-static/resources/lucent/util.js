@@ -220,6 +220,74 @@ function fdbMap(topology) {
 	return map;
 }
 
+/* A usable sidebar when the live menu is unavailable: the standard LuCI
+   modules plus this theme's own pages, at their stock paths. It lives here so
+   both the menu builder and the core watchdog can render it — if it only
+   existed inside menu-lucent.js, a build that cannot load that file would show
+   nothing but an apology. */
+var BUILTIN_MENU = [
+	{ title: 'Home', path: 'admin/home' },
+	{ title: 'Devices', path: 'admin/clients' },
+	{ title: 'Status', path: 'admin/status', kids: [
+		{ title: 'Overview', path: 'admin/status/overview' },
+		{ title: 'Realtime', path: 'admin/status/realtime/load' },
+		{ title: 'System log', path: 'admin/status/syslog' }
+	] },
+	{ title: 'Network', path: 'admin/network', kids: [
+		{ title: 'Interfaces', path: 'admin/network/network' },
+		{ title: 'Wireless', path: 'admin/network/wireless' },
+		{ title: 'DHCP leases', path: 'admin/network/dhcp' },
+		{ title: 'Routes', path: 'admin/network/routes' }
+	] },
+	{ title: 'System', path: 'admin/system', kids: [
+		{ title: 'System', path: 'admin/system/system' },
+		{ title: 'Administration', path: 'admin/system/admin' },
+		{ title: 'Software', path: 'admin/system/packages' },
+		{ title: 'Reboot', path: 'admin/system/reboot' }
+	] },
+	{ title: 'Appearance', path: 'admin/system/appearance' },
+	{ title: 'Logout', path: 'admin/logout' }
+];
+
+/* Same markup as the live menu, so icons, the accordion, the drawer and the
+   command palette keep working. opts: { reason, onRetry } */
+function builtinMenu(ul, opts) {
+	if (!ul)
+		return;
+
+	opts = opts || {};
+	ul.textContent = '';
+
+	var note = E('li', { 'class': 'ltc-nav-note' }, [
+		E('span', {}, _('The live menu could not be loaded, showing the built-in navigation instead.')),
+		opts.reason ? E('small', {}, String(opts.reason)) : ''
+	]);
+
+	if (typeof opts.onRetry === 'function') {
+		note.appendChild(E('button', {
+			'type': 'button', 'class': 'ltc-btn sm', 'style': 'margin-top:7px',
+			'click': opts.onRetry
+		}, _('Retry')));
+	}
+
+	ul.appendChild(note);
+
+	BUILTIN_MENU.forEach(function (item) {
+		var kids = arr(item.kids).map(function (k) {
+			return E('li', {}, E('a', { 'href': L.url(k.path) }, _(k.title)));
+		});
+
+		ul.appendChild(E('li', { 'class': kids.length ? 'dropdown' : '' }, [
+			E('a', {
+				'class': kids.length ? 'menu' : '',
+				'href': kids.length ? '#' : L.url(item.path),
+				'title': _(item.title)
+			}, _(item.title)),
+			kids.length ? E('ul', { 'class': 'dropdown-menu' }, kids) : ''
+		]));
+	});
+}
+
 function hostsFrom(hints, leases) {
 	var map = {}, list = [];
 
@@ -481,6 +549,7 @@ return baseclass.extend({
 			return L.resolveDefault(callAssocLegacy(ifname), []).then(stationsOf);
 		});
 	},
+	builtinMenu: builtinMenu,
 	stations: stationsOf,
 	fdbMap: fdbMap,
 	ip4: ip4,

@@ -126,6 +126,9 @@ window.L = {
 	bind: function (f, c) { return f.bind(c); },
 	resolveDefault: function (p, d) { return Promise.resolve(p).catch(function () { return d; }); },
 	isObject: function (v) { return v != null && typeof v === 'object'; },
+	/* the real L.require would fetch modules; here it must fail like a missing
+	   file so core's watchdog path is the one under test */
+	require: function () { return Promise.reject(new Error('harness: no module loader')); },
 	env: { dispatchpath: ['admin', 'home'], requestpath: ['admin', 'home'] }
 };
 
@@ -325,7 +328,7 @@ var FLAGS = location.hash || '';
 	var clients = await mod(base + 'view/lucent/clients.js');
 
 	/* menu failure scenarios: the sidebar must never end up blank */
-	var menuFail = /#menu-(reject|empty|noclass|hang)/.test(FLAGS);
+	var menuFail = /#menu-(reject|empty|noclass|hang|throw|noload)/.test(FLAGS);
 	var noisy = /#tree-noisy/.test(FLAGS);
 	if (/#menu-reject/.test(FLAGS))
 		ui.menu.load = function () { return Promise.reject(new Error('mock session failure')); };
@@ -333,6 +336,12 @@ var FLAGS = location.hash || '';
 		ui.menu.load = function () { return Promise.resolve({ children: {} }); };
 	if (/#menu-noclass/.test(FLAGS))
 		ui.menu = null;
+	/* what the stripped ONT build did: throw synchronously, which used to make
+	   the whole module reject and the sidebar stay silently empty */
+	if (/#menu-throw/.test(FLAGS))
+		ui.menu.load = function () { throw new Error('mock synchronous explosion'); };
+	/* the menu module never loads at all: core.js must still explain the sidebar */
+	var menuSkip = /#menu-noload/.test(FLAGS);
 	/* a forked build whose requestpath matches no root child */
 	if (/#menu-nomatch/.test(FLAGS))
 		window.L.env.requestpath = ['notadmin'];
@@ -369,7 +378,7 @@ var FLAGS = location.hash || '';
 		ASSOC = {};
 	}
 
-	var menu = await mod(base + 'menu-lucent.js');
+	var menu = menuSkip ? null : await mod(base + 'menu-lucent.js');
 	var side = await mod(base + 'lucent/sideinfo.js');
 
 	side.init();
@@ -390,7 +399,7 @@ var FLAGS = location.hash || '';
 		return c.load().then(function (cd) {
 			document.getElementById('root').appendChild(c.render(cd));
 		});
-	}).then(function () { return wait(1300); }).then(function () {
+	}).then(function () { return wait(menuSkip ? 19000 : 1300); }).then(function () {
 		/* sidebar traffic: two more samples with moved counters */
 		MOCK['luci-rpc.getNetworkDevices']['pppoe-wan'] = { statistics: { rx_bytes: 1260000000, tx_bytes: 357000000 } };
 		side._n = 3;
@@ -437,6 +446,13 @@ var FLAGS = location.hash || '';
 			check('fallback note shown', !!document.querySelector('.ltc-nav-note'));
 			check('retry button present', !!document.querySelector('.ltc-nav-note .ltc-btn'));
 			check('fallback keeps groups', document.querySelectorAll('#topmenu > li.dropdown').length >= 3);
+		}
+		if (menuSkip) {
+			check('watchdog spoke instead of silence', !!document.querySelector('.ltc-nav-note'),
+				document.querySelectorAll('#topmenu li').length + ' li, note ' + !!document.querySelector('.ltc-nav-note'));
+			check('watchdog offers a retry', !!document.querySelector('.ltc-nav-note .ltc-btn'));
+			check('watchdog menu is usable', document.querySelectorAll('#topmenu > li.dropdown').length >= 3,
+				document.querySelectorAll('#topmenu > li').length + ' entries, ' + document.querySelectorAll('#topmenu > li.dropdown').length + ' groups');
 		}
 		if (/#menu-hang/.test(FLAGS)) {
 			var why = document.querySelector('.ltc-nav-note small');

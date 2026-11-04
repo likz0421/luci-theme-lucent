@@ -1,5 +1,6 @@
 'use strict';
 'require baseclass';
+'require lucent.util as util';
 'require ui';
 
 /*
@@ -15,31 +16,6 @@
  * saying out loud which step failed.
  */
 
-/* A usable sidebar even when the menu service is gone: the standard LuCI
-   modules plus this theme's own pages, at their stock paths. */
-var BUILTIN = [
-	{ title: 'Home', path: 'admin/home', icon: 'home' },
-	{ title: 'Devices', path: 'admin/clients', icon: 'devices' },
-	{ title: 'Status', path: 'admin/status', icon: 'info', kids: [
-		{ title: 'Overview', path: 'admin/status/overview' },
-		{ title: 'Realtime', path: 'admin/status/realtime/load' },
-		{ title: 'System log', path: 'admin/status/syslog' }
-	] },
-	{ title: 'Network', path: 'admin/network', icon: 'network', kids: [
-		{ title: 'Interfaces', path: 'admin/network/network' },
-		{ title: 'Wireless', path: 'admin/network/wireless' },
-		{ title: 'DHCP leases', path: 'admin/network/dhcp' },
-		{ title: 'Routes', path: 'admin/network/routes' }
-	] },
-	{ title: 'System', path: 'admin/system', icon: 'sliders', kids: [
-		{ title: 'System', path: 'admin/system/system' },
-		{ title: 'Administration', path: 'admin/system/admin' },
-		{ title: 'Software', path: 'admin/system/packages' },
-		{ title: 'Reboot', path: 'admin/system/reboot' }
-	] },
-	{ title: 'Appearance', path: 'admin/system/appearance', icon: 'image' },
-	{ title: 'Logout', path: 'admin/logout', icon: 'x' }
-];
 
 function childrenOf(tree) {
 	if (ui.menu && typeof ui.menu.getChildren === 'function') {
@@ -70,7 +46,8 @@ function withTimeout(promise, ms, label) {
 			reject(new Error('%s → %s %dms'.format(label, _('timed out'), ms)));
 		}, ms);
 
-		promise.then(function (v) {
+		/* a forked ui.menu can return a plain object instead of a promise */
+		Promise.resolve(promise).then(function (v) {
 			if (settled)
 				return;
 			settled = true;
@@ -86,20 +63,39 @@ function withTimeout(promise, ms, label) {
 	});
 }
 
+function pathOf(list) {
+	return Array.isArray(list) ? list : [];
+}
+
 return baseclass.extend({
+	/* Nothing here may throw. A synchronous error at instantiation time makes
+	   L.require('menu-lucent') reject, which means not one line of the fallback
+	   logic below ever runs — and the sidebar shows neither a menu nor a reason,
+	   which is exactly what a stripped ONT build produced. */
 	__init: function () {
 		var self = this;
 
 		this.reason = '';
-		this.build();
+
+		try {
+			this.build();
+		} catch (e) {
+			this.reason = 'init: ' + String(e && e.message || e);
+			try {
+				this.renderBuiltin();
+			} catch (e2) {}
+			return;
+		}
 
 		/* Last resort: by now every deadline above has expired, so an empty
 		   menu here means something else cleared it. Rebuild once, no more. */
 		setTimeout(function () {
-			if (!self._retried && !document.querySelector('#topmenu li')) {
-				self._retried = true;
-				self.build();
-			}
+			try {
+				if (!self._retried && !document.querySelector('#topmenu li')) {
+					self._retried = true;
+					self.build();
+				}
+			} catch (e) {}
 		}, 12000);
 	},
 
@@ -122,8 +118,12 @@ return baseclass.extend({
 		this.reason = '';
 
 		this.loadTree().then(function (tree) {
-			if (tree)
-				self.render(tree);
+			try {
+				if (tree)
+					self.render(tree);
+			} catch (e) {
+				self.reason = 'render: ' + String(e && e.message || e);
+			}
 
 			if (!document.querySelector('#topmenu li')) {
 				self.reason = self.reason || _('The menu service returned no entries');
@@ -214,12 +214,13 @@ return baseclass.extend({
 		var node = tree;
 		var url = '';
 
-		if (L.env.dispatchpath.length < 3)
+		if (pathOf(L.env.dispatchpath).length < 3)
 			return;
 
+		var dp = pathOf(L.env.dispatchpath);
 		for (var i = 0; i < 3 && node; i++) {
-			node = (node.children || {})[L.env.dispatchpath[i]];
-			url += (url ? '/' : '') + L.env.dispatchpath[i];
+			node = (node.children || {})[dp[i]];
+			url += (url ? '/' : '') + dp[i];
 		}
 
 		if (node)
@@ -235,7 +236,7 @@ return baseclass.extend({
 			return;
 
 		childrenOf(tree).forEach(function (child) {
-			var isActive = (L.env.dispatchpath[3 + (level || 0)] === child.name);
+			var isActive = (pathOf(L.env.dispatchpath)[3 + (level || 0)] === child.name);
 
 			items.push(E('li', {
 				'class': 'tabmenu-item-%s%s'.format(child.name, isActive ? ' active' : '')
@@ -289,8 +290,8 @@ return baseclass.extend({
 			return;
 
 		childrenOf(tree).forEach(function (child, index) {
-			var isActive = L.env.requestpath.length
-				? child.name === L.env.requestpath[0]
+			var isActive = pathOf(L.env.requestpath).length
+				? child.name === pathOf(L.env.requestpath)[0]
 				: index === 0;
 
 			ul.appendChild(E('li', { 'class': isActive ? 'active' : '' }, [
@@ -308,42 +309,15 @@ return baseclass.extend({
 	/* The static menu: same DOM as the real one, so icons, the accordion and
 	   the command palette all keep working. */
 	renderBuiltin: function () {
-		var ul = document.querySelector('#topmenu');
-		var self = this;
-
-		if (!ul)
-			return;
-
-		ul.textContent = '';
-
-		ul.appendChild(E('li', { 'class': 'ltc-nav-note' }, [
-			E('span', {}, _('The live menu could not be loaded, showing the built-in navigation instead.')),
-			this.reason ? E('small', {}, this.reason) : '',
-			E('button', {
-				'type': 'button', 'class': 'ltc-btn sm', 'style': 'margin-top:7px',
-				'click': function () {
-					if (ui.menu && typeof ui.menu.flushCache === 'function') {
-						try { ui.menu.flushCache(); } catch (e) {}
-					}
-					try { sessionStorage.clear(); } catch (e) {}
-					self.build();
+		util.builtinMenu(document.querySelector('#topmenu'), {
+			reason: this.reason,
+			onRetry: L.bind(function () {
+				if (ui.menu && typeof ui.menu.flushCache === 'function') {
+					try { ui.menu.flushCache(); } catch (e) {}
 				}
-			}, _('Retry'))
-		]));
-
-		BUILTIN.forEach(function (item) {
-			var kids = (item.kids || []).map(function (k) {
-				return E('li', {}, E('a', { 'href': L.url(k.path) }, _(k.title)));
-			});
-
-			ul.appendChild(E('li', { 'class': kids.length ? 'dropdown' : '' }, [
-				E('a', {
-					'class': kids.length ? 'menu' : '',
-					'href': kids.length ? '#' : L.url(item.path),
-					'title': _(item.title)
-				}, _(item.title)),
-				kids.length ? E('ul', { 'class': 'dropdown-menu' }, kids) : ''
-			]));
+				try { sessionStorage.clear(); } catch (e) {}
+				this.build();
+			}, this)
 		});
 	}
 });

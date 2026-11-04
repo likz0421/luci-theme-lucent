@@ -3,6 +3,45 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.10.7 — 2026-11-04
+
+### Fixed
+
+- **A synchronous throw inside `ui.menu.load()` blanked the sidebar with no
+  message at all.** This is what the stripped ONT build (OpenWrt 0.8.4-beta,
+  Tianyi TYFZA1) hit: the throw happened while the module was being
+  instantiated, so `L.require('menu-lucent')` rejected and **not one line of
+  the fallback logic ran** — no menu, no note, nothing. Every entry point is
+  now guarded:
+  - `__init` wraps `build()` in try/catch and renders the built-in menu on
+    error, recording the reason;
+  - `render(tree)` is wrapped too, so a throwing tree cannot skip the fallback;
+  - `withTimeout()` accepts non-promises (`Promise.resolve()`), because a
+    forked `ui.menu` may return a plain object;
+  - every `L.env.dispatchpath` / `L.env.requestpath` read goes through
+    `pathOf()`, since those can be undefined on minimal builds.
+- **The built-in menu died with the module that carried it.** It lived inside
+  `menu-lucent.js`, so if that file could not be loaded the sidebar had nothing
+  left but an apology. The table and renderer moved to `lucent.util.js`
+  (`util.builtinMenu(ul, {reason, onRetry})`) and are now drawn by two callers:
+  the menu builder, and a new independent watchdog in `core.js`.
+- **`core.js` gained that watchdog** (`watchMenu`), which runs even when
+  menu-lucent never loads: at 7 s it re-requests the module and calls `build()`
+  if the nav is still empty; at 16 s it renders the built-in menu itself with
+  the reason and a Retry that reloads the page. The sidebar can no longer be a
+  silent empty column.
+
+### Verified
+
+- Ten harness scenarios, 0 failures: healthy tree (47), `ui.menu.load()`
+  rejecting (50), **throwing synchronously (50 — the ONT case; asserts the
+  built-in menu and its reason appear)**, hanging forever (52), requestpath
+  matching no root child (47), empty tree (50), no `ui.menu` class (50),
+  **menu module never loaded at all (53 — asserts the watchdog produces a
+  usable menu: ≥3 groups, a note and a retry)**, 15-port bridge (50) and the
+  simulated FTTR ONU (39).
+- 0 untranslated strings after regenerating `lucent.zh-cn.lmo`.
+
 ## 3.10.6 — 2026-11-04
 
 ### Fixed

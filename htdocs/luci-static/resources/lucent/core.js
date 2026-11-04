@@ -103,6 +103,45 @@ return baseclass.extend({
 		this.observeMenu();
 		this.initSearch();
 		this.initRail();
+		this.watchMenu();
+	},
+
+	/* Independent safety net. menu-lucent already has its own fallbacks, but if
+	   that module never loads (404, a half-written cache copy, a parse error)
+	   nothing else would speak for the sidebar — and an empty column with no
+	   explanation is the one outcome users cannot act on. */
+	watchMenu: function () {
+		if (this._watching)
+			return;
+		this._watching = true;
+
+		var empty = function () {
+			var ul = document.querySelector('#topmenu');
+			return !!ul && !ul.children.length;
+		};
+
+		setTimeout(function () {
+			if (!empty())
+				return;
+			L.require('menu-lucent').then(function (m) {
+				if (m && typeof m.build === 'function')
+					m.build();
+			}).catch(function () {});
+		}, 7000);
+
+		/* the module never loaded, or loaded and produced nothing: give the
+		   sidebar a usable menu anyway */
+		setTimeout(function () {
+			var ul = document.querySelector('#topmenu');
+
+			if (!ul || ul.children.length)
+				return;
+
+			util.builtinMenu(ul, {
+				reason: _('The sidebar menu could not be loaded.'),
+				onRetry: function () { location.reload(); }
+			});
+		}, 16000);
 	},
 
 	initSearch: function () {

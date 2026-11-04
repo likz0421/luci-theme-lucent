@@ -1178,5 +1178,11 @@ msgstr "台其他设备"
 msgid "down"
 msgstr "未连线"
 
+msgid "The sidebar menu could not be loaded."
+msgstr "侧栏菜单无法加载。"
+
+msgid "Reload"
+msgstr "重新加载"
+
 msgid "timed out"
 msgstr "超时"
