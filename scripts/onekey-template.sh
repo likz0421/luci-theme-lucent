@@ -34,11 +34,15 @@ detect_installed() {
 
 	if command -v apk >/dev/null 2>&1; then
 		CUR_VER=$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//" || true)
-		[ -n "$CUR_VER" ] && CUR_HOW="apk"
+		if [ -n "$CUR_VER" ]; then
+			CUR_HOW="apk"
+		fi
 	fi
 	if [ -z "$CUR_VER" ] && command -v opkg >/dev/null 2>&1; then
 		CUR_VER=$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1 || true)
-		[ -n "$CUR_VER" ] && CUR_HOW="opkg"
+		if [ -n "$CUR_VER" ]; then
+			CUR_HOW="opkg"
+		fi
 	fi
 	if [ -z "$CUR_VER" ] && [ -f /usr/share/lucent/version ]; then
 		CUR_VER=$(cat /usr/share/lucent/version 2>/dev/null || true)
@@ -61,7 +65,8 @@ usage() {
 	cat <<'EOF'
 Lucent 3 一键脚本
 
-  sh lucent-onekey-install.sh install     安装或升级主题（默认）
+  sh lucent-onekey-install.sh             交互菜单：1 安装 / 升级，2 卸载
+  sh lucent-onekey-install.sh install     直接安装或升级主题
   sh lucent-onekey-install.sh uninstall   卸载主题并恢复 Bootstrap
   sh lucent-onekey-install.sh status      查看安装状态
 
@@ -74,9 +79,41 @@ Lucent 3 一键脚本
 EOF
 }
 
-ACTION="${1:-install}"
+# 有没有能打字的终端？stdin 被管道占走时控制终端仍在 /dev/tty 上，
+# 没有控制终端时打开它会立刻失败，不会挂住。
+has_tty() {
+	if [ -t 0 ]; then
+		return 0
+	fi
+	if ! [ -c /dev/tty ]; then
+		return 1
+	fi
+	# stderr 要先指走，否则没有控制终端的机器上会自己打印一句错误
+	if { : </dev/tty; } 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
+ask() {
+	local ans
+	if [ ! -t 0 ] && ! has_tty; then
+		printf '%s' "$2"
+		return 0
+	fi
+	printf '%s [%s] ' "$1" "$2"
+	if [ -t 0 ]; then
+		read -r ans || ans=""
+	else
+		read -r ans </dev/tty 2>/dev/null || ans=""
+	fi
+	[ -n "$ans" ] || ans="$2"
+	printf '%s' "$ans"
+}
+
+ACTION="${1:-}"
 case "$ACTION" in
-	install|uninstall|status) ;;
+	''|install|uninstall|status) ;;
 	-h|--help|help) usage; exit 0 ;;
 	*)
 		echo "未知操作：$ACTION" >&2
@@ -85,7 +122,7 @@ case "$ACTION" in
 		;;
 esac
 
-[ "$(id -u)" = "0" ] || { echo "请使用 root 运行：sh $0 $ACTION" >&2; exit 1; }
+[ "$(id -u)" = "0" ] || { echo "请使用 root 运行：sh $0${ACTION:+ $ACTION}" >&2; exit 1; }
 [ -f /etc/openwrt_release ] || { echo "这不是 OpenWrt 系统。" >&2; exit 1; }
 
 TMP=$(mktemp -d /tmp/lucent-install.XXXXXX) || exit 1
@@ -253,20 +290,21 @@ do_uninstall() {
 	rm -rf /www/luci-static/resources/lucent
 	rm -rf /www/luci-static/resources/view/lucent
 	rm -rf /usr/share/ucode/luci/template/themes/lucent
+	rm -rf /usr/share/lucent
 	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json
 	rm -f /usr/share/rpcd/acl.d/luci-theme-lucent.json
 	rm -f /usr/libexec/rpcd/luci.lucent
-	rm -f /usr/lib/lua/luci/i18n/lucent.zh-cn.lmo
-	rm -f /usr/lib/lua/luci/i18n/lucent-zh-*.zh-cn.lmo
+	rm -f /usr/lib/lua/luci/i18n/lucent*.lmo
 	rm -f /etc/uci-defaults/30_luci-theme-lucent
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
-		/tmp/lucent-check.sh /tmp/lucent-update.sh
+		/tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.*
 
 	# The daily wallpaper job lives in root's crontab, not in the package.
 	if [ -w /etc/crontabs/root ]; then
 		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null || true
+		sed -i '/lucent\/wallpaper.sh/d' /etc/crontabs/root 2>/dev/null || true
 		/etc/init.d/cron restart >/dev/null 2>&1 || true
 	fi
 
@@ -286,6 +324,32 @@ do_uninstall() {
 	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
 	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 
+	# 收尾自查：没删干净就明说。显式 if —— 脚本有 set -e。
+	LEFT=""
+	for p in /www/luci-static/lucent /www/luci-static/resources/lucent \
+		/www/luci-static/resources/view/lucent \
+		/usr/share/ucode/luci/template/themes/lucent /usr/share/lucent \
+		/usr/share/luci/menu.d/luci-theme-lucent.json \
+		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
+		/usr/libexec/rpcd/luci.lucent /etc/uci-defaults/30_luci-theme-lucent \
+		/etc/config/lucent; do
+		if [ -e "$p" ]; then
+			LEFT="$LEFT $p"
+		fi
+	done
+	for p in /usr/lib/lua/luci/i18n/lucent*.lmo /tmp/lucent-* /var/run/lucent-*; do
+		if [ -e "$p" ]; then
+			LEFT="$LEFT $p"
+		fi
+	done
+	if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
+		LEFT="$LEFT luci.themes.Lucent"
+	fi
+	if [ -n "$LEFT" ]; then
+		echo "！卸载未清干净，仍然存在：$LEFT" >&2
+		exit 1
+	fi
+
 	echo "卸载完成，LuCI 已恢复 Bootstrap。"
 }
 
@@ -299,8 +363,35 @@ do_status() {
 	echo "中文目录文件：$(ls /usr/lib/lua/luci/i18n/lucent*.lmo 2>/dev/null | wc -l) 个"
 }
 
-case "$ACTION" in
-	install) do_install ;;
-	uninstall) do_uninstall ;;
-	status) do_status ;;
-esac
+menu() {
+	detect_installed
+	cat <<EOF
+
+  Lucent 3 一键脚本    内嵌版本 $VER
+  本机状态：$(installed_desc)
+
+    1) 安装 / 升级到最新版
+    2) 卸载主题并恢复 Bootstrap
+    0) 退出
+EOF
+	case "$(ask "  请选择 [1]" "1")" in
+		1) do_install ;;
+		2) do_uninstall ;;
+		0) echo "已退出，未做任何改动。" ;;
+		*) echo "没听懂，按退出处理。" ;;
+	esac
+}
+
+if [ -z "$ACTION" ]; then
+	if has_tty; then
+		menu
+	else
+		do_install
+	fi
+else
+	case "$ACTION" in
+		install) do_install ;;
+		uninstall) do_uninstall ;;
+		status) do_status ;;
+	esac
+fi

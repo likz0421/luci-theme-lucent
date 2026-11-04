@@ -138,13 +138,17 @@ wget -qO- https://raw.githubusercontent.com/likz0421/luci-theme-lucent/main/inst
 curl -fsSL https://github.com/likz0421/luci-theme-lucent/releases/latest/download/lucent-install.sh | sh
 ```
 
-卸载 / 查看状态：
+卸载 / 查看状态：直接运行脚本会出菜单（1 安装 / 升级，2 卸载），也可以写全命令：
 
 ```sh
-# 卸载（恢复 Bootstrap，无需联网）
+# 卸载（恢复 Bootstrap，并清掉壁纸缓存、cron 任务与中文语言包）
 sh install.sh uninstall
-# 查看状态
+
+# 查看本机装的是哪个版本
 sh install.sh status
+
+# 管道方式同样会先弹菜单；无终端的自动化环境才会直接安装
+wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh
 ```
 
 如果管道方式不便，可先下载脚本再执行：

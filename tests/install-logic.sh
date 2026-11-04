@@ -3,7 +3,7 @@
 # extract the functions under test, stub the package managers, assert outcomes.
 # The offline template carries its own copy of these helpers, so it is checked
 # against the same table to catch the two drifting apart.
-set -e
+# no set -e: a failing predicate here is an assertion result, not an error
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 fails=0
@@ -27,7 +27,7 @@ suite() {
 		extract ver_newer
 		extract detect_installed
 		extract installed_desc
-		[ "$label" = "install.sh" ] && extract ask
+		[ "$label" = "install.sh" ] && { extract ask; extract has_tty; }
 	} > "$WORK/fns.sh"
 	. "$WORK/fns.sh"
 
@@ -66,13 +66,54 @@ suite() {
 	[ "$(installed_desc)" = "已安装 未知版本（files 方式）" ] || no "desc: unknown version" "$(installed_desc)"
 
 	if [ "$label" = "install.sh" ]; then
-		ASKED=$(ask "question" "n")
-		[ "$ASKED" = "n" ] && ok "ask returns default when stdin is not a tty" || no "ask default" "$ASKED"
+		# /dev/tty cannot be probed here: the msys layer on Windows kills the
+		# process the moment it is touched. So the two branches are driven by
+		# splicing a stub has_tty/ask in just before the dispatch, which is what
+		# actually decides whether the menu appears.
+		case "$(uname -s 2>/dev/null)" in
+		MINGW*|MSYS*|CYGWIN*)
+			MARK='if [ -z "$ACTION" ]; then'
+			printf 'has_tty() { return 1; }\n' > "$WORK/no-tty.ov"
+			printf 'has_tty() { return 0; }\nask() { printf "2"; return 0; }\n' > "$WORK/tty.ov"
 
-		# A pipe must never be read: under `wget -qO- … | sh` stdin is the rest
-		# of the script, so consuming it there would silently truncate the install.
-		PIPED=$(printf 'y' | ask "q" "n")
-		[ "$PIPED" = "n" ] && ok "piped stdin is never read" || no "piped stdin" "read '$PIPED'"
+			splice() {
+				awk -v m="$2" -v ov="$3" '
+					index($0, m) == 1 && !done { while ((getline l < ov) > 0) print l; close(ov); done = 1 }
+					{ print }' "$1"
+			}
+
+			splice "$SRC" "$MARK" "$WORK/no-tty.ov" > "$WORK/no-tty.sh"
+			NO=$(sh "$WORK/no-tty.sh" 2>&1 | head -1)
+			case "$NO" in
+				*root*|*OpenWrt*) ok "no terminal: skips the menu and installs" ;;
+				*) no "no terminal: skips the menu" "$NO" ;;
+			esac
+
+			splice "$SRC" "$MARK" "$WORK/tty.ov" > "$WORK/tty.sh"
+			WITH=$(sh "$WORK/tty.sh" 2>&1)
+			case "$WITH" in
+				*"1) 安装"*"2) 卸载"*) ok "menu lists install and uninstall" ;;
+				*) no "menu lists install and uninstall" "$(printf '%s' "$WITH" | head -3 | tr '\n' ' ')" ;;
+			esac
+			# the root guard is the same message for both actions, so routing
+			# beyond the menu is not observable on a non-OpenWrt box; what is
+			# observable is that the menu itself appeared before any action ran.
+			case "$WITH" in
+				*"本机状态"*) ok "menu reports the installed version first" ;;
+				*) no "menu reports the installed version" "$(printf '%s' "$WITH" | head -3 | tr '\n' ' ')" ;;
+			esac
+			;;
+		*)
+			if has_tty; then
+				printf '  SKIP tty assertions (a controlling terminal is present)\n'
+			else
+				ASKED=$(ask "question" "n")
+				[ "$ASKED" = "n" ] && ok "no terminal: ask returns default, never blocks" || no "ask default" "$ASKED"
+				PIPED=$(printf 'y' | ask "q" "n")
+				[ "$PIPED" = "n" ] && ok "piped stdin is never read" || no "piped stdin" "read '$PIPED'"
+			fi
+			;;
+		esac
 	fi
 
 	rm -rf "$WORK"

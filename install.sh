@@ -16,11 +16,10 @@
 #   若路由器没有 wget，可用 curl：
 #     curl -fsSL https://github.com/likz0421/luci-theme-lucent/raw/main/install.sh | sh
 #
-# 卸载：
+# 运行后会先问你装什么：
+#     1) 安装 / 升级到最新版        2) 卸载主题并恢复 Bootstrap
+# 直接回车就是安装。想跳过菜单也可以写全命令：
 #     wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh -s uninstall
-#
-# 在 SSH 里把脚本下载下来直接运行（不带动作参数）会进入交互菜单：
-# 安装/升级、检查更新、一键卸载、查看状态，并先告诉你本机装的是哪个版本。
 #
 # 环境变量（可选）：
 #   LUCENT_CN=1        强制优先使用国内镜像下载软件包
@@ -31,8 +30,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.12.0-r1"
-LUCENT_TAG_DEFAULT="v3.12.0"
+LUCENT_VERSION_DEFAULT="3.12.1-r1"
+LUCENT_TAG_DEFAULT="v3.12.1"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -49,11 +48,11 @@ usage() {
 	cat <<EOF
 Lucent 3 在线一键脚本  (版本 $VER)
 
-  sh install.sh             在终端里直接运行会进入交互菜单（安装/检查/卸载/状态）
-  sh install.sh install     在线下载并安装 / 升级（管道执行时的默认动作）
+  sh install.sh             交互菜单：1 安装 / 升级，2 卸载
+  sh install.sh install     直接安装 / 升级（管道执行且无终端时的默认动作）
   sh install.sh check       检查是否有新版本（输出 JSON）
   sh install.sh update      检测到新版本时在线升级
-  sh install.sh uninstall   一键卸载并恢复 Bootstrap
+  sh install.sh uninstall   卸载并恢复 Bootstrap
   sh install.sh status      查看本机安装状态与版本号
 
 默认从 GitHub Releases 下载，失败时自动回退到国内镜像。
@@ -246,11 +245,15 @@ detect_installed() {
 
 	if have apk; then
 		CUR_VER=$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//" || true)
-		[ -n "$CUR_VER" ] && CUR_HOW="apk"
+		if [ -n "$CUR_VER" ]; then
+			CUR_HOW="apk"
+		fi
 	fi
 	if [ -z "$CUR_VER" ] && have opkg; then
 		CUR_VER=$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1 || true)
-		[ -n "$CUR_VER" ] && CUR_HOW="opkg"
+		if [ -n "$CUR_VER" ]; then
+			CUR_HOW="opkg"
+		fi
 	fi
 	if [ -z "$CUR_VER" ] && [ -f /usr/share/lucent/version ]; then
 		CUR_VER=$(cat /usr/share/lucent/version 2>/dev/null || true)
@@ -270,13 +273,37 @@ installed_desc() {
 	fi
 }
 
-# 管道执行（wget -qO- … | sh）时 stdin 不是终端，read 会把脚本自己吃掉，
-# 所以非交互一律直接取默认值。
+# 有没有能打字的终端？stdin 被管道占走时（`wget -qO- … | sh`），控制终端仍然
+# 在 /dev/tty 上；没有控制终端时打开它会立刻失败，不会挂住。
+# 全部写成显式 if：脚本开着 set -e，裸的 `[ 条件 ] && …` 在部分 shell 里会
+# 直接把脚本带走。
+has_tty() {
+	if [ -t 0 ]; then
+		return 0
+	fi
+	if ! [ -c /dev/tty ]; then
+		return 1
+	fi
+	if { : </dev/tty; } 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
+# 交互确认：有终端就读终端（必要时走 /dev/tty），完全没终端时取默认值，
+# 这样 CI、cron、批量刷机不会被卡在输入上。
 ask() {
 	local ans
-	[ -t 0 ] || { printf '%s' "$2"; return 0; }
+	if [ ! -t 0 ] && ! has_tty; then
+		printf '%s' "$2"
+		return 0
+	fi
 	printf '%s [%s] ' "$1" "$2"
-	read -r ans || ans=""
+	if [ -t 0 ]; then
+		read -r ans || ans=""
+	else
+		read -r ans </dev/tty 2>/dev/null || ans=""
+	fi
 	[ -n "$ans" ] || ans="$2"
 	printf '%s' "$ans"
 }
@@ -505,18 +532,18 @@ do_uninstall() {
 	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json \
 		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
 		/usr/libexec/rpcd/luci.lucent \
-		/usr/lib/lua/luci/i18n/lucent.zh-cn.lmo \
-		/usr/lib/lua/luci/i18n/lucent-zh-*.zh-cn.lmo \
+		/usr/lib/lua/luci/i18n/lucent*.lmo \
 		/etc/uci-defaults/30_luci-theme-lucent
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
-		/tmp/lucent-check.sh /tmp/lucent-update.sh
+		/tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.*
 
 	# The daily wallpaper job is written into root's crontab, not into the
 	# package, so it survives an uninstall unless we drop it here.
 	if [ -w /etc/crontabs/root ]; then
 		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null || true
+		sed -i '/lucent\/wallpaper.sh/d' /etc/crontabs/root 2>/dev/null || true
 		/etc/init.d/cron restart >/dev/null 2>&1 || true
 	fi
 
@@ -531,6 +558,35 @@ do_uninstall() {
 
 	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
 	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+
+	# 收尾自查：还有东西没删掉就明说，不要只报"卸载完成"。
+	# 全部用显式 if —— 脚本开着 set -e，裸 `[ -e x ] && …` 会在第一个"本该
+	# 不存在"的路径上直接把脚本带走。
+	LEFT=""
+	for p in /www/luci-static/lucent /www/luci-static/resources/lucent \
+		/www/luci-static/resources/view/lucent \
+		/usr/share/ucode/luci/template/themes/lucent /usr/share/lucent \
+		/usr/share/luci/menu.d/luci-theme-lucent.json \
+		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
+		/usr/libexec/rpcd/luci.lucent /etc/uci-defaults/30_luci-theme-lucent \
+		/etc/config/lucent; do
+		if [ -e "$p" ]; then
+			LEFT="$LEFT $p"
+		fi
+	done
+	for p in /usr/lib/lua/luci/i18n/lucent*.lmo /tmp/lucent-* /var/run/lucent-*; do
+		if [ -e "$p" ]; then
+			LEFT="$LEFT $p"
+		fi
+	done
+	if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
+		LEFT="$LEFT luci.themes.Lucent"
+	fi
+	if [ -n "$LEFT" ]; then
+		log "！卸载未清干净，仍然存在：$LEFT" >&2
+		exit 1
+	fi
+
 	log "卸载完成，LuCI 已恢复 Bootstrap。"
 }
 
@@ -605,25 +661,22 @@ menu() {
   本机状态：$(installed_desc)
 
     1) 安装 / 升级到最新版
-    2) 检查是否有新版本
-    3) 一键卸载主题并恢复 Bootstrap
-    4) 查看安装状态
+    2) 卸载主题并恢复 Bootstrap
     0) 退出
 EOF
 	case "$(ask "  请选择 [1]" "1")" in
 		1) do_install ;;
-		2) do_check ;;
-		3) do_uninstall ;;
-		4) do_status ;;
-		*) echo "已退出，未做任何改动。" ;;
+		2) do_uninstall ;;
+		0) echo "已退出，未做任何改动。" ;;
+		*) echo "没听懂，按退出处理。" ;;
 	esac
 }
 
 if [ -z "$ACTION" ]; then
-	if [ -t 0 ]; then
+	if has_tty; then
 		menu
 	else
-		# 管道执行保持原来的行为：直接装
+		# 真的没有终端（CI、cron、批量刷机）：保持全自动，直接装
 		do_install
 	fi
 else

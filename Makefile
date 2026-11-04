@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=3.12.0
+PKG_VERSION:=3.12.1
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard
@@ -33,9 +33,24 @@ define Package/luci-theme-lucent/postrm
 	uci -q delete luci.themes.Lucent
 	[ "$$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ] && \
 		uci -q set luci.main.mediaurlbase=/luci-static/bootstrap
+	ls /usr/lib/lua/luci/i18n/*.zh-cn.lmo >/dev/null 2>&1 || uci -q delete luci.languages.zh_cn
 	uci commit luci
 	rm -rf /www/luci-static/lucent /tmp/lucent-upload
 	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/
+	rm -rf /usr/share/lucent /www/luci-static/resources/lucent \
+		/www/luci-static/resources/view/lucent /usr/share/ucode/luci/template/themes/lucent
+	rm -f /etc/config/lucent /usr/lib/lua/luci/i18n/lucent*.lmo \
+		/usr/share/luci/menu.d/luci-theme-lucent.json \
+		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
+		/usr/libexec/rpcd/luci.lucent \
+		/etc/uci-defaults/30_luci-theme-lucent
+	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.pid /var/run/lucent-*.job.sh
+	if [ -w /etc/crontabs/root ]; then
+		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null
+		sed -i '/lucent\/wallpaper.sh/d' /etc/crontabs/root 2>/dev/null
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
 	/etc/init.d/rpcd reload >/dev/null 2>&1
 }
 endef

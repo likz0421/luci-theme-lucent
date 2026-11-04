@@ -76,9 +76,23 @@ cat > "$C/postrm" <<'SH'
 	uci -q delete luci.themes.Lucent
 	[ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ] && \
 		uci -q set luci.main.mediaurlbase=/luci-static/bootstrap
+	# the zh label only helps while some zh catalogue exists
+	ls /usr/lib/lua/luci/i18n/*.zh-cn.lmo >/dev/null 2>&1 || uci -q delete luci.languages.zh_cn
 	uci commit luci
 	rm -rf /www/luci-static/lucent /tmp/lucent-upload
 	rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/
+	# things the package manifest never knew about: the fetched wallpapers,
+	# the daily cron line, helper caches and job pid files
+	rm -rf /usr/share/lucent
+	rm -f /etc/config/lucent
+	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.* \
+		/var/run/lucent-*.pid /var/run/lucent-*.job.sh
+	if [ -w /etc/crontabs/root ]; then
+		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null
+		sed -i '/lucent\/wallpaper.sh/d' /etc/crontabs/root 2>/dev/null
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
 	/etc/init.d/rpcd reload >/dev/null 2>&1
 }
 exit 0

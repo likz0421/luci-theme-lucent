@@ -3,6 +3,56 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.12.1 — 2026-11-04
+
+### Fixed
+
+- **The menu now appears for the one-key command itself.** 3.12.0 only showed
+  it when stdin was already a terminal, which `wget -qO- … | sh` never is — so
+  the command most people actually run skipped it entirely. The prompt reads
+  from `/dev/tty` when stdin is taken by the pipe, and falls back to the old
+  fully automatic behaviour only when there is genuinely no controlling
+  terminal (CI, cron, reflashing a batch of routers).
+- **Uninstalling leaves nothing behind.** The removal pass now covers every
+  path the theme can touch: all shipped `.lmo` catalogues rather than the two
+  zh-cn names we happened to have today, `/usr/share/lucent` including the
+  wallpapers fetched at runtime, `/tmp/lucent-*` and `/var/run/lucent-*`, the
+  uci section, and the `luci.languages.zh_cn` entry when no Chinese catalogue
+  survives.
+- **The package's own removal scripts did the same.** `postrm` / `post-deinstall`
+  previously reset the theme and deleted the htdocs directory, but left the
+  cron entry, the wallpaper cache and the helper's caches behind — those are
+  runtime files the manifest never listed, so the manager cannot remove them.
+- **The offline one-key installer never deleted `/usr/share/lucent`** at all.
+- **Removal scripts report failure when they miss something.** Each uninstall
+  path now finishes with a self-audit and exits non-zero, naming the paths
+  still present, instead of always printing "卸载完成".
+- **`set -e` could abort the installer on a plain predicate.** `[ -c /dev/tty ]`
+  and the `[ -e x ] && LEFT=…` audit lines were written as bare AND-lists, whose
+  non-zero status some shells treat as fatal even in a condition context. They
+  are explicit `if` blocks now.
+
+### Removed
+
+- The `-u` / `UNINSTALL=1` / `卸载` argument aliases added in 3.12.0. The menu
+  made them redundant, and three spellings for one action is three things to
+  remember.
+
+### Verified
+
+- `sh tests/install-logic.sh`: 25 checks, no failures. The two terminal
+  branches are driven by splicing a stubbed `has_tty` in before the dispatch,
+  because touching `/dev/tty` from the Windows test box kills the shell — which
+  is also the proof that the real device is never read when there is no
+  terminal.
+- `sh tests/uninstall-audit.sh`: new suite. It plants a full install into a
+  fake root (18 entries, including a cron line that must survive alongside an
+  unrelated one), runs a path-rewritten copy of `uninstall.sh` against it, and
+  asserts nothing lucent-shaped remains and the audit exits 0; it then deletes
+  one removal line from the copy and asserts the audit fails and names that
+  path.
+- `node tests/run-harness.js`: 15 scenarios, 844 assertions, no failures.
+
 ## 3.12.0 — 2026-11-04
 
 ### Added
