@@ -1,1 +1,1 @@
-luci-theme-lucent-3.11.1-r1.apk
+luci-theme-lucent-3.12.0-r1.apk
