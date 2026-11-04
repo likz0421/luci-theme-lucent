@@ -11,11 +11,32 @@ function line(label, value) {
 	]);
 }
 
-function kpi(label, value, sub, key) {
+/* The uptime card repeating its own number under itself tells nothing; when
+   the router booted is the half that is actually useful. */
+function bootStamp(seconds) {
+	var d = new Date(Date.now() - (Number(seconds) || 0) * 1000);
+
+	if (isNaN(d.getTime()))
+		return '–';
+
+	function p(n) { return (n < 10 ? '0' : '') + n; }
+
+	return '%s-%s-%s %s:%s'.format(d.getFullYear(), p(d.getMonth() + 1), p(d.getDate()),
+		p(d.getHours()), p(d.getMinutes()));
+}
+
+/* A KPI card with one number and one small line leaves most of the tile empty;
+   `meter` puts a proportion under it, which is the information the number
+   alone withholds (26% of what, and how full is that?). */
+function kpi(label, value, sub, key, meter) {
 	return E('div', { 'class': 'ltc-kpi' }, [
 		E('small', {}, label),
 		E('b', key ? { 'data-live': key } : {}, value),
-		E('span', key ? { 'data-live': key + '-sub' } : {}, sub)
+		E('span', key ? { 'data-live': key + '-sub' } : {}, sub),
+		meter != null ? E('i', { 'class': 'ltc-kmeter' }, E('u', {
+			'style': 'width:%d%%'.format(Math.max(2, Math.min(100, Math.round(meter)))),
+			'data-live': key ? key + '-meter' : ''
+		})) : ''
 	]);
 }
 
@@ -122,18 +143,47 @@ function clientsOf(data) {
 	return util.hosts(data.hints, data.leases);
 }
 
-/* Traffic history survives page navigation within the tab. */
+/* Stations associated across all radios: "2 devices" on its own says nothing
+   about where they hang off, and the Wi-Fi half is what a user asks next. */
+function assocCount(data) {
+	var assoc = (data && data.assoc) || {};
+
+	return Object.keys(assoc).reduce(function (n, k) {
+		return n + util.arr(assoc[k]).length;
+	}, 0);
+}
+
+function deviceSub(online, wifiN) {
+	return wifiN ? '%d · %s / %d · %s'.format(online, _('online'), wifiN, _('Wi-Fi'))
+		: '%d · %s'.format(online, _('online'));
+}
+
+/* Traffic history survives page navigation, tab close and a browser restart:
+   sessionStorage would leave the trend card empty on every fresh page, which
+   is the "half an empty card" the day-to-day complaint is about. Keyed by day
+   so yesterday's curve does not stretch today's axis. */
+function histKey() {
+	return 'lucent.hist.' + new Date().toISOString().slice(0, 10);
+}
+
 function loadHist() {
+	var out = [];
+
 	try {
-		return JSON.parse(sessionStorage.getItem('lucent.hist') || '[]');
+		var raw = localStorage.getItem(histKey());
+		out = raw ? JSON.parse(raw) : [];
 	} catch (e) {
 		return [];
 	}
+
+	/* a browser left open for days would keep every earlier day's tail */
+	var dayAgo = Date.now() - 86400000;
+	return out.filter(function (p) { return p && p.t > dayAgo; }).slice(-120);
 }
 
 function saveHist(h) {
 	try {
-		sessionStorage.setItem('lucent.hist', JSON.stringify(h.slice(-120)));
+		localStorage.setItem(histKey(), JSON.stringify(h.slice(-120)));
 	} catch (e) {}
 }
 
@@ -387,7 +437,7 @@ function treeSection(data, wifi) {
 		}, [
 			E('span', { 'class': 'ic' }, util.icon('devices')),
 			E('span', { 'class': 'tname' }, h.name || mac),
-			ip ? E('small', { 'class': 'tmeta' }, ip) : '',
+			ip ? E('small', { 'class': 'tmeta' }, ip) : E('small', { 'class': 'tmeta dim' }, _('no lease, no name')),
 			ip ? E('b', { 'class': 'trate', 'data-live': 'hr-' + ip.replace(/\./g, '-') },
 				rates[ip] ? rateText(rates[ip]) : '') : ''
 		]));
@@ -666,16 +716,24 @@ return view.extend({
 				el.style.setProperty('--val', String(percent));
 		}
 
+		function meter(key, percent) {
+			var el = document.querySelector('[data-live=' + key + '-meter]');
+			if (el)
+				el.style.width = '%d%%'.format(Math.max(2, Math.min(100, Math.round(percent))));
+		}
+
 		set('[data-live=uptime]', util.fmtDuration(data.info.uptime));
-		set('[data-live=uptime-sub]', _('%s since boot').format(util.fmtDuration(data.info.uptime)));
+		set('[data-live=uptime-sub]', _('since %s').format(bootStamp(data.info.uptime)));
 		if (data.info.localtime)
 			set('[data-live=sys-time]', new Date(data.info.localtime * 1000).toLocaleString());
 		setNum('[data-live=memory]', mem.percent, '%');
 		set('[data-live=memory-sub]', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)));
+		meter('memory', mem.percent);
 		set('[data-live=wan]', wan ? (util.ip4(wan) || _('Connected')) : _('Down'));
 		set('[data-live=wan-sub]', wan ? (wan.proto || wan.device || '') : _('No default route'));
 		setNum('[data-live=devices]', clients.length, '');
-		set('[data-live=devices-sub]', _('%d active').format(online));
+		set('[data-live=devices-sub]', deviceSub(online, assocCount(data)));
+		meter('devices', clients.length ? online * 100 / clients.length : 0);
 
 		var gwv = wan ? util.gateway(wan) : '';
 		var dnsv = wan ? util.dns(wan) : [];
@@ -870,12 +928,22 @@ return view.extend({
 			var h = byIp[e.ip] || {};
 			var name = h.name || e.ip;
 			var total = e.r.rx_rate + e.r.tx_rate;
+			var meta = [];
+
+			/* every row gets its second line, or the card reads as a list with
+			   random gaps; a named host shows its address, an unnamed one has
+			   nothing left to say but how long it has been quiet */
+			if (h.name)
+				meta.push(e.ip);
+
+			if (e.r.age > 20)
+				meta.push(_('%ds ago').format(e.r.age));
 
 			box.appendChild(E('li', { 'class': 'ltc-talker', 'title': '%s · %s'.format(name, e.ip) }, [
 				E('span', { 'class': 'who' }, name),
 				E('i', { 'class': 'bar' }, E('u', { 'style': 'width:%d%%'.format(Math.min(100, Math.round(total * 100 / peak))) })),
 				E('b', { 'class': 'val' }, rateText(e.r)),
-				e.r.age > 20 ? E('small', { 'class': 'age' }, _('%ds ago').format(e.r.age)) : ''
+				E('small', { 'class': 'age' }, meta.length ? meta.join(' · ') : _('active now'))
 			]));
 		});
 
@@ -938,9 +1006,25 @@ return view.extend({
 				return '%dm'.format(Math.round(s / 60));
 			return '%dh'.format(Math.round(s / 3600));
 		}
-		set('[data-live=tick-0]', rel(t0));
-		set('[data-live=tick-1]', rel(t0 + (tN - t0) / 3));
-		set('[data-live=tick-2]', rel(t0 + (tN - t0) * 2 / 3));
+		var labels = [
+			rel(t0),
+			rel(t0 + (tN - t0) / 3),
+			rel(t0 + (tN - t0) * 2 / 3),
+			_('now')
+		];
+
+		/* A history only seconds old rounds every tick to the same word, and an
+		   axis reading "now now now now" looks broken rather than young — so
+		   keep the rightmost copy of a repeated label and blank the rest. */
+		for (var ti = 0; ti < labels.length - 1; ti++) {
+			if (labels[ti] && labels[ti] === labels[ti + 1])
+				labels[ti] = '';
+		}
+
+		set('[data-live=tick-0]', labels[0]);
+		set('[data-live=tick-1]', labels[1]);
+		set('[data-live=tick-2]', labels[2]);
+		set('[data-live=tick-3]', labels[3]);
 
 		/* Persist the daily maximum beyond the in-tab history window. */
 		var dkey = 'lucent.peak.' + new Date().toISOString().slice(0, 10);
@@ -1217,11 +1301,12 @@ return view.extend({
 
 		var kpis = E('div', { 'class': 'ltc-kpis' }, [
 			kpi(_('WAN address'), wanIp, wan ? (wan.proto || wan.device || '') : _('No default route'), 'wan'),
-			kpi(_('Devices'), String(clients.length), _('%d active').format(online), 'devices'),
+			kpi(_('Devices'), String(clients.length), deviceSub(online, assocCount(data)), 'devices',
+				clients.length ? online * 100 / clients.length : null),
 			kpi(_('Traffic'), '↓ –', _('WAN throughput'), 'traffic'),
-			kpi(_('Uptime'), uptime, _('%s since boot').format(uptime), 'uptime'),
-			kpi(_('Memory'), mem.percent + '%', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)), 'memory'),
-			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage')
+			kpi(_('Uptime'), uptime, _('since %s').format(bootStamp(info.uptime)), 'uptime'),
+			kpi(_('Memory'), mem.percent + '%', '%s / %s'.format(util.fmtBytes(mem.used), util.fmtBytes(mem.total)), 'memory', mem.percent),
+			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage', storage ? storage.percent : null)
 		]);
 
 		var leaseRem = '–';

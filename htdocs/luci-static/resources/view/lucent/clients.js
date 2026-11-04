@@ -4,10 +4,16 @@
 'require lucent.core as core';
 'require lucent.util as util';
 
-function summary(value, label) {
+/* A tile with one number in it is a tile the eye slides past; the second line
+   says what the number is a share of. */
+function summary(value, label, sub, percent) {
 	return E('div', { 'class': 'ltc-kpi' }, [
 		E('small', {}, label),
-		E('b', {}, value)
+		E('b', {}, value),
+		E('span', {}, sub || ''),
+		percent != null ? E('i', { 'class': 'ltc-kmeter' }, E('u', {
+			'style': 'width:%d%%'.format(Math.max(2, Math.min(100, Math.round(percent))))
+		})) : ''
 	]);
 }
 
@@ -226,10 +232,15 @@ return view.extend({
 
 		this.sumBox.textContent = '';
 		[
-			summary(String(hosts.length), _('Known devices')),
-			summary(String(online), _('Active leases')),
-			summary(String(named), _('Named hosts')),
-			summary(String(v6), _('IPv6 capable'))
+			summary(String(hosts.length), _('Known devices'),
+				'%d · %s'.format(online, _('online')),
+				hosts.length ? online * 100 / hosts.length : null),
+			summary(String(online), _('Active leases'),
+				'%d · %s'.format(named, _('named'))),
+			summary(String(named), _('Named hosts'),
+				'%d · %s'.format(Math.max(0, hosts.length - named), _('unnamed'))),
+			summary(String(v6), _('IPv6 capable'),
+				'%d · %s'.format(Math.max(0, hosts.length - v6), _('IPv4 only')))
 		].forEach(function (s) { self.sumBox.appendChild(s); });
 
 		rows.forEach(function (r) {

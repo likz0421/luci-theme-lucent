@@ -97,7 +97,10 @@ async function run(port) {
 		fs.mkdirSync(shots, { recursive: true });
 
 	for (const flag of scenarios) {
-		const base = flag === '#base' ? '' : flag;
+		/* #tall is a viewport choice rather than a scenario: the same page, tall
+		   enough to photograph the whole dashboard in one picture */
+		const base = (flag === '#base' || flag === '#tall') ? '' : flag;
+		const tall = flag === '#tall';
 		const narrow = base === '#drawer';
 		const opt = {
 			/* #menu-noload waits 19 s for the core.js watchdog and the other menu
@@ -105,7 +108,7 @@ async function run(port) {
 			   not wall clock */
 			budget: base === '#menu-noload' ? 34000 : (/^#menu-/.test(base) ? 24000 : 13000),
 			width: narrow ? 390 : 1500,
-			height: narrow ? 844 : 900
+			height: narrow ? 844 : (tall ? 2700 : 900)
 		};
 
 		const url = 'http://127.0.0.1:' + port + '/tests/harness.html' + base;

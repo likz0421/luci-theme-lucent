@@ -3,6 +3,49 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.11.0 — 2026-11-04
+
+### Fixed
+
+- **The trend axis read "now now now now"** while the history was only seconds
+  old — a chart that looks broken rather than young. Repeated tick labels now
+  collapse, keeping only the rightmost one.
+- **The Uptime card repeated its own number** as its sub-line
+  (`12h 50m` above `12h 50m since boot`). The sub-line is now the boot
+  timestamp (`since 2026-11-04 00:59`), which is the half that carries
+  information.
+- **Topology leaves with neither a lease nor a name showed a bare MAC**, which
+  is indistinguishable from a rendering failure; they now say
+  *no lease, no name*.
+- **Top talkers rows had a second line only sometimes** (the age, when over
+  20 s), leaving the card visibly ragged. Every row now has one: the address
+  when the host is named, otherwise how long it has been quiet.
+
+### Added
+
+- **The trend history survives a browser restart.** Samples lived in
+  `sessionStorage`, i.e. per tab, so every fresh tab redrew an almost empty
+  chart for minutes — one of the "cards look half empty" reports. They are
+  stored per day in `localStorage`, capped at 120 samples and 24 hours, so the
+  curve is populated the moment the page opens.
+- **KPI tiles gained a proportion.** Devices, Memory and Storage now carry a
+  thin meter, and the Devices tile splits its count into online and
+  Wi-Fi-associated hosts instead of a single number.
+- The four tiles above the device table (Known devices / Active leases / Named
+  hosts / IPv6 capable) gained the same second line and meter: a bare number
+  hides its own denominator.
+- The sidebar status panel **fades its bottom edge while it can scroll**, so a
+  row ending at the cap reads as "more below" instead of clipped text. The
+  fade is off in the rail and while the panel is collapsed, where nothing
+  scrolls.
+
+### Verified
+
+- Fourteen harness scenarios, 0 failures. Dashboard and device page
+  re-photographed at 1500×2700 (whole page in one picture) and 390 px drawer;
+  boot timestamp, meters, talker rows, leaf labels and the panel fade checked
+  in the pictures, not only in the DOM.
+
 ## 3.10.12 — 2026-11-04
 
 ### Fixed

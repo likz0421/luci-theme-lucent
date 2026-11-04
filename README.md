@@ -44,6 +44,8 @@ stylesheets, scripts or package metadata with them.
 - Memory, swap and load rings
 - Device list and quick actions
 - Wi-Fi radio count and the first configured SSID
+- Traffic trend that survives a browser restart (samples are kept per day),
+  with KPI tiles carrying a proportion bar instead of a bare number
 
 **Navigation**
 - Grouped sidebar with a mobile drawer, built by the theme itself — no
