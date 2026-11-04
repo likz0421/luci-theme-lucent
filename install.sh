@@ -296,22 +296,23 @@ has_tty() {
 	return 1
 }
 
-# 交互确认：有终端就读终端（必要时走 /dev/tty），完全没终端时取默认值，
-# 这样 CI、cron、批量刷机不会被卡在输入上。
+# 交互确认：结果写进 ANSWER，绝不通过 stdout 返回。
+# 用 `ANS=$(ask …)` 的写法会把提示语一起捕获进来（"请选择 [1] 2"），
+# case 永远匹配不上 —— 菜单就是这么失效的。提示语走 stderr。
 ask() {
 	local ans
 	if [ ! -t 0 ] && ! has_tty; then
-		printf '%s' "$2"
+		ANSWER="$2"
 		return 0
 	fi
-	printf '%s [%s] ' "$1" "$2"
+	printf '%s [%s] ' "$1" "$2" >&2
 	if [ -t 0 ]; then
 		read -r ans || ans=""
 	else
 		read -r ans </dev/tty 2>/dev/null || ans=""
 	fi
 	[ -n "$ans" ] || ans="$2"
-	printf '%s' "$ans"
+	ANSWER="$ans"
 }
 
 get_latest() {
@@ -433,8 +434,8 @@ do_install() {
 			log ""
 			log "！本机 $CUR_VER 比线上 $VER 更新，继续会降级，并且装完无法在页面里回退。"
 			if [ "$FORCE" != "1" ]; then
-				ANS=$(ask "  仍要安装 $VER 吗？(y/N)" "n")
-				[ "$ANS" = "y" ] || [ "$ANS" = "Y" ] || { log "已取消，未改动系统。"; exit 0; }
+				ask "  仍要安装 $VER 吗？(y/N)" "n"
+				[ "$ANSWER" = "y" ] || [ "$ANSWER" = "Y" ] || { log "已取消，未改动系统。"; exit 0; }
 			fi
 		fi
 	else
@@ -533,8 +534,8 @@ do_uninstall() {
 	if [ "$CUR_HOW" = "none" ]; then
 		log "→ 没有检测到已安装的 Lucent，仍将清理可能残留的文件与配置。"
 	else
-		ANS=$(ask "→ 确认卸载并恢复 Bootstrap？(y/N)" "y")
-		[ "$ANS" = "y" ] || [ "$ANS" = "Y" ] || { log "已取消，未做任何改动。"; exit 0; }
+		ask "→ 确认卸载并恢复 Bootstrap？(y/N)" "y"
+		[ "$ANSWER" = "y" ] || [ "$ANSWER" = "Y" ] || { log "已取消，未做任何改动。"; exit 0; }
 	fi
 	log "→ 卸载 Lucent…"
 
@@ -683,7 +684,8 @@ menu() {
     2) 卸载主题并恢复 Bootstrap
     0) 退出
 EOF
-	case "$(ask "  请选择 [1]" "1")" in
+	ask "  请选择 [1]" "1"
+	case "$ANSWER" in
 		1) do_install ;;
 		2) do_uninstall ;;
 		0) echo "已退出，未做任何改动。" ;;

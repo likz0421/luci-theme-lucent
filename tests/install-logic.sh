@@ -70,11 +70,20 @@ suite() {
 		# process the moment it is touched. So the two branches are driven by
 		# splicing a stub has_tty/ask in just before the dispatch, which is what
 		# actually decides whether the menu appears.
+		# Contract: ask() answers through ANSWER and writes nothing to stdout.
+		# `ANS=$(ask …)` used to capture the prompt text as well, so every menu
+		# choice became "  请选择 [1] 2" and fell through to "没听懂".
+		has_tty() { return 1; }
+		ask "问题" "n" 2>/dev/null
+		[ "$ANSWER" = "n" ] && ok "ask returns the default through ANSWER" || no "ask ANSWER default" "$ANSWER"
+		STDOUT=$(ask "问题" "n" 2>/dev/null)
+		[ -z "$STDOUT" ] && ok "ask writes nothing to stdout" || no "ask writes nothing to stdout" "captured '$STDOUT'"
+
 		case "$(uname -s 2>/dev/null)" in
 		MINGW*|MSYS*|CYGWIN*)
 			MARK='if [ -z "$ACTION" ]; then'
 			printf 'has_tty() { return 1; }\n' > "$WORK/no-tty.ov"
-			printf 'has_tty() { return 0; }\nask() { printf "2"; return 0; }\n' > "$WORK/tty.ov"
+			printf 'has_tty() { return 0; }\nask() { ANSWER="2"; }\n' > "$WORK/tty.ov"
 
 			splice() {
 				awk -v m="$2" -v ov="$3" '

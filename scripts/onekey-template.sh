@@ -98,17 +98,17 @@ has_tty() {
 ask() {
 	local ans
 	if [ ! -t 0 ] && ! has_tty; then
-		printf '%s' "$2"
+		ANSWER="$2"
 		return 0
 	fi
-	printf '%s [%s] ' "$1" "$2"
+	printf '%s [%s] ' "$1" "$2" >&2
 	if [ -t 0 ]; then
 		read -r ans || ans=""
 	else
 		read -r ans </dev/tty 2>/dev/null || ans=""
 	fi
 	[ -n "$ans" ] || ans="$2"
-	printf '%s' "$ans"
+	ANSWER="$ans"
 }
 
 ACTION="${1:-}"
@@ -385,7 +385,8 @@ menu() {
     2) 卸载主题并恢复 Bootstrap
     0) 退出
 EOF
-	case "$(ask "  请选择 [1]" "1")" in
+	ask "  请选择 [1]" "1"
+	case "$ANSWER" in
 		1) do_install ;;
 		2) do_uninstall ;;
 		0) echo "已退出，未做任何改动。" ;;
