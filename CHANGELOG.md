@@ -3,6 +3,39 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.12.2 — 2026-11-04
+
+Two failures reported from a real router running the one-key command.
+
+### Fixed
+
+- **`apk` upgrades failed outright on routers that had ever been installed by
+  file copy.** The install stopped at
+  `ERROR: luci-theme-lucent-3.12.1-r1: trying to overwrite usr/lib/lua/luci/i18n/…`
+  because a tar.gz / offline install drops its `.lmo` catalogues and theme
+  files on disk without any package owning them, and apk refuses to write over
+  a file that belongs to nobody. The installer now recognises that specific
+  error and retries once with `--force-overwrite` — these files are ours by
+  definition — and reports that it did. Any other apk failure is left to fail
+  loudly as before; the retry is deliberately not a blanket `--force`.
+- **The menu did not appear for the documented command.** The copy served from
+  `cdn.jsdelivr.net/gh/…@main/install.sh` was a 3.10.12-era cached file, which
+  predates the menu entirely (the run's own first line, "脚本内置默认
+  3.10.12-r1", gave it away). The header docs and the README uninstall example
+  now lead with `releases/latest/download/lucent-install.sh`, which always
+  resolves to the newest release and cannot go stale, and say plainly why the
+  `@main` CDN path may hand back an old script.
+
+### Verified
+
+- `sh tests/install-apk-retry.sh`: new suite. It runs the real installer
+  against a stubbed router whose `apk add` fails with exactly that error, and
+  asserts the conflict is shown, the retry happens with `--force-overwrite`,
+  and the install exits 0; then it swaps in a different apk failure and asserts
+  the script does *not* force-overwrite and still fails. 7 checks, no failures.
+- `sh tests/install-logic.sh` (25), `sh tests/uninstall-audit.sh`, and
+  `node tests/run-harness.js` (15 scenarios / 844 assertions) all clean.
+
 ## 3.12.1 — 2026-11-04
 
 ### Fixed

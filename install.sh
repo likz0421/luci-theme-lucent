@@ -7,14 +7,20 @@
 #
 # 一行命令安装（在路由器 SSH 里执行）：
 #
-#   直连 GitHub：
+#   推荐（Release 资源，永远是最新版，不会被 CDN 缓存成旧副本）：
+#     wget -qO- https://github.com/likz0421/luci-theme-lucent/releases/latest/download/lucent-install.sh | sh
+#
+#   直连 GitHub 仓库文件：
 #     wget -qO- https://raw.githubusercontent.com/likz0421/luci-theme-lucent/main/install.sh | sh
 #
-#   国内镜像加速（jsDelivr，拉脚本更快）：
+#   国内镜像加速（拉脚本更快）：
 #     wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh
 #
 #   若路由器没有 wget，可用 curl：
 #     curl -fsSL https://github.com/likz0421/luci-theme-lucent/raw/main/install.sh | sh
+#
+#   注意：jsDelivr 这类 CDN 会把 @main 的文件缓存一段时间，可能给你一份旧
+#   脚本（旧脚本没有交互菜单）。想拿到当前版本，用上面第一条 Release 资源地址。
 #
 # 运行后会先问你装什么：
 #     1) 安装 / 升级到最新版        2) 卸载主题并恢复 Bootstrap
@@ -30,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.12.1-r1"
-LUCENT_TAG_DEFAULT="v3.12.1"
+LUCENT_VERSION_DEFAULT="3.12.2-r1"
+LUCENT_TAG_DEFAULT="v3.12.2"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -470,6 +476,19 @@ do_install() {
 			INSTALLED=1; log "  apk: 完成"
 		else
 			cat "$TMP/pkg.log"
+			# 早先用文件方式（tar.gz / 离线包）装过的机器，磁盘上会留着不属于
+			# 任何包的 /usr/lib/lua/luci/i18n/*.lmo 等文件；apk 升级时不会覆盖
+			# 无主文件，直接报 "trying to overwrite" 并失败。这些文件本来就归本
+			# 主题所有，所以识别到该错误就显式覆盖重试一次。
+			if grep -q 'trying to overwrite' "$TMP/pkg.log" 2>/dev/null; then
+				log "  与旧版残留文件冲突，使用 --force-overwrite 重试…"
+				if apk add --allow-untrusted --force-overwrite --no-network \
+					"$TMP/$PKGFILE" >"$TMP/pkg2.log" 2>&1; then
+					INSTALLED=1; log "  apk: 完成（已覆盖旧残留文件）"
+				else
+					cat "$TMP/pkg2.log"
+				fi
+			fi
 		fi
 	elif have opkg; then
 		log "→ 使用 opkg 安装…"

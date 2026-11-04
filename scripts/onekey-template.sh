@@ -221,6 +221,17 @@ do_install() {
 			echo "  apk: 完成"
 		else
 			cat "$TMP/pkg.log"
+			# 文件方式安装留下的无主 .lmo 会让 apk 拒绝覆盖，识别后显式重试
+			if grep -q 'trying to overwrite' "$TMP/pkg.log" 2>/dev/null; then
+				echo "  与旧版残留文件冲突，使用 --force-overwrite 重试…"
+				if apk add --allow-untrusted --force-overwrite --no-network \
+					"$TMP/$PKG_NAME-$VER.apk" >"$TMP/pkg2.log" 2>&1; then
+					INSTALLED=1
+					echo "  apk: 完成（已覆盖旧残留文件）"
+				else
+					cat "$TMP/pkg2.log"
+				fi
+			fi
 		fi
 	elif command -v opkg >/dev/null 2>&1; then
 		echo "→ 使用 opkg 安装…"

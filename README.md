@@ -147,8 +147,9 @@ sh install.sh uninstall
 # 查看本机装的是哪个版本
 sh install.sh status
 
-# 管道方式同样会先弹菜单；无终端的自动化环境才会直接安装
-wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh
+# 管道方式同样会先弹菜单；无终端的自动化环境才会直接安装。
+# 用 Release 资源地址，避免 jsDelivr 把 @main 的旧脚本缓存给你（旧副本没有菜单）。
+wget -qO- https://github.com/likz0421/luci-theme-lucent/releases/latest/download/lucent-install.sh | sh
 ```
 
 如果管道方式不便，可先下载脚本再执行：
