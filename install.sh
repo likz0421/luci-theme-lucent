@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.12.2-r1"
-LUCENT_TAG_DEFAULT="v3.12.2"
+LUCENT_VERSION_DEFAULT="0.1-r1"
+LUCENT_TAG_DEFAULT="v0.1"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -227,6 +227,25 @@ ver_newer() {
 	local a b
 	a=$(vkey "$1"); b=$(vkey "$2")
 	[ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort | tail -n1)" = "$a" ]
+}
+
+# ver_advance <target> <installed> -> true when the target should replace it.
+# A 0.x target also counts: the 3.x line was retired and its release assets
+# were deleted, so moving onto the new line is the correct direction even
+# though 0.1 sorts below 3.12.
+ver_advance() {
+	# Never let the retired line overwrite the new one: a stale mirror pointer
+	# can still name a 3.x build whose release assets no longer exist.
+	if [ "${2%%.*}" = "0" ] && [ "${1%%.*}" != "0" ]; then
+		return 1
+	fi
+	if ver_newer "$1" "$2"; then
+		return 0
+	fi
+	if [ "${1%%.*}" = "0" ] && [ "${2%%.*}" != "0" ]; then
+		return 0
+	fi
+	return 1
 }
 
 get_current() {
@@ -430,6 +449,10 @@ do_install() {
 			[ "$FORCE" = "1" ] || exit 0
 		elif ver_newer "$VER" "$CUR_VER"; then
 			log "→ 检测到旧版本 $CUR_VER，线上最新为 $VER，开始在线升级"
+		elif [ "${VER%%.*}" = "0" ] && [ "${CUR_VER%%.*}" != "0" ]; then
+			# 版本线重置：0.x 是新线的起点，机器上的 3.x 已经停止发布、指向的
+			# 资源也已删除，所以这不是降级，切过去才是正确方向。
+			log "→ 版本线已重置：本机 $CUR_VER 属于不再发布的 3.x，现在切换到新线 $VER"
 		else
 			log ""
 			log "！本机 $CUR_VER 比线上 $VER 更新，继续会降级，并且装完无法在页面里回退。"
@@ -640,7 +663,7 @@ do_check() {
 	[ -n "$LATEST" ] || { printf '{"current":"%s","latest":"","available":false,"error":"no-source"}\n' "$CURRENT"; exit 0; }
 	if [ -z "$CURRENT" ]; then
 		AVAIL=true
-	elif ver_newer "$LATEST" "$CURRENT"; then
+	elif ver_advance "$LATEST" "$CURRENT"; then
 		AVAIL=true
 	fi
 	printf '{"current":"%s","latest":"%s","available":%s,"via":"%s"}\n' "$CURRENT" "$LATEST" "$AVAIL" "${VIA:-unknown}"
@@ -658,7 +681,7 @@ do_update() {
 		log "无法连接更新源，请检查网络或改用镜像：LUCENT_CN=1 sh install.sh update" >&2
 		exit 1
 	fi
-	if [ -n "$CURRENT" ] && ! ver_newer "$LATEST" "$CURRENT"; then
+	if [ -n "$CURRENT" ] && ! ver_advance "$LATEST" "$CURRENT"; then
 		log "已是最新版本 $LATEST。"
 		exit 0
 	fi

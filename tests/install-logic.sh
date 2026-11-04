@@ -25,6 +25,7 @@ suite() {
 		extract sanitize
 		extract vkey
 		extract ver_newer
+		extract ver_advance
 		extract detect_installed
 		extract installed_desc
 		[ "$label" = "install.sh" ] && { extract ask; extract has_tty; }
@@ -38,6 +39,16 @@ suite() {
 	ver_newer 3.11.1 3.11.1 && no "equal not newer" "equal counted as newer" || ok "equal not newer"
 	ver_newer 3.11.0 3.9.9 && ok "double digit minor" || no "double digit minor" "lexicographic trap"
 	ver_newer 3.11.1-r2 3.11.1-r1 && ok "release bump counts" || no "release bump" "ignored -r"
+
+	# the retired-3.x / new-0.x line, which plain ordering gets backwards
+	if ! command -v ver_advance >/dev/null 2>&1; then
+		printf '  SKIP line-reset rules (%s has no ver_advance)\n' "$label"
+	else
+		ver_advance 0.1-r1 3.12.1-r1 && ok "line reset moves 3.x onto 0.1" || no "line reset" "refused the switch"
+		ver_advance 0.2 0.1 && ok "newer within the new line" || no "newer within line" "refused"
+		ver_advance 0.1 0.2 && no "still refuses a real downgrade" "accepted 0.1 over 0.2" || ok "still refuses a real downgrade"
+		ver_advance 3.12.1 0.1 && no "3.x over 0.x is a downgrade" "accepted" || ok "3.x over 0.x is a downgrade"
+	fi
 
 	mkdir -p "$WORK/bin"
 	printf '#!/bin/sh\n[ "$1" = info ] && [ "$2" = -e ] && [ "$3" = -v ] && echo "luci-theme-lucent-3.10.12-r1"\nexit 1\n' > "$WORK/bin/apk"

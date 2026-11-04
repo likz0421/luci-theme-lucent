@@ -1,7 +1,66 @@
 # Changelog
 
-All notable changes to Lucent 3 are documented here. The project follows
+All notable changes to Lucent are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
+
+The 3.x line was retired on 2026-11-04 and its GitHub releases and tags were
+removed; the version numbering restarts at **0.1** from here. The feature notes
+below describe what the theme does today — the 3.x history is kept underneath
+for reference.
+
+## 0.1 — 2026-11-04
+
+Restart of the version line. Everything below is what this release contains.
+
+### Dashboard
+
+- Hero panel with greeting, daily line, WAN/LAN address, uptime and model.
+- KPI row: WAN address, device count, live throughput, uptime, memory, storage.
+- **Network path card**: Internet → this router → LAN/WiFi as clickable nodes
+  with live per-link rates, plus a summary strip (current traffic, connected
+  time, active networks, busiest network).
+- **Traffic trend**: rolling down/up curve sampled every 10 s, with a relative
+  time axis, hover readout, session history and a persisted daily peak.
+- Health card: CPU / memory / load dials, a used-cache-free memory split bar
+  with a legend, and per-core busy bars.
+- Top talkers and per-host rates, driven by conntrack accounting when the user
+  turns it on in Appearance.
+- Update banner with an automatic version check, a progress bar during the
+  online upgrade, and an upgradable-package count.
+
+### Devices
+
+- Device-class chips (phone / TV / camera / computer / printer / wearable /
+  smart / network), sortable columns, a connections column, and a 15 s refresh
+  that keeps the active filter.
+
+### Look and behaviour
+
+- Seven palettes, light/dark/auto, glass on/off, blur and opacity sliders,
+  density, greeting, wallpaper (including a daily Bing auto-fetch cron), and a
+  three-state theme cycle.
+- Collapsible icon rail on desktop, drawer + bottom dock on phones, command
+  palette, keyboard focus rings, and `prefers-reduced-motion` handling.
+
+### Installer
+
+- One-key online install / upgrade / uninstall with mirror fallback, a terminal
+  menu (1 install, 2 uninstall), version detection that upgrades an old install
+  and refuses a downgrade, gzip validation of every download, and an exhaustive
+  uninstall that self-audits for leftovers.
+
+### Fixed since 3.12.2
+
+- **The menu never accepted a choice.** `$(ask …)` captured the prompt text
+  along with the answer, so every input fell through to "没听懂". `ask()` now
+  answers through `ANSWER` and prints the prompt to stderr.
+- **Version-line reset handled explicitly.** A 0.x target now replaces a 3.x
+  install instead of being refused as a downgrade, and the reverse — a stale
+  mirror pointer trying to push a retired 3.x build onto a 0.x machine — is
+  refused even though 3.x sorts higher numerically.
+
+<details>
+<summary>3.x history (retired)</summary>
 
 ## 3.12.2 — 2026-11-04
 
@@ -1441,3 +1500,5 @@ OpenWrt 25.12 (ucode LuCI); it does not contain code from other themes.
   at 390 px and 280 px widths.
 - Started the add-on installer with `setsid` and recorded the background
   shell's own PID so status polling works on images without `nohup`.
+
+</details>
