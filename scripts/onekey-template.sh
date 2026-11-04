@@ -14,6 +14,49 @@ set -e
 VER="__VER__"
 PKG_NAME="luci-theme-lucent"
 
+# ---- 已安装状态探测 --------------------------------------------------------
+# 与在线版 install.sh 同一套判断：包记录、版本标记、主题目录三选一。
+sanitize() { printf '%s' "$1" | tr -cd 'A-Za-z0-9._-'; }
+
+vkey() {
+	printf '%s' "$1" | sed 's/[-.rR]/ /g' | awk '{printf "%06d.%06d.%06d.%06d", $1+0, $2+0, $3+0, $4+0}'
+}
+
+ver_newer() {
+	local a b
+	a=$(vkey "$1"); b=$(vkey "$2")
+	[ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort | tail -n1)" = "$a" ]
+}
+
+detect_installed() {
+	CUR_VER=""
+	CUR_HOW="none"
+
+	if command -v apk >/dev/null 2>&1; then
+		CUR_VER=$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//" || true)
+		[ -n "$CUR_VER" ] && CUR_HOW="apk"
+	fi
+	if [ -z "$CUR_VER" ] && command -v opkg >/dev/null 2>&1; then
+		CUR_VER=$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1 || true)
+		[ -n "$CUR_VER" ] && CUR_HOW="opkg"
+	fi
+	if [ -z "$CUR_VER" ] && [ -f /usr/share/lucent/version ]; then
+		CUR_VER=$(cat /usr/share/lucent/version 2>/dev/null || true)
+		CUR_HOW="files"
+	elif [ "$CUR_HOW" = "none" ] && [ -d /www/luci-static/lucent ]; then
+		CUR_HOW="files"
+	fi
+	CUR_VER=$(sanitize "$CUR_VER")
+}
+
+installed_desc() {
+	if [ "$CUR_HOW" = "none" ]; then
+		printf '未安装'
+	else
+		printf '已安装 %s（%s 方式）' "${CUR_VER:-未知版本}" "$CUR_HOW"
+	fi
+}
+
 usage() {
 	cat <<'EOF'
 Lucent 3 一键脚本
@@ -117,6 +160,19 @@ activate_theme() {
 do_install() {
 	ensure_luci || exit 1
 	decode_payload || exit 1
+
+	# 这个包里的版本是固定的，所以要告诉用户本机装的是什么、这次是升级还是重装。
+	detect_installed
+	echo "→ 本机状态：$(installed_desc)；本包版本：$VER"
+	if [ "$CUR_HOW" != "none" ] && [ -n "$CUR_VER" ]; then
+		if [ "$CUR_VER" = "$VER" ]; then
+			echo "→ 版本一致，继续执行覆盖重装。"
+		elif ver_newer "$VER" "$CUR_VER"; then
+			echo "→ 检测到旧版本 $CUR_VER，本包为 $VER，执行升级。"
+		else
+			echo "→ 注意：本机 $CUR_VER 比本包 $VER 更新，继续会降级。"
+		fi
+	fi
 
 	INSTALLED=0
 
@@ -234,18 +290,9 @@ do_uninstall() {
 }
 
 do_status() {
-	PKG_STATE="未安装"
+	detect_installed
 
-	if command -v apk >/dev/null 2>&1; then
-		if apk info -e "$PKG_NAME" >/dev/null 2>&1; then
-			PKG_STATE="$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 || echo '已安装')"
-		fi
-	elif command -v opkg >/dev/null 2>&1; then
-		OPKG_VER="$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p')"
-		[ -n "$OPKG_VER" ] && PKG_STATE="$PKG_NAME $OPKG_VER"
-	fi
-
-	echo "软件包：$PKG_STATE"
+	echo "本机状态：$(installed_desc)"
 	echo "当前主题：$(uci -q get luci.main.mediaurlbase || echo '未设置')"
 	echo "Lucent 注册路径：$(uci -q get luci.themes.Lucent || echo '未注册')"
 	echo "中文语言项：$(uci -q get luci.languages.zh_cn || echo '未注册')"

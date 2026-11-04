@@ -3,6 +3,49 @@
 All notable changes to Lucent 3 are documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## 3.12.0 — 2026-11-04
+
+### Added
+
+- **Interactive menu in `install.sh`.** Running the script from a shell with no
+  argument now lists 安装/升级 · 检查更新 · 一键卸载 · 查看状态 instead of
+  jumping straight into an install. It only appears on a real terminal: under
+  `wget -qO- … | sh` stdin *is* the script, so reading an answer there would
+  truncate the install halfway. Piped runs keep the old non-interactive
+  behaviour.
+- **Version detection before anything is touched.** Every action now starts
+  with `本机状态：已安装 3.10.12-r1（apk 方式）` or `未安装`. Detection covers
+  all three ways the theme can be on a router: an apk record, an opkg record,
+  and a file-copy install (whose only trace is the version marker, or the
+  theme directory alone when the marker is missing).
+- **An old install is upgraded, not silently overwritten.** When the router has
+  an older version than the online latest, the script says so and proceeds to
+  upgrade.
+- **Downgrades are refused.** If the router carries a newer version than the
+  source can offer — a stale mirror pointer, an offline package built from an
+  older tag — the script explains that there is no way back from the web UI
+  and asks; `LUCENT_FORCE=1` overrides.
+- **Uninstall asks first**, and reports what it found when it finds nothing.
+- The offline one-key installer carries the same detection and the same
+  upgrade / downgrade messaging, so the two scripts cannot drift apart.
+
+### Changed
+
+- Running `install.sh` when the exact version is already installed now stops
+  with "已是最新版" instead of re-downloading and re-installing it;
+  `LUCENT_FORCE=1` restores the repair reinstall.
+- `install.sh status` prints the detected version and install method instead of
+  a package-manager-only summary, which read as "未安装" on file-copy installs.
+
+### Verified
+
+- `sh tests/install-logic.sh` — a new suite that runs the same assertions
+  against both `install.sh` and `scripts/onekey-template.sh`: ordered version
+  comparison including the `3.11.0 > 3.9.9` lexicographic trap,
+  apk/opkg/marker detection, and that a piped stdin is never read.
+  38 checks, no failures.
+- `node tests/run-harness.js`: 15 scenarios, 844 assertions, no failures.
+
 ## 3.11.1 — 2026-11-04
 
 A full read-through of the codebase — frontend, rpcd helper, installers,

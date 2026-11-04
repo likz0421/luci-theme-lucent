@@ -19,16 +19,20 @@
 # 卸载：
 #     wget -qO- https://cdn.jsdelivr.net/gh/likz0421/luci-theme-lucent@main/install.sh | sh -s uninstall
 #
+# 在 SSH 里把脚本下载下来直接运行（不带动作参数）会进入交互菜单：
+# 安装/升级、检查更新、一键卸载、查看状态，并先告诉你本机装的是哪个版本。
+#
 # 环境变量（可选）：
 #   LUCENT_CN=1        强制优先使用国内镜像下载软件包
 #   LUCENT_BASE_URL=…  指定你自己的下载地址（私有镜像 / 内网 / 本地测试）
 #   LUCENT_VERSION=…   覆盖要安装的版本号
+#   LUCENT_FORCE=1     已是最新版也覆盖重装；本机比线上新时允许降级
 #
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="3.11.1-r1"
-LUCENT_TAG_DEFAULT="v3.11.1"
+LUCENT_VERSION_DEFAULT="3.12.0-r1"
+LUCENT_TAG_DEFAULT="v3.12.0"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -36,6 +40,8 @@ VER="${LUCENT_VERSION:-$LUCENT_VERSION_DEFAULT}"
 TAG="${LUCENT_TAG:-$LUCENT_TAG_DEFAULT}"
 VER_NO_R="${VER%%-r*}"
 PKG_NAME="luci-theme-lucent"
+# 覆盖式重装 / 允许降级：LUCENT_FORCE=1（或 FORCE=1）
+FORCE="${LUCENT_FORCE:-${FORCE:-0}}"
 
 log() { [ "$QUIET" = "1" ] || echo "$@"; }
 
@@ -43,21 +49,23 @@ usage() {
 	cat <<EOF
 Lucent 3 在线一键脚本  (版本 $VER)
 
-  sh install.sh install     在线下载并安装 / 升级（默认）
+  sh install.sh             在终端里直接运行会进入交互菜单（安装/检查/卸载/状态）
+  sh install.sh install     在线下载并安装 / 升级（管道执行时的默认动作）
   sh install.sh check       检查是否有新版本（输出 JSON）
   sh install.sh update      检测到新版本时在线升级
-  sh install.sh uninstall   卸载并恢复 Bootstrap
-  sh install.sh status      查看安装状态
+  sh install.sh uninstall   一键卸载并恢复 Bootstrap
+  sh install.sh status      查看本机安装状态与版本号
 
 默认从 GitHub Releases 下载，失败时自动回退到国内镜像。
 强制走镜像：  LUCENT_CN=1 sh install.sh
 自定义地址：  LUCENT_BASE_URL=https://your-host/lucent sh install.sh
+已是最新也要重装 / 允许降级：  LUCENT_FORCE=1 sh install.sh
 EOF
 }
 
-ACTION="${1:-install}"
+ACTION="${1:-}"
 case "$ACTION" in
-	install|check|update|uninstall|status) ;;
+	''|install|check|update|uninstall|status) ;;
 	-h|--help|help) usage; exit 0 ;;
 	*) log "未知操作：$ACTION"; usage; exit 1 ;;
 esac
@@ -229,6 +237,50 @@ get_current() {
 	printf '%s' "$v"
 }
 
+# ---- 已安装状态探测 --------------------------------------------------------
+# 包管理器记录、安装时写下的版本标记、以及实际存在的主题目录，三者任一命中都
+# 算"已安装"。只查包管理器会漏掉 tar.gz 文件方式安装的那批机器。
+detect_installed() {
+	CUR_VER=""
+	CUR_HOW="none"
+
+	if have apk; then
+		CUR_VER=$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 | sed "s/^${PKG_NAME}-//" || true)
+		[ -n "$CUR_VER" ] && CUR_HOW="apk"
+	fi
+	if [ -z "$CUR_VER" ] && have opkg; then
+		CUR_VER=$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p' | head -n1 || true)
+		[ -n "$CUR_VER" ] && CUR_HOW="opkg"
+	fi
+	if [ -z "$CUR_VER" ] && [ -f /usr/share/lucent/version ]; then
+		CUR_VER=$(cat /usr/share/lucent/version 2>/dev/null || true)
+		CUR_HOW="files"
+	elif [ "$CUR_HOW" = "none" ] && [ -d /www/luci-static/lucent ]; then
+		# 目录在、版本标记不在：装过但没留下可比较的版本号
+		CUR_HOW="files"
+	fi
+	CUR_VER=$(sanitize "$CUR_VER")
+}
+
+installed_desc() {
+	if [ "$CUR_HOW" = "none" ]; then
+		printf '未安装'
+	else
+		printf '已安装 %s（%s 方式）' "${CUR_VER:-未知版本}" "$CUR_HOW"
+	fi
+}
+
+# 管道执行（wget -qO- … | sh）时 stdin 不是终端，read 会把脚本自己吃掉，
+# 所以非交互一律直接取默认值。
+ask() {
+	local ans
+	[ -t 0 ] || { printf '%s' "$2"; return 0; }
+	printf '%s [%s] ' "$1" "$2"
+	read -r ans || ans=""
+	[ -n "$ans" ] || ans="$2"
+	printf '%s' "$ans"
+}
+
 get_latest() {
 	local f base ptr="" tag
 	if have apk; then f="latest-apk.txt"; else f="latest.txt"; fi
@@ -333,6 +385,29 @@ do_install() {
 		fi
 	fi
 
+	# 先说清楚这台机器上到底装了什么，再决定是升级、覆盖还是收工。
+	detect_installed
+	log "→ 本机状态：$(installed_desc)"
+	if [ "$CUR_HOW" != "none" ]; then
+		if [ -z "$CUR_VER" ]; then
+			log "→ 读不到已安装版本号，按覆盖重装处理"
+		elif [ "$CUR_VER" = "$VER" ]; then
+			log "→ 已是最新版 $VER，无需改动。要修复式重装请用：LUCENT_FORCE=1 sh install.sh"
+			[ "$FORCE" = "1" ] || exit 0
+		elif ver_newer "$VER" "$CUR_VER"; then
+			log "→ 检测到旧版本 $CUR_VER，线上最新为 $VER，开始在线升级"
+		else
+			log ""
+			log "！本机 $CUR_VER 比线上 $VER 更新，继续会降级，并且装完无法在页面里回退。"
+			if [ "$FORCE" != "1" ]; then
+				ANS=$(ask "  仍要安装 $VER 吗？(y/N)" "n")
+				[ "$ANS" = "y" ] || [ "$ANS" = "Y" ] || { log "已取消，未改动系统。"; exit 0; }
+			fi
+		fi
+	else
+		log "→ 未检测到已安装的主题，执行全新安装"
+	fi
+
 	log "→ 从 GitHub / 镜像在线下载 Lucent…"
 
 	# 根据包管理器选择要下载的安装包
@@ -407,6 +482,14 @@ do_uninstall() {
 	[ "$(id -u)" = "0" ] || { log "请用 root 运行。" >&2; exit 1; }
 	[ -f /etc/openwrt_release ] || { log "这不是 OpenWrt 系统。" >&2; exit 1; }
 	new_tmp
+	detect_installed
+	log "→ 本机状态：$(installed_desc)"
+	if [ "$CUR_HOW" = "none" ]; then
+		log "→ 没有检测到已安装的 Lucent，仍将清理可能残留的文件与配置。"
+	else
+		ANS=$(ask "→ 确认卸载并恢复 Bootstrap？(y/N)" "y")
+		[ "$ANS" = "y" ] || [ "$ANS" = "Y" ] || { log "已取消，未做任何改动。"; exit 0; }
+	fi
 	log "→ 卸载 Lucent…"
 
 	if have apk; then
@@ -454,19 +537,15 @@ do_uninstall() {
 # ---- 状态 ------------------------------------------------------------------
 do_status() {
 	new_tmp
-	PKG_STATE="未安装"
-	if have apk; then
-		apk info -e "$PKG_NAME" >/dev/null 2>&1 && \
-			PKG_STATE="$(apk info -e -v "$PKG_NAME" 2>/dev/null | head -n1 || echo '已安装')"
-	elif have opkg; then
-		V="$(opkg status "$PKG_NAME" 2>/dev/null | sed -n 's/^Version: //p')"
-		[ -n "$V" ] && PKG_STATE="$PKG_NAME $V"
-	fi
-	echo "软件包：$PKG_STATE"
+	detect_installed
+	echo "本机状态：$(installed_desc)"
 	echo "当前主题：$(uci -q get luci.main.mediaurlbase || echo '未设置')"
 	echo "Lucent 注册路径：$(uci -q get luci.themes.Lucent || echo '未注册')"
 	echo "中文语言项：$(uci -q get luci.languages.zh_cn || echo '未注册')"
 	echo "中文目录文件：$(ls /usr/lib/lua/luci/i18n/lucent*.lmo 2>/dev/null | wc -l) 个"
+	if [ "$CUR_HOW" != "none" ]; then
+		echo "线上最新：运行 sh install.sh check 可直接比对（会访问 GitHub / 镜像）"
+	fi
 }
 
 # ---- 在线检查更新 ----------------------------------------------------------
@@ -515,10 +594,44 @@ do_update() {
 	log "升级完成。"
 }
 
-case "$ACTION" in
-	install) do_install ;;
-	check) do_check ;;
-	update) do_update ;;
-	uninstall) do_uninstall ;;
-	status) do_status ;;
-esac
+# ---- 交互菜单 --------------------------------------------------------------
+# 只在真正连着终端时出现：`wget -qO- … | sh` 的 stdin 就是脚本本身，这里一旦
+# read，就会把后面还没执行的脚本内容当成输入吃掉。
+menu() {
+	detect_installed
+	cat <<EOF
+
+  Lucent 3 一键脚本    脚本版本 $VER
+  本机状态：$(installed_desc)
+
+    1) 安装 / 升级到最新版
+    2) 检查是否有新版本
+    3) 一键卸载主题并恢复 Bootstrap
+    4) 查看安装状态
+    0) 退出
+EOF
+	case "$(ask "  请选择 [1]" "1")" in
+		1) do_install ;;
+		2) do_check ;;
+		3) do_uninstall ;;
+		4) do_status ;;
+		*) echo "已退出，未做任何改动。" ;;
+	esac
+}
+
+if [ -z "$ACTION" ]; then
+	if [ -t 0 ]; then
+		menu
+	else
+		# 管道执行保持原来的行为：直接装
+		do_install
+	fi
+else
+	case "$ACTION" in
+		install) do_install ;;
+		check) do_check ;;
+		update) do_update ;;
+		uninstall) do_uninstall ;;
+		status) do_status ;;
+	esac
+fi
