@@ -8,6 +8,57 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.10 — 2026-11-06
+
+The remaining distance between 0.9 and the reference, closed.
+
+### Changed
+
+- **The graph is four levels deep now, like the reference.** The radio owns
+  band, generation, channel and width; the SSID gets its own box with the key
+  icon, the name and a row of signal dots; the clients hang under the SSID.
+  A radio with several VAPs lists them all under one box, and a build whose
+  wireless dump names no interface falls back to one box per netdev so its
+  clients still appear somewhere.
+- **Uplink tile counts throughput, not the address.** The big number is the
+  downlink rate and the line under it is the uplink rate, the protocol and
+  the device — the address still sits in the hero row and on the Internet
+  node of the graph, where it is not competing with a number that moves.
+- **Wi-Fi tile says how many radios are on and how many SSIDs are
+  broadcasting**; the client count was never this tile's job and the graph
+  shows it two rows below.
+- **Signal tile gives a verdict** — "1 weak link" or "all strong" — with the
+  weakest reading underneath, instead of a bare dBm number that needs a table
+  to interpret.
+- **The summary row under the graph gained the reference's second line**: the
+  client count broken out by band and by wire, the uplink rate with the port
+  it comes through, the busiest band's share of Wi-Fi traffic, and *whose*
+  reading the weakest signal belongs to.
+
+### Fixed
+
+- **The client total and its own breakdown disagreed.** The count came from
+  the DHCP table while the split came from the radios and the bridge, so a
+  router showed "2" above "3 on 2.4 GHz · 2 wired". Both now come from one
+  set — stations, learned MACs and leases — and a host no link can place is
+  named as "unplaced" so the parts always add up. An assertion pins the count
+  to the number of client boxes the graph actually drew.
+- **Five columns of boxes no longer overflow the card.** The graph keeps its
+  content width inside a horizontal scroller and the connector layer is
+  measured against that box, so the curves stay welded to the nodes even while
+  the card is scrolled sideways.
+- `stationsOf()` in util.js had lost the newline between its comment and its
+  declaration.
+
+### Verified
+
+- `node tests/run-harness.js`: 16 scenarios, 1,356 assertions. New checks pin
+  the four-level depth (`.ltc-gnode.wan → .me → .radio → .ssid → .leaf`), that
+  the SSID box lives inside its radio's subtree, and the client-count invariant
+  above.
+- All 358 translatable literals have `.po` entries (`node tests/po-gap.js`),
+  `.lmo` recompiled.
+
 ## 0.9 — 2026-11-06
 
 The dashboard now reproduces the reference layout feature for feature —

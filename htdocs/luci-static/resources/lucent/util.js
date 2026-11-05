@@ -257,7 +257,8 @@ function pct(part, total) {
 }
 
 /* iwinfo exposes the association list either as an array or keyed by MAC, and
-   the signal field name differs across drivers. */function stationsOf(res) {
+   the signal field name differs across drivers. */
+function stationsOf(res) {
 	if (res && !Array.isArray(res) && res.results)
 		res = res.results;
 

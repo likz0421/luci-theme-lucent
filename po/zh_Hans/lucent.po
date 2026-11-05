@@ -1387,3 +1387,39 @@ msgstr "接入方式"
 
 msgid "Last activity"
 msgstr "最后活动"
+
+msgid "%d on %s"
+msgstr "%d 台在 %s"
+
+msgid "all above %d dBm"
+msgstr "全部高于 %d dBm"
+
+msgid "all strong"
+msgstr "全部正常"
+
+msgid "of Wi-Fi traffic"
+msgstr "的 Wi-Fi 流量"
+
+msgid "via"
+msgstr "经由"
+
+msgid "weakest %d dBm"
+msgstr "最弱 %d dBm"
+
+msgid "wired"
+msgstr "有线"
+
+msgid "unplaced"
+msgstr "未能定位"
+
+msgid "radio on"
+msgstr "个射频已启用"
+
+msgid "radios on"
+msgstr "个射频已启用"
+
+msgid "SSID broadcasting"
+msgstr "个 SSID 正在广播"
+
+msgid "SSIDs broadcasting"
+msgstr "个 SSID 正在广播"

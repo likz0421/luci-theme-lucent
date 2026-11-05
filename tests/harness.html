@@ -637,6 +637,10 @@ if (menuNoStore) {
 
 		check('graph rendered', !!graph && !!document.querySelector('.ltc-gnode.wan') &&
 			!!document.querySelector('.ltc-gnode.me'), graph ? graph.querySelectorAll('.ltc-gnode').length + ' nodes' : 'no graph');
+		/* four levels deep, like the reference: Internet → router → radio →
+		   SSID → client, with the leaf inside the radio's own subtree */
+		check('graph is four levels deep', /#tree-noisy/.test(FLAGS) || !!document.querySelector(
+			'.ltc-gnode.wan + .ltc-gkids .ltc-gnode.me + .ltc-gkids .ltc-gnode.radio + .ltc-gkids .ltc-gnode.ssid + .ltc-gkids .ltc-gnode.leaf'));
 		if (!noisy) {
 			check('wired branch present', !!document.querySelector('.ltc-gnode.wired'), 'no Wired node');
 			check('radios branch out', radioNodes.length >= 2, radioNodes.length + ' radio nodes');
@@ -649,7 +653,8 @@ if (menuNoStore) {
 				check('unconnected port is not listed as one', !/lan2/.test(portText), portText.slice(0, 70));
 			}
 			check('wired port speed shown', /1 Gbit\/s/.test(portText), portText.slice(0, 70));
-			check('ssid on radio node', /MyHome-2\.4G/.test(radioText), radioText.slice(0, 90));
+			check('ssid gets its own box under the radio', !!document.querySelector('.ltc-gnode.ssid') &&
+				under('radio', /MyHome-2\.4G/), radioText.slice(0, 90));
 			check('band badge from iwinfo.info', /2\.4 GHz/.test(radioText), radioText.slice(0, 90));
 			check('channel and width shown', /channel 1 · 40 MHz/i.test(radioText) || /信道 1 · 40 MHz/.test(radioText), radioText.slice(0, 120));
 			check('wifi generation label', /Wi-Fi 6/.test(radioText), radioText.slice(0, 120));
@@ -657,13 +662,13 @@ if (menuNoStore) {
 			/* a station the DHCP table never saw still has a signal reading —
 			   that is the whole point of the dot, and it used to be dropped */
 			check('every station leaf gets a signal dot', Array.prototype.every.call(
-				document.querySelectorAll('.ltc-gnode.radio .ltc-gkids > .ltc-grow > .ltc-gnode.leaf'),
+				document.querySelectorAll('.ltc-gnode.ssid .ltc-gkids > .ltc-grow > .ltc-gnode.leaf'),
 				function (n) { return !!n.querySelector('.ltc-gdots i.good, .ltc-gdots i.ok, .ltc-gdots i.weak'); }),
-				document.querySelectorAll('.ltc-gnode.radio .ltc-gkids > .ltc-grow > .ltc-gnode.leaf').length + ' leaves');
+				document.querySelectorAll('.ltc-gnode.ssid .ltc-gkids > .ltc-grow > .ltc-gnode.leaf').length + ' leaves');
 			check('the weak station is marked weak', !!document.querySelector('.ltc-gdots i.weak'), 'no weak dot');
 			check('randomised MAC marked private', /私有设备|Private device/.test(document.body.textContent), 'private leaf missing');
 			check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
-			check('phone placed under radio', under('radio', /phone/), leafText.slice(0, 90));
+			check('phone placed under its SSID', under('ssid', /phone/), leafText.slice(0, 90));
 
 			if (!manyp) {
 				check('laptop placed under lan1', under('port', /laptop/), portText.slice(0, 90));
@@ -677,6 +682,13 @@ if (menuNoStore) {
 				document.querySelector('[data-live=leaf-192-168-1-30]') && document.querySelector('[data-live=leaf-192-168-1-30]').textContent);
 			check('branch rate slots exist', document.querySelectorAll('.ltc-gnode .grate').length >= 3,
 				document.querySelectorAll('.ltc-gnode .grate').length + ' rate boxes');
+			/* the summary counts the same set the graph draws: a client that is
+			   on the wire but missing from DHCP still has to be counted */
+			check('client count agrees with the graph',
+				leaves.length === Number((document.querySelector('[data-live=path-clients]') || {}).textContent),
+				leaves.length + ' leaves vs ' + (document.querySelector('[data-live=path-clients]') || {}).textContent);
+			check('the split line is filled', /\d/.test((document.querySelector('[data-live=path-clients-sub]') || {}).textContent || ''),
+				(document.querySelector('[data-live=path-clients-sub]') || {}).textContent);
 		}
 
 		/* ---- verdict strip, band summary, event timeline ---- */

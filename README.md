@@ -34,8 +34,11 @@ stylesheets, scripts or package metadata with them.
 - Greeting, hostname, firmware and model, with one live sentence under the
   title — uplink, uptime, memory free and Wi-Fi clients — and a `实时 · 刚刚`
   row that says the page is current
-- Six KPI tiles: uplink, CPU, memory available, Wi-Fi clients, weakest client
-  signal and storage, each with a proportion bar instead of a bare number
+- Six KPI tiles with the reference's own meanings, not just its layout: the
+  uplink tile counts throughput, memory reports what is still available, the
+  Wi-Fi tile says how many radios are on and how many SSIDs broadcast, and the
+  signal tile gives a verdict ("1 weak link" / "all strong") with the weakest
+  reading underneath
 - Branching network graph: Internet → router → radio → SSID → client, and
   router → wired → port → client. Band, generation, channel and width sit on
   the radio node, the negotiated speed on the port, dBm and a coloured dot on

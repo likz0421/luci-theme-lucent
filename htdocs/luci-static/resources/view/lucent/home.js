@@ -374,10 +374,11 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 	var sig = signalStats(data);
 	var band = bandStats(data);
 
-	function psum(label, value, key) {
+	function psum(label, value, key, sub, subKey) {
 		return E('div', { 'class': 'ltc-psum' }, [
 			E('small', {}, label),
-			E('b', key ? { 'data-live': key } : {}, value)
+			E('b', key ? { 'data-live': key } : {}, value),
+			E('small', { 'class': 'psub', 'data-live': subKey || undefined }, sub || '')
 		]);
 	}
 
@@ -520,10 +521,11 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 		};
 	}
 
-	function radioBranch(dev) {
-		var info = radios[dev] || {};
-		var stations = util.arr(assoc[dev]);
-		var ssid = ssidForNetdev(wifiDump, dev) || dev;
+	function bandCls(band) {
+		return band === '5 GHz' ? ' b5' : (band === '6 GHz' ? ' b6' : ' b24');
+	}
+
+	function chLine(info) {
 		var chline = [];
 
 		if (info.channel != null)
@@ -531,22 +533,93 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 		if (info.width)
 			chline.push('%d MHz'.format(info.width));
 
+		return chline.join(' · ');
+	}
+
+	function ssidKids(dev) {
+		var stations = util.arr(assoc[dev]);
+
+		return {
+			cls: 'ssid ' + (stations.length ? 'up' : 'down'),
+			icon: 'shield',
+			title: ssidForNetdev(wifiDump, dev) || dev,
+			l1: stations.length ? plural(stations.length, 'client', 'clients') : _('no clients'),
+			dots: stations.length ? stations.map(function (s) {
+				return signalClass(s && s.signal).trim();
+			}) : null,
+			gr: dev,
+			kind: 'ssid',
+			live: 'gr-' + dev,
+			cap: 6,
+			kids: stations.map(function (s) { return deviceLeaf(s.mac, false, seen); })
+		};
+	}
+
+	/* The reference gives the radio and the SSID one box each: the radio owns
+	   band, generation, channel and width, the SSID owns the key icon, the name
+	   and the row of signal dots. A radio with several VAPs lists them all. */
+	function radioGroup(key, nets) {
+		var dev = nets.filter(function (d) { return radios[d]; })[0] || nets[0];
+		var info = radios[dev] || {};
+		var count = nets.reduce(function (n, d) { return n + util.arr(assoc[d]).length; }, 0);
+
 		return {
 			cls: 'radio up',
 			badge: info.band || '',
-			badgeCls: info.band === '5 GHz' ? ' b5' : (info.band === '6 GHz' ? ' b6' : ' b24'),
+			badgeCls: bandCls(info.band),
 			icon: 'wifi',
-			title: ssid,
+			title: info.generation || key,
+			l1: chLine(info) || plural(count, 'client', 'clients'),
+			gr: dev,
+			kind: 'radio',
+			live: 'gr-' + dev,
+			cap: 4,
+			kids: nets.map(ssidKids)
+		};
+	}
+
+	/* Fallback for a build whose wireless dump names no interface: the netdev
+	   becomes both boxes at once, so its clients still hang somewhere. */
+	function radioBranch(dev) {
+		var info = radios[dev] || {};
+		var stations = util.arr(assoc[dev]);
+
+		return {
+			cls: 'radio up',
+			badge: info.band || '',
+			badgeCls: bandCls(info.band),
+			icon: 'wifi',
+			title: dev,
 			l1: [stations.length
 				? plural(stations.length, 'client', 'clients')
 				: _('no clients'), info.generation].filter(Boolean).join(' · '),
-			l2: chline.join(' · '),
+			l2: chLine(info),
 			gr: dev,
 			kind: 'radio',
 			live: 'gr-' + dev,
 			cap: 6,
 			kids: stations.map(function (s) { return deviceLeaf(s.mac, false, seen); })
 		};
+	}
+
+	function wirelessBranches() {
+		var devs = ports.filter(function (p) { return p && p.wireless; }).map(function (p) { return p.device; });
+		var claimed = {};
+		var groups = [];
+
+		Object.keys(wifiDump || {}).forEach(function (key) {
+			var nets = util.arr((wifiDump[key] || {}).interfaces)
+				.map(function (i) { return i && (i.ifname || i.section || i['.name']); })
+				.filter(function (d) { return d && devs.indexOf(d) >= 0 && !claimed[d]; });
+
+			if (!nets.length)
+				return;
+
+			nets.forEach(function (d) { claimed[d] = true; });
+			groups.push(radioGroup(key, nets));
+		});
+
+		return groups.concat(devs.filter(function (d) { return !claimed[d]; }).map(radioBranch));
 	}
 
 	function wiredBranch() {
@@ -635,8 +708,7 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 	}
 
 	var seen = {};
-	var radioKids = ports.filter(function (p) { return p && p.wireless; })
-		.map(function (p) { return radioBranch(p.device); });
+	var radioKids = wirelessBranches();
 	var wired = wiredBranch();
 	var other = otherBranch();
 	var branches = radioKids.concat(wired ? [wired] : [], other ? [other] : []);
@@ -667,12 +739,15 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 
 	return card(_('Network path'), E('span', { 'class': 'ltc-muted ltc-ghint' }, _('Click any node for details')),
 		E('div', {}, [
-			graph,
+			E('div', { 'class': 'ltc-graphwrap' }, [graph]),
 			E('div', { 'class': 'ltc-pathsum' }, [
-				psum(_('Clients'), String(hosts.length), 'path-clients'),
-				psum(_('Current traffic'), '↓ –  ↑ –', 'path-now'),
-				psum(_('Busiest band'), band.busiest ? '%s · %d%%'.format(band.busiest.band, band.share) : '–', 'path-band'),
-				psum(_('Weakest client'), sig.count ? '%d dBm'.format(sig.min) : '–', 'path-sig')
+				psum(_('Clients'), String(connectedCount(data) || hosts.length), 'path-clients',
+					clientSplit(data), 'path-clients-sub'),
+				psum(_('Current traffic'), '↓ –', 'path-now', '↑ –', 'path-now-sub'),
+				psum(_('Busiest band'), band.busiest ? band.busiest.band : '–', 'path-band',
+					band.busiest ? '%d%% %s'.format(band.share, _('of Wi-Fi traffic')) : '', 'path-band-sub'),
+				psum(_('Weakest client'), sig.count ? '%d dBm'.format(sig.min) : '–', 'path-sig',
+					worstClient(data), 'path-sig-sub')
 			])
 		]));
 }
@@ -941,6 +1016,98 @@ function bandStats(data) {
 		busiest: busiest && busiest.traffic > 0 ? busiest : null,
 		share: busiest && total > 0 ? Math.round(busiest.traffic / total * 100) : null
 	};
+}
+
+/* "3 on 2.4 GHz · 7 on 5 GHz · 3 wired" — the reference spells the client
+   count out by path, because a bare total says nothing about where they are.
+   Whatever the bridge and the radios cannot place is named too, so the parts
+   always add up to the number above them. */
+function clientSplit(data) {
+	var assoc = data.assoc || {};
+	var b = bandStats(data);
+	var placed = {};
+	var parts = Object.keys(b.counts).filter(function (name) {
+		return b.counts[name] && name !== _('unknown');
+	}).sort(function (x, y) {
+		return String(x).localeCompare(String(y));
+	}).map(function (name) {
+		return _('%d on %s').format(b.counts[name], name);
+	});
+
+	Object.keys(assoc).forEach(function (dev) {
+		util.arr(assoc[dev]).forEach(function (s) {
+			if (s && s.mac)
+				placed[macKey(s.mac)] = true;
+		});
+	});
+
+	var wired = Object.keys(util.fdbMap(data.topology || {})).filter(function (m) {
+		return !placed[m];
+	});
+
+	wired.forEach(function (m) { placed[m] = true; });
+	if (wired.length)
+		parts.push('%d %s'.format(wired.length, _('wired')));
+
+	var unplaced = clientsOf(data).filter(function (h) {
+		return h.mac && !placed[macKey(h.mac)];
+	}).length;
+
+	if (unplaced)
+		parts.push('%d %s'.format(unplaced, _('unplaced')));
+
+	return parts.join(' · ');
+}
+
+/* Clients actually on the wire or in the lease table — everything the graph
+   draws a box for. The DHCP table alone undercounts: an unleased station is
+   still a client, and the split line under the number has to add up to it. */
+function connectedCount(data) {
+	var assoc = data.assoc || {};
+	var macs = {};
+
+	Object.keys(assoc).forEach(function (dev) {
+		util.arr(assoc[dev]).forEach(function (s) {
+			if (s && s.mac)
+				macs[macKey(s.mac)] = true;
+		});
+	});
+
+	Object.keys(util.fdbMap(data.topology || {})).forEach(function (m) {
+		macs[m] = true;
+	});
+
+	clientsOf(data).forEach(function (h) {
+		if (h.mac)
+			macs[macKey(h.mac)] = true;
+	});
+
+	return Object.keys(macs).length;
+}
+
+/* Whose reading the weakest signal belongs to: the summary row says the number
+   is -83 dBm, this says it is the private MAC in the back bedroom. */
+function worstClient(data) {
+	var assoc = data.assoc || {};
+	var byMac = {};
+	var worst = null;
+
+	clientsOf(data).forEach(function (h) {
+		if (h.mac)
+			byMac[macKey(h.mac)] = h;
+	});
+
+	Object.keys(assoc).forEach(function (dev) {
+		util.arr(assoc[dev]).forEach(function (s) {
+			if (s && isFinite(s.signal) && (!worst || Number(s.signal) < Number(worst.signal)))
+				worst = s;
+		});
+	});
+
+	if (!worst)
+		return '';
+
+	return (byMac[macKey(worst.mac)] || {}).name || worst.mac;
 }
 
 function healthVerdict(data, wifi, mem, storage, info) {
@@ -1271,7 +1438,6 @@ return view.extend({
 		setNum('[data-live=memory]', availPct, '%');
 		set('[data-live=memory-sub]', '%s / %s'.format(util.fmtBytes(mem.avail), util.fmtBytes(mem.total)));
 		meter('memory', availPct);
-		set('[data-live=wan]', wan ? (util.ip4(wan) || _('Connected')) : _('Down'));
 		set('[data-live=wan-sub]', wan
 			? [wan.proto || wan.device || '', util.fmtDuration(wan.uptime || 0)].join(' · ')
 			: _('No default route'));
@@ -1280,21 +1446,29 @@ return view.extend({
 		var cpuPct = util.cpu(netInfo, data.info);
 		var sigLive = signalStats(data);
 		var wifiLive = wifiState(data.wifi);
+		var bandLive = bandStats(data);
 
 		setNum('[data-live=cpu]', cpuPct, '%');
 		set('[data-live=cpu-sub]', netInfo.temp_c != null
 			? '%s °C · %s'.format(netInfo.temp_c, _('%d cores').format(Number(netInfo.cores) || 0))
 			: _('load %s').format(loads.length ? loads[0].toFixed(2) : '–'));
 		meter('cpu', cpuPct);
-		set('[data-live=kpi-wifi]', plural(assocCount(data), 'client', 'clients'));
-		set('[data-live=kpi-wifi-sub]', wifiLive.ssids.length
-			? wifiLive.ssids.slice(0, 2).join(', ') + (wifiLive.ssids.length > 2 ? ' +' + (wifiLive.ssids.length - 2) : '')
-			: '%d / %d %s'.format(wifiLive.up, wifiLive.total, _('radios')));
-		set('[data-live=kpi-signal]', sigLive.count ? '%d dBm'.format(sigLive.min) : '–');
+		set('[data-live=kpi-wifi]', plural(wifiLive.up, 'radio on', 'radios on'));
+		set('[data-live=kpi-wifi-sub]', plural(wifiLive.ssids.length,
+			'SSID broadcasting', 'SSIDs broadcasting'));
+		set('[data-live=kpi-signal]', sigLive.count
+			? (sigLive.weak ? plural(sigLive.weak, 'weak link', 'weak links') : _('all strong')) : '–');
 		set('[data-live=kpi-signal-sub]', sigLive.count
-			? [plural(sigLive.count, 'client measured', 'clients measured'),
-				sigLive.weak ? plural(sigLive.weak, 'weak link', 'weak links') : ''].filter(Boolean).join(' · ')
+			? (sigLive.weak ? _('weakest %d dBm').format(sigLive.min) : _('all above %d dBm').format(-75))
 			: _('no stations'));
+
+		/* the summary row under the graph moves with the same poll */
+		set('[data-live=path-clients-sub]', clientSplit(data));
+		set('[data-live=path-band]', bandLive.busiest ? bandLive.busiest.band : '–');
+		set('[data-live=path-band-sub]', bandLive.busiest
+			? '%d%% %s'.format(bandLive.share, _('of Wi-Fi traffic')) : '');
+		set('[data-live=path-sig]', sigLive.count ? '%d dBm'.format(sigLive.min) : '–');
+		set('[data-live=path-sig-sub]', worstClient(data));
 
 		var gwv = wan ? util.gateway(wan) : '';
 		var dnsv = wan ? util.dns(wan) : [];
@@ -1330,11 +1504,12 @@ return view.extend({
 				var dt = Math.max(1, (now - this._lastStats.t) / 1000);
 				var rx = Math.max(0, (Number(stats.rx_bytes) - this._lastStats.rx) / dt);
 				var tx = Math.max(0, (Number(stats.tx_bytes) - this._lastStats.tx) / dt);
-				set('[data-live=traffic]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
-				set('[data-live=traffic-sub]', devName || wan.proto || '');
-				set('[data-live=path-down]', '↓ ' + util.fmtRate(rx));
-				set('[data-live=path-up]', '↑ ' + util.fmtRate(tx));
-				set('[data-live=path-now]', '↓ ' + util.fmtRate(rx) + '  ↑ ' + util.fmtRate(tx));
+				set('[data-live=wan]', '↓ ' + util.fmtRate(rx));
+				set('[data-live=wan-sub]', [util.fmtDuration(wan.uptime || 0), wan.proto || '',
+					devName || ''].filter(Boolean).join(' · '));
+				set('[data-live=path-now]', '↓ ' + util.fmtRate(rx));
+				set('[data-live=path-now-sub]', '↑ %s · %s %s'.format(
+					util.fmtRate(tx), _('via'), devName || wan.proto || ''));
 				this._hist.push({ t: now, rx: rx, tx: tx });
 				if (this._hist.length > 120)
 					this._hist = this._hist.slice(-120);
@@ -1478,7 +1653,7 @@ return view.extend({
 		if (wiredOut)
 			put(wiredOut, wrx + wtx > 0 ? '↓ %s ↑ %s'.format(util.fmtRate(wrx), util.fmtRate(wtx)) : '–');
 
-		set('[data-live=path-clients]', String(clients.length));
+		set('[data-live=path-clients]', String(connectedCount(data) || clients.length));
 
 		/* the curves follow the boxes, and the boxes move when rates appear */
 		drawGraphLinks();
@@ -1948,18 +2123,18 @@ return view.extend({
 		var wifiClients = assocCount(data);
 
 		var kpis = E('div', { 'class': 'ltc-kpis' }, [
-			kpi(_('Uplink'), wanIp, wan ? [wan.proto || wan.device || '', util.fmtDuration(wan.uptime || 0)].join(' · ')
+			kpi(_('Uplink'), '↓ –', wan ? [wan.proto || wan.device || '', util.fmtDuration(wan.uptime || 0)].join(' · ')
 				: _('No default route'), 'wan'),
 			kpi(_('CPU'), '%d%%'.format(cpu), net.temp_c != null
 				? '%s °C · %s'.format(net.temp_c, _('%d cores').format(Number(net.cores) || 0))
 				: _('load %s').format(loads.length ? loads[0].toFixed(2) : '–'), 'cpu', cpu),
 			kpi(_('Memory available'), '%d%%'.format(availPct),
 				'%s / %s'.format(util.fmtBytes(mem.avail), util.fmtBytes(mem.total)), 'memory', availPct),
-			kpi(_('Wi-Fi'), plural(wifiClients, 'client', 'clients'), wifiStr, 'kpi-wifi'),
-			kpi(_('Signal'), sig.count ? '%d dBm'.format(sig.min) : '–',
-				sig.count ? [plural(sig.count, 'client measured', 'clients measured'),
-					sig.weak ? plural(sig.weak, 'weak link', 'weak links') : ''].filter(Boolean).join(' · ')
-				: _('no stations'), 'kpi-signal'),
+			kpi(_('Wi-Fi'), plural(wifi.up, 'radio on', 'radios on'),
+				plural(wifi.ssids.length, 'SSID broadcasting', 'SSIDs broadcasting'), 'kpi-wifi'),
+			kpi(_('Signal'), sig.count ? (sig.weak ? plural(sig.weak, 'weak link', 'weak links') : _('all strong')) : '–',
+				sig.count ? (sig.weak ? _('weakest %d dBm').format(sig.min) : _('all above %d dBm').format(-75))
+					: _('no stations'), 'kpi-signal'),
 			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage', storage ? storage.percent : null)
 		]);
 
