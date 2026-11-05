@@ -8,6 +8,76 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.9 — 2026-11-06
+
+The dashboard now reproduces the reference layout feature for feature —
+ideas and layout only, no code was copied from any third-party theme — and
+adds the parts the reference does not have.
+
+### Added
+
+- **The topology tree became a graph.** Three real levels — radio → SSID →
+  client, and 有线 → port → client — as boxes on a dotted canvas, joined by
+  bezier connectors drawn after layout by measuring the boxes. The SVG is
+  built with `createElementNS`, because LuCI's `E()` only makes HTML-namespace
+  elements and the paths would have rendered blank on a router.
+- **Branch throughput on the branches.** Each radio, port and the wired
+  aggregate carry their own `↓/↑` from the netdev counters (delta between
+  poll rounds, wrapped counters clamped). A port whose counters never appear
+  shows a dimmed pill rather than a dash that reads like a failure.
+- **Overflow is one click away.** More than 8 wired ports, or more than 6
+  clients under one branch, collapse into a dashed "还有 N 个 · 点击展开"
+  node that expands in place and redraws the curves. 22 unconnected FTTR
+  ports now take one line instead of 22.
+- **Six KPI cards, the reference's six and its semantics**: 上行链路 / CPU /
+  内存可用 / WI-FI / 信号 / 存储. Memory counts what is still free rather than
+  what has been eaten, and the CPU figure comes from `util.cpu()` — the same
+  function the sidebar dial uses, so the two can no longer disagree.
+- **Header rebuilt to the reference**: status dot beside the hostname badge,
+  one live sentence under the greeting (`上行 100.64.1.2 · 已运行 12h 50m ·
+  44% 内存空闲 · 3 台 Wi-Fi 设备`), and a right column with `实时 · 刚刚`,
+  WAN/LAN/设备/运行时间/型号 as live rows and a 自定义 link.
+- **Devices page gained 接入方式 and 最后活动**: which radio or bridge port a
+  host reaches the router through with what signal or link speed, and how
+  long ago it was last seen. Both come from the same two sources the graph
+  uses, so the pages cannot disagree about a client.
+
+### Fixed
+
+- **Wireless branches rendered `[object Object]` and "no clients"**:
+  `.map(radioBranch)` handed the whole port object to a function expecting a
+  device name, and the SSID lookup was passed `wifiState()`'s summary instead
+  of the wireless dump.
+- **A station the DHCP table never saw lost its signal dot** — the lookup was
+  gated on the host record carrying a `mac`, so an unknown client drew no
+  reading even though `iwinfo` had one.
+- **Case**: `iwinfo` reports stations lowercase while the bridge and the
+  leases report them uppercase. Every MAC comparison now goes through one
+  key, so a wired client is neither listed twice nor placed on the wrong
+  branch.
+- **Leaf labels were cut to "ph…"**: the rate pill pushed the name out of the
+  box. Leaves wrap their rate onto a second line now.
+- A host that no radio and no forwarding entry claims is no longer dropped:
+  it gets an *Other devices* branch, so the graph's count agrees with the
+  devices page.
+
+### Removed
+
+- `treeSection()` (the flat list the graph replaced), `bootStamp()` and
+  `deviceSub()` (dead once the uptime and devices tiles moved to the header).
+
+### Verified
+
+- `node tests/run-harness.js`: 16 scenarios, 1,310 assertions. New checks pin
+  the graph at three depths, that every curve is a real bezier whose ends are
+  apart, that branch and leaf rates fill after the second poll round, that
+  ports cap at 8 and the toggle reveals the rest, that 22 idle ports collapse
+  to one summary row, that unplaceable hosts get their own branch capped at
+  6, that every station leaf carries a signal dot, and that below 980px the
+  curves give way to an indented list instead of lines crossing the screen.
+- All 350 translatable literals in the JS have `.po` entries (verified by
+  `tests/po-gap.js`, not by eye) and the `.lmo` was recompiled from them.
+
 ## 0.8 — 2026-11-05
 
 Modelled on the dashboards the user supplied as references. Feature ideas only —

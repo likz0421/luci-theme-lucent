@@ -101,6 +101,7 @@ async function run(port) {
 		   enough to photograph the whole dashboard in one picture */
 		const base = (flag === '#base' || flag === '#tall') ? '' : flag;
 		const tall = flag === '#tall';
+		const graph = flag === '#graph';
 		const narrow = base === '#drawer';
 		/* a laptop window: wide enough for the desktop shell, narrow enough
 		   that the width rule is supposed to collapse the sidebar by itself */
@@ -111,7 +112,7 @@ async function run(port) {
 			   not wall clock */
 			budget: base === '#menu-noload' ? 34000 : (/^#menu-/.test(base) ? 24000 : 13000),
 			width: narrow ? 390 : (laptop ? 1100 : 1500),
-			height: narrow ? 844 : (tall ? 2700 : 900)
+			height: narrow ? 844 : (tall ? 2700 : (graph ? 1400 : 900))
 		};
 
 		const url = 'http://127.0.0.1:' + port + '/tests/harness.html' + base;

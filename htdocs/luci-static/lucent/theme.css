@@ -553,6 +553,17 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 	color-mix(in srgb,var(--card) 94%,transparent);
 }
 .ltc-hero h1{margin:2px 0 6px}
+.ltc-hero-top{display:flex;align-items:center;gap:8px}
+.ltc-hero-live{
+	display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);
+	padding-bottom:2px;border-bottom:1px solid var(--line);margin-bottom:2px;
+}
+.ltc-hero-live b{font-weight:600;color:var(--text-2)}
+.ltc-hero-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.ltc-hero-custom{
+	align-self:flex-start;font-size:11.5px;color:var(--accent);text-decoration:none!important;
+}
+.ltc-hero-custom:hover{text-decoration:underline}
 .ltc-hero .ltc-hero-sub{color:var(--text-2);font-size:13.5px;margin:0;max-width:52ch}
 .ltc-hero-quote{display:flex;align-items:center;gap:8px;margin:10px 0 0;max-width:56ch;font-size:13px;font-style:italic;color:var(--text-2);line-height:1.5}
 .ltc-hero-quote::before{content:"“";font-style:normal;font-weight:700;font-size:20px;line-height:1;color:var(--accent);opacity:.7;flex:none}
@@ -717,6 +728,9 @@ a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--
 .ltc-rate.none{color:var(--text-3)}
 .ltc-ratebar{display:block;height:4px;min-width:46px;margin-top:3px;overflow:hidden;border-radius:99px;background:var(--card-2)}
 .ltc-ratebar u{display:block;height:100%;background:var(--accent);transition:width .6s var(--ease)}
+.ltc-linkcell{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ltc-linkcell b{font-size:12px;font-weight:600}
+.ltc-linkcell small{font:10.5px var(--mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ltc-acctnote{
 	display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;
 	padding:9px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--text-3);font-size:11.5px;
@@ -1106,3 +1120,74 @@ body.ltc-search-open{overflow:hidden}
 .ltc-tl.up i{background:var(--ok)}
 .ltc-tl.down i{background:var(--bad)}
 .ltc-tl time{flex:none;font:10.5px var(--mono);color:var(--text-3)}
+
+/* ------------------------------------------------------------ network graph */
+.ltc-graph{position:relative;padding:20px 0 6px}
+/* the reference canvas is a dot grid; it is decoration, so it sits behind and
+   never intercepts clicks */
+.ltc-graph::before{
+	content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;
+	background-image:radial-gradient(circle,var(--line) 1px,transparent 1px);
+	background-size:16px 16px;
+}
+.ltc-grow{display:flex;align-items:center;gap:22px;position:relative}
+.ltc-gkids{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
+.ltc-gnode{
+	flex:none;position:relative;z-index:1;display:flex;align-items:center;gap:8px;
+	min-width:186px;max-width:252px;padding:10px 12px;border:1px solid var(--line);
+	border-radius:14px;background:var(--card);color:inherit;text-decoration:none!important;
+	box-shadow:var(--shadow);transition:border-color .18s,transform .18s var(--ease),box-shadow .18s;
+}
+.ltc-gnode.me{border-color:var(--accent);box-shadow:0 0 0 3px var(--tint)}
+.ltc-gnode.down{opacity:.6}
+.ltc-gnode:hover{border-color:var(--accent);transform:translateX(2px)}
+/* a leaf carries four things in twenty lines of text; letting the rate drop to
+   its own row is what keeps the hostname from being cut to "ph…" */
+.ltc-gnode.leaf{
+	min-width:0;max-width:236px;padding:6px 9px;border-radius:11px;background:var(--card-2);
+	box-shadow:none;gap:6px;flex-wrap:wrap;
+}
+.ltc-gnode.leaf .gtxt{flex:1 1 62%;min-width:0}
+.ltc-gnode.leaf .grate{flex:0 1 auto;order:3;text-align:right}
+.ltc-gnode.leaf:hover{transform:translateX(2px);background:var(--tint)}
+.ltc-gnode.priv .gtxt b{font-style:italic;opacity:.85}
+.ltc-gnode.more{border-style:dashed;background:transparent;box-shadow:none;cursor:pointer;color:var(--text-2)}
+.ltc-gnode.more:hover{background:var(--tint)}
+.ltc-gnode.other{border-style:dashed;background:var(--card-2);box-shadow:none;color:var(--text-2)}
+.ltc-gnode .ic{flex:none;display:flex}
+.ltc-gnode .ic svg{width:17px;height:17px}
+.ltc-gnode.leaf .ic svg{width:14px;height:14px;opacity:.75}
+.ltc-gnode.more .ic svg{transform:rotate(90deg);width:14px;height:14px}
+.gtxt{display:flex;flex-direction:column;min-width:0;flex:1}
+.gtxt b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gtxt .g1{font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gtxt .g2{font:10.5px var(--mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grate{
+	flex:none;font:10px var(--mono);color:var(--text-3);padding:2px 6px;border-radius:7px;
+	background:color-mix(in srgb,var(--card-2) 70%,transparent);white-space:nowrap;
+}
+/* an empty counter is not a zero counter: say so quietly instead of leaving a
+   dash that reads like the sampler failed */
+.grate.idle{opacity:.4}
+.ltc-gdots{display:flex;gap:2px;flex:none}
+.ltc-gdots i{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.ltc-gdots i.good{background:var(--ok)}
+.ltc-gdots i.ok{background:var(--warn)}
+.ltc-gdots i.weak{background:var(--bad)}
+.ltc-glinks{position:absolute;left:0;top:0;pointer-events:none;z-index:0;overflow:visible}
+.ltc-glinks .gl{
+	fill:none;stroke:var(--accent);stroke-width:1.5;opacity:.65;
+	stroke-dasharray:1 4;stroke-linecap:round;
+}
+.ltc-glinks .gl.down{stroke:var(--text-3);opacity:.35}
+.ltc-ghint{font-size:11px}
+
+/* phones cannot host a horizontal fan-out: fall back to an indented column and
+   drop the curves, which would otherwise cross the whole screen */
+@media (max-width:980px){
+	.ltc-grow{flex-direction:column;align-items:stretch;gap:8px}
+	.ltc-gnode{max-width:none;width:100%}
+	.ltc-gkids{margin-left:12px;padding-left:10px;border-left:1px solid var(--line)}
+	.ltc-glinks{display:none}
+	.ltc-graph::before{display:none}
+}

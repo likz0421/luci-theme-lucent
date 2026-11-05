@@ -369,6 +369,7 @@ if (menuNoStore) {
 	/* menu failure scenarios: the sidebar must never end up blank */
 	var menuFail = /#menu-(reject|empty|noclass|hang|throw|noload|cache)/.test(FLAGS);
 	var noisy = /#tree-noisy/.test(FLAGS);
+	var manyp = /#manyports/.test(FLAGS);
 	if (/#menu-reject/.test(FLAGS))
 		ui.menu.load = function () { return Promise.reject(new Error('mock session failure')); };
 	if (/#menu-empty/.test(FLAGS))
@@ -568,14 +569,14 @@ if (menuNoStore) {
 				stored ? (stored.d.length + ' bytes') : 'nothing stored');
 		}
 		if (/#manyports/.test(FLAGS)) {
-			var shown = document.querySelectorAll('.ltc-tnode.port').length;
-			var moreBtn = document.querySelector('.ltc-tnode.more');
+			var shown = document.querySelectorAll('.ltc-gnode.port').length;
+			var moreBtn = document.querySelector('.ltc-gnode.more');
 			check('ports capped', shown === 8, shown + ' shown');
 			check('more toggle present', !!moreBtn, moreBtn && moreBtn.textContent);
 			if (moreBtn) {
 				moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-				var after = document.querySelectorAll('.ltc-tnode.port').length;
-				check('toggle expands the rest', after === 15 && !document.querySelector('.ltc-tnode.more'),
+				var after = document.querySelectorAll('.ltc-gnode.port').length;
+				check('toggle expands the rest', after === 9 && !document.querySelector('.ltc-gnode.more'),
 					after + ' after click');
 			}
 		}
@@ -611,32 +612,71 @@ if (menuNoStore) {
 		check('clock ticking', /\d\d/.test(txt('clock') || ''), txt('clock'));
 		check('skeletons cleared', skel.length === 0, skel.length + ' left');
 
-		/* ---- branching topology tree ---- */
-		var tree = document.querySelector('.ltc-tree');
-		var ports = document.querySelectorAll('.ltc-tnode.port');
-		var leaves = document.querySelectorAll('.ltc-tnode.leaf');
+		/* ---- branching topology graph ---- */
+		var graph = document.querySelector('.ltc-graph');
+		var ports = document.querySelectorAll('.ltc-gnode.port');
+		var leaves = document.querySelectorAll('.ltc-gnode.leaf');
+		var radioNodes = document.querySelectorAll('.ltc-gnode.radio');
 		var leafText = Array.prototype.map.call(leaves, function (n) {
 			return n.textContent;
 		}).join(' | ');
 		var portText = Array.prototype.map.call(ports, function (n) { return n.textContent; }).join(' | ');
+		var radioText = Array.prototype.map.call(radioNodes, function (n) { return n.textContent; }).join(' | ');
 
-		check('tree rendered', !!tree && !!document.querySelector('.ltc-tnode.root'));
+		/* children live in the .ltc-gkids that trails their own .ltc-grow row,
+		   so "is this host under that radio" is a DOM question, not a text one */
+		function under(sel, re) {
+			var nodes = document.querySelectorAll('.ltc-gnode.' + sel);
+
+			return Array.prototype.some.call(nodes, function (n) {
+				var row = n.parentNode;
+				var kids = row && row.querySelector(':scope > .ltc-gkids');
+				return !!kids && re.test(kids.textContent);
+			});
+		}
+
+		check('graph rendered', !!graph && !!document.querySelector('.ltc-gnode.wan') &&
+			!!document.querySelector('.ltc-gnode.me'), graph ? graph.querySelectorAll('.ltc-gnode').length + ' nodes' : 'no graph');
 		if (!noisy) {
+			check('wired branch present', !!document.querySelector('.ltc-gnode.wired'), 'no Wired node');
+			check('radios branch out', radioNodes.length >= 2, radioNodes.length + ' radio nodes');
 			/* an unconnected port belongs in the idle summary, not in the list */
-			check('active ports shown', ports.length >= 3, ports.length + ' port rows');
+			check('active ports shown', ports.length >= 1, ports.length + ' port rows');
+
+			/* #manyports empties the forwarding table on purpose, so the
+			   placement-only assertions below have nothing to place */
+			if (!manyp) {
+				check('unconnected port is not listed as one', !/lan2/.test(portText), portText.slice(0, 70));
+			}
 			check('wired port speed shown', /1 Gbit\/s/.test(portText), portText.slice(0, 70));
-			check('ssid on radio node', /MyHome-2\.4G/.test(portText));
-			check('band badge from iwinfo.info', /2\.4 GHz/.test(portText), portText.slice(0, 90));
-			check('channel and width shown', /channel 1 · 40 MHz/i.test(portText) || /信道 1 · 40 MHz/.test(portText), portText.slice(0, 90));
-			check('wifi generation label', /Wi-Fi 6/.test(portText), portText.slice(0, 90));
-			check('station signal in dBm', /dBm/.test(portText) || /-48 dBm/.test(document.body.textContent), 'no dBm on any leaf');
+			check('ssid on radio node', /MyHome-2\.4G/.test(radioText), radioText.slice(0, 90));
+			check('band badge from iwinfo.info', /2\.4 GHz/.test(radioText), radioText.slice(0, 90));
+			check('channel and width shown', /channel 1 · 40 MHz/i.test(radioText) || /信道 1 · 40 MHz/.test(radioText), radioText.slice(0, 120));
+			check('wifi generation label', /Wi-Fi 6/.test(radioText), radioText.slice(0, 120));
+			check('station signal in dBm', /-48 dBm/.test(document.body.textContent), 'no dBm on any leaf');
+			/* a station the DHCP table never saw still has a signal reading —
+			   that is the whole point of the dot, and it used to be dropped */
+			check('every station leaf gets a signal dot', Array.prototype.every.call(
+				document.querySelectorAll('.ltc-gnode.radio .ltc-gkids > .ltc-grow > .ltc-gnode.leaf'),
+				function (n) { return !!n.querySelector('.ltc-gdots i.good, .ltc-gdots i.ok, .ltc-gdots i.weak'); }),
+				document.querySelectorAll('.ltc-gnode.radio .ltc-gkids > .ltc-grow > .ltc-gnode.leaf').length + ' leaves');
+			check('the weak station is marked weak', !!document.querySelector('.ltc-gdots i.weak'), 'no weak dot');
 			check('randomised MAC marked private', /私有设备|Private device/.test(document.body.textContent), 'private leaf missing');
 			check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
-			check('phone placed under radio', /phone/.test(leafText), leafText.slice(0, 90));
-			check('laptop placed under lan1', /laptop/.test(leafText));
-			check('every host placed on a branch', !/Other links/.test(leafText + portText), 'no catch-all needed');
-			check('per-host rate in tree', !!document.querySelector('[data-live=hr-192-168-1-30]'),
-				document.querySelector('[data-live=hr-192-168-1-30]') && document.querySelector('[data-live=hr-192-168-1-30]').textContent);
+			check('phone placed under radio', under('radio', /phone/), leafText.slice(0, 90));
+
+			if (!manyp) {
+				check('laptop placed under lan1', under('port', /laptop/), portText.slice(0, 90));
+				check('every host placed on a branch', !/Other devices/.test(graph.textContent), 'catch-all needed');
+			}
+			else {
+				/* nothing the bridge can point at still has to appear */
+				check('unplaced hosts get their own branch', under('stray', /laptop/), 'strays missing');
+			}
+			check('per-host rate in graph', !!document.querySelector('[data-live=leaf-192-168-1-30]'),
+				document.querySelector('[data-live=leaf-192-168-1-30]') && document.querySelector('[data-live=leaf-192-168-1-30]').textContent);
+			check('branch rate slots exist', document.querySelectorAll('.ltc-gnode .grate').length >= 3,
+				document.querySelectorAll('.ltc-gnode .grate').length + ' rate boxes');
 		}
 
 		/* ---- verdict strip, band summary, event timeline ---- */
@@ -666,7 +706,8 @@ if (menuNoStore) {
 		   zero (IPv4-only devices), and those are not this bug. */
 		var kpiRow = document.querySelector('.ltc-kpis');
 		var negKpi = [].slice.call(kpiRow ? kpiRow.querySelectorAll('.ltc-kpi b') : [])
-			.filter(function (b) { return /-\d/.test(b.textContent); })
+			/* a signal reading is legitimately negative; a tween is not */
+			.filter(function (b) { return /-\d/.test(b.textContent) && !/dBm/.test(b.textContent); })
 			.map(function (b) { return b.textContent; });
 		check('no negative KPI values', !negKpi.length, negKpi.join(' '));
 
@@ -683,8 +724,8 @@ if (menuNoStore) {
 					((k.querySelector('span') || {}).textContent || '');
 			});
 		check('KPI values do not reset to zero', !zeroKpi.length, zeroKpi.join('  |  '));
-		check('idle ports collapsed', !!document.querySelector('.ltc-tnode.other'),
-			document.querySelectorAll('.ltc-tnode.other').length + ' summary rows');
+		check('idle ports collapsed', !!document.querySelector('.ltc-gnode.other'),
+			document.querySelectorAll('.ltc-gnode.other').length + ' summary rows');
 
 		/* ---- top talkers ---- */
 		var talkers = document.querySelectorAll('[data-talkers] li');
@@ -696,12 +737,19 @@ if (menuNoStore) {
 		check('talker rates formatted', !!first && /↓/.test(first.querySelector('.val').textContent),
 			first && first.querySelector('.val').textContent);
 
-		/* ---- devices page rate column ---- */
+		/* ---- devices page link, rate and activity columns ---- */
 		var heads = document.querySelectorAll('.ltc-content .table .table-titles .th');
 		var rateCells = document.querySelectorAll('.ltc-rate');
-		check('devices table has rate column', heads.length >= 7, heads.length + ' columns');
+		var linkCells = document.querySelectorAll('.ltc-linkcell b');
+		var headText = Array.prototype.map.call(heads, function (h) { return h.textContent; }).join('|');
+		check('devices table has the nine columns', heads.length >= 9, heads.length + ' columns');
+		check('link and activity headers present', /Link/.test(headText) && /Last activity|最后活动/.test(headText), headText);
 		if (!noisy) check('devices rate cells filled', rateCells.length >= 2 && /↓/.test(rateCells[0].textContent),
 			rateCells.length + ' cells');
+		if (!manyp && !noisy) check('link column names the path', linkCells.length >= 2 && /Wired|有线|Wireless|无线/.test(linkCells[0].textContent),
+			linkCells.length + ' links: ' + (linkCells[0] || {}).textContent);
+		else if (noisy) check('an unplaceable host says so', !linkCells.length &&
+			document.querySelectorAll('.ltc-linkcell').length >= 2, linkCells.length + ' named links');
 
 		/* Being in the DOM is not the same as being visible: measure pixels. */
 		var navEl = document.querySelector('.ltc-nav');
@@ -736,19 +784,19 @@ if (menuNoStore) {
 		})(), navEl ? 'scrollHeight ' + navEl.scrollHeight : 'no nav');
 
 		if (/#tree-noisy/.test(FLAGS)) {
-			var tRows = document.querySelectorAll('.ltc-tnode').length;
-			var tPorts = document.querySelectorAll('.ltc-tnode.port').length;
-			var tOther = document.querySelectorAll('.ltc-tnode.other').length;
-			var tLeaves = document.querySelectorAll('.ltc-tnode.leaf').length;
+			var gRows = document.querySelectorAll('.ltc-gnode').length;
+			var gPorts = document.querySelectorAll('.ltc-gnode.port').length;
+			var gOther = document.querySelectorAll('.ltc-gnode.other').length;
+			var gLeaves = document.querySelectorAll('.ltc-gnode.leaf').length;
 
-			check('idle ports collapsed', tPorts === 0 && tOther === 2, tPorts + ' port rows, ' + tOther + ' summary rows');
-			check('tree stays short', tRows <= 12, tRows + ' rows for 22 ports + 15 hosts');
-			check('stray hosts capped at 6', tLeaves === 6, tLeaves + ' leaves before expanding');
-			var tMore = document.querySelector('.ltc-tnode.more');
-			if (tMore) {
-				tMore.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-				check('more reveals the rest', document.querySelectorAll('.ltc-tnode.leaf').length === 15,
-					document.querySelectorAll('.ltc-tnode.leaf').length + ' leaves after click');
+			check('idle ports collapsed', gPorts === 0 && gOther === 1, gPorts + ' port rows, ' + gOther + ' summary rows');
+			check('graph stays short', gRows <= 12, gRows + ' nodes for 22 ports + 15 hosts');
+			check('stray hosts capped at 6', gLeaves === 6, gLeaves + ' leaves before expanding');
+			var gMore = document.querySelector('.ltc-gnode.more');
+			if (gMore) {
+				gMore.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+				check('more reveals the rest', document.querySelectorAll('.ltc-gnode.leaf').length === 15,
+					document.querySelectorAll('.ltc-gnode.leaf').length + ' leaves after click');
 			}
 			else {
 				check('more reveals the rest', false, 'no toggle found');
@@ -764,11 +812,29 @@ if (menuNoStore) {
 		MOCK['luci.lucent.host_rates'].bump = 1;
 		return v.load();
 	}).then(function (d2) {
-		var cell = document.querySelector('[data-live=hr-192-168-1-30]');
+		var cell = document.querySelector('[data-live=leaf-192-168-1-30]');
 		var before = cell ? cell.textContent : '';
 		v.applyLive(d2);
 		var after = cell ? cell.textContent : '';
-		if (!noisy) check('tree rate refreshed', before !== after, before + ' → ' + after);
+		if (!noisy) check('graph rate refreshed', before !== after, before + ' → ' + after);
+
+		/* the curves can only be measured once the boxes are laid out, which is
+		   what applyLive does — so this belongs after the first paint. Below
+		   980px the graph folds into an indented list and CSS hides the SVG. */
+		var links = document.querySelectorAll('svg.ltc-glinks path');
+		if (innerWidth > 980) {
+			check('connectors drawn', links.length >= 4, links.length + ' curves');
+			check('curves are real beziers', links.length > 0 && Array.prototype.every.call(links, function (p) {
+				var d = p.getAttribute('d');
+				var n = (d.match(/-?[\d.]+/g) || []).map(Number);
+				/* M x y C cx1 cy1 cx2 cy2 x y — eight numbers, and the two ends
+				   must actually be apart or there is nothing to see */
+				return /^M[-\d.]+ [-\d.]+ C[-\d. ]+$/.test(d) && n.length === 8 && n[6] > n[0];
+			}), links.length && links[0].getAttribute('d').slice(0, 40));
+		}
+		else {
+			check('narrow screens use the indented list', true, links.length + ' curves at ' + innerWidth + 'px');
+		}
 		return wait(400);
 	}).then(function () {
 		var live = document.querySelector('[data-live=spark-now]');
@@ -843,6 +909,13 @@ if (menuNoStore) {
 			document.body.classList.add('ltc-menu-open');
 		if (/#report/.test(FLAGS))
 			document.body.classList.add('show-report');
+		/* a photographing aid, like #tall: put the topology card in the middle
+		   of the window so the shot shows the graph at readable scale */
+		if (/#graph/.test(FLAGS)) {
+			var g = document.querySelector('.ltc-graph');
+			if (g)
+				g.scrollIntoView({ block: 'center' });
+		}
 
 		document.title = /FAIL|THREW/.test(REPORT.join('\n')) ? 'HARNESS_FAILED' : 'HARNESS_READY';
 	}).catch(function (err) {

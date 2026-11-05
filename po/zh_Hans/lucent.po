@@ -1297,3 +1297,93 @@ msgstr "已离线"
 
 msgid "1 thing needs attention"
 msgstr "有 1 项需要处理"
+
+msgid "Clients"
+msgstr "客户端"
+
+msgid "Customize"
+msgstr "自定义"
+
+msgid "Live"
+msgstr "实时"
+
+msgid "Memory available"
+msgstr "内存可用"
+
+msgid "Other devices"
+msgstr "其他设备"
+
+msgid "Signal"
+msgstr "信号"
+
+msgid "Wired"
+msgstr "有线"
+
+msgid "Click any node for details"
+msgstr "点击任意节点查看详情"
+
+msgid "%d cores"
+msgstr "%d 核"
+
+msgid "%d more"
+msgstr "还有 %d 个"
+
+msgid "expand"
+msgstr "点击展开"
+
+msgid "just now"
+msgstr "刚刚"
+
+msgid "load %s"
+msgstr "负载 %s"
+
+msgid "memory free"
+msgstr "内存空闲"
+
+msgid "no clients"
+msgstr "无客户端"
+
+msgid "no stations"
+msgstr "无关联终端"
+
+msgid "up %s"
+msgstr "已运行 %s"
+
+msgid "uplink %s"
+msgstr "上行 %s"
+
+msgid "client"
+msgstr "台设备"
+
+msgid "clients"
+msgstr "台设备"
+
+msgid "device"
+msgstr "台设备"
+
+msgid "idle port"
+msgstr "个空闲端口"
+
+msgid "client measured"
+msgstr "台设备有信号读数"
+
+msgid "clients measured"
+msgstr "台设备有信号读数"
+
+msgid "weak link"
+msgstr "个弱信号"
+
+msgid "weak links"
+msgstr "个弱信号"
+
+msgid "Wi-Fi client"
+msgstr "台 Wi-Fi 设备"
+
+msgid "Wi-Fi clients"
+msgstr "台 Wi-Fi 设备"
+
+msgid "Link"
+msgstr "接入方式"
+
+msgid "Last activity"
+msgstr "最后活动"

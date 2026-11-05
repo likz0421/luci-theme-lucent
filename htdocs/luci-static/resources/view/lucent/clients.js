@@ -70,8 +70,51 @@ function kindOf(name) {
 	return { icon: 'globe', cls: 'unk', label: _('Device') };
 }
 
+/* How a host reaches the router: the bridge port and its link speed for
+   cable, the radio and the signal reading for Wi-Fi. The dashboard graph uses
+   the same two sources, so the pages cannot disagree about a client. */
+function linkOf(self, mac) {
+	var want = String(mac || '').toUpperCase();
+	var topo = self._topo || {};
+	var dev = util.fdbMap(topo)[want];
+	var out = null;
+
+	if (dev) {
+		var p = util.arr(topo.ports).filter(function (x) { return x && x.device === dev; })[0]
+			|| { device: dev };
+		out = { wired: true, dev: p.label || dev, speed: Number(p.speed) || null };
+		return out;
+	}
+
+	Object.keys(self._assoc || {}).some(function (d) {
+		return util.arr(self._assoc[d]).some(function (s) {
+			if (!s || String(s.mac).toUpperCase() !== want)
+				return false;
+			out = { wired: false, dev: d, signal: Number(s.signal) };
+			return true;
+		});
+	});
+
+	return out;
+}
+
+function linkCell(l) {
+	if (!l)
+		return E('div', { 'class': 'ltc-linkcell' }, E('small', { 'class': 'ltc-muted' }, _('unknown')));
+
+	return E('div', { 'class': 'ltc-linkcell' }, [
+		E('b', {}, l.wired ? _('Wired') : _('Wireless')),
+		E('small', {}, [l.dev, l.speed
+			? (l.speed >= 1000 ? _('%d Gbit/s').format(Math.round(l.speed / 1000)) : '%d Mbit/s'.format(l.speed))
+			: (isFinite(l.signal) ? '%d dBm'.format(l.signal) : '')].filter(Boolean).join(' · '))
+	]);
+}
+
 var SORTS = {
 	name: function (a, b) { return String(a.name).toLowerCase() < String(b.name).toLowerCase() ? -1 : 1; },
+	last: function (a, b) {
+		return (a.rate && a.rate.age != null ? a.rate.age : 1e12) - (b.rate && b.rate.age != null ? b.rate.age : 1e12);
+	},
 	ip: function (a, b) { return (Number(a.ip.split('.').reduce(function (p, o) { return p * 256 + Number(o); }, 0)) || 0) - ((Number(b.ip.split('.').reduce(function (p, o) { return p * 256 + Number(o); }, 0)) || 0)); },
 	conns: function (a, b) { return a.conns - b.conns; },
 	status: function (a, b) { return (b.online ? 1 : 0) - (a.online ? 1 : 0); },
@@ -86,9 +129,31 @@ return view.extend({
 	refresh: function () {
 		var self = this;
 
-		return Promise.all([util.load(), util.hostRates()]).then(function (r) {
+		/* the link column needs more than the host table: which radio or port a
+		   MAC was learned on, and with what signal. Same two calls the dashboard
+		   graph makes, so the two pages cannot disagree about a client. */
+		return Promise.all([
+			util.load(),
+			util.hostRates(),
+			util.topology().catch(function () { return {}; })
+		]).then(function (r) {
 			self._hr = r[1] || {};
-			return r[0];
+			self._topo = r[2] || {};
+
+			var devs = util.arr(self._topo.ports)
+				.filter(function (p) { return p && p.wireless; })
+				.map(function (p) { return p.device; });
+
+			return Promise.all(devs.map(function (dev) {
+				return util.assocList(dev).catch(function () { return []; })
+					.then(function (st) { return { dev: dev, stations: util.arr(st) }; });
+			})).then(function (list) {
+				var assoc = {};
+
+				list.forEach(function (e) { assoc[e.dev] = e.stations; });
+				self._assoc = assoc;
+				return r[0];
+			});
 		});
 	},
 
@@ -116,8 +181,10 @@ return view.extend({
 				this.th(_('IPv4 address'), 'ip'),
 				E('th', { 'class': 'th' }, _('IPv6 address')),
 				E('th', { 'class': 'th' }, _('MAC address')),
+				E('th', { 'class': 'th' }, _('Link')),
 				this.th(_('Connections'), 'conns'),
 				this.th(_('Rate'), 'rate'),
+				this.th(_('Last activity'), 'last'),
 				this.th(_('Status'), 'status')
 			])
 		]);
@@ -213,6 +280,7 @@ return view.extend({
 				name: h.name || h.mac,
 				ip: ip,
 				rate: ip ? rates[ip] : null,
+				link: linkOf(self, h.mac),
 				conns: h.ips.reduce(function (p, ip2) { return p + util.connCount(data.conns, ip2); }, 0),
 				online: h.online
 			};
@@ -249,7 +317,8 @@ return view.extend({
 		rows.forEach(function (r) {
 			var h = r.h;
 			var kind = kindOf(h.name || h.mac);
-			var search = [r.name, h.mac, h.ips.join(' '), h.v6.join(' '), kind.label].join(' ').toLowerCase();
+			var search = [r.name, h.mac, h.ips.join(' '), h.v6.join(' '), kind.label,
+				r.link ? ((r.link.wired ? _('Wired') : _('Wireless')) + ' ' + r.link.dev) : ''].join(' ').toLowerCase();
 
 			var row = E('tr', { 'class': 'tr', 'data-search': search }, [
 				E('td', { 'class': 'td' }, [
@@ -264,11 +333,10 @@ return view.extend({
 				E('td', { 'class': 'td' }, r.ip || '–'),
 				E('td', { 'class': 'td' }, h.v6[0] || '–'),
 				E('td', { 'class': 'td' }, E('code', {}, h.mac)),
+				E('td', { 'class': 'td' }, linkCell(r.link)),
 				E('td', { 'class': 'td' }, r.conns > 0 ? String(r.conns) : '–'),
-				E('td', { 'class': 'td' }, [
-					rateCell(r.rate),
-					r.rate ? E('small', { 'class': 'ltc-muted' }, ageText(r.rate)) : ''
-				]),
+				E('td', { 'class': 'td' }, rateCell(r.rate)),
+				E('td', { 'class': 'td' }, r.rate ? (ageText(r.rate) || '–') : '–'),
 				E('td', { 'class': 'td' }, [
 					E('span', { 'class': 'ltc-badge ' + (h.online ? 'ok' : 'plain') },
 						h.online ? _('Active') : _('Known')),

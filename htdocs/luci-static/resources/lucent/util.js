@@ -194,6 +194,24 @@ function storageOf(storage) {
 	return { total: total, free: free, used: Math.max(0, total - free), percent: pct(total - free, total) };
 }
 
+/* Busy CPU percent. netifd's per-core samples are the accurate source; the
+   1-minute load average is the fallback, and luCInfo reports it scaled by
+   65535 rather than in tasks-per-core. */
+function cpuPercent(net, info) {
+	var cores = Number(net && net.cores) || 0;
+	var per = arr(net && net.cpus).map(function (v) { return Number(v); })
+		.filter(function (v) { return isFinite(v) && v >= 0; });
+
+	if (per.length)
+		return Math.min(100, Math.round(per.reduce(function (a, b) { return a + b; }, 0) / per.length));
+
+	var load = arr(info && info.load)[0];
+	if (load != null)
+		return Math.max(0, Math.min(100, Math.round((Number(load) / 65535) * 100 / Math.max(1, cores))));
+
+	return 0;
+}
+
 function fmtBytes(n) {
 	n = Number(n);
 	if (!isFinite(n))
@@ -699,6 +717,7 @@ return baseclass.extend({
 	gateway: gatewayOf,
 	dns: dnsOf,
 	storage: storageOf,
+	cpu: cpuPercent,
 	checkUpdate: function () { return callThemeCheck(); },
 	startUpdate: function () { return callThemeUpdate(); },
 	updateStatus: function () { return callThemeStatus(); },

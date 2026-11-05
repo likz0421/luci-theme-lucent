@@ -31,21 +31,26 @@ stylesheets, scripts or package metadata with them.
 - Settings are applied live and saved to `/etc/config/lucent`
 
 **Dashboard** (`/cgi-bin/luci/admin/home`)
-- Greeting, hostname, firmware and model
-- WAN/LAN addresses, uptime, memory, device count and live WAN
-  throughput KPIs, refreshed by polling
-- Branching LAN tree: bridge → ports (negotiated speed, up/down) → the hosts
-  learned on each, wired from the bridge FDB and wireless from the driver's
-  association list; every host leaf links to the devices page
+- Greeting, hostname, firmware and model, with one live sentence under the
+  title — uplink, uptime, memory free and Wi-Fi clients — and a `实时 · 刚刚`
+  row that says the page is current
+- Six KPI tiles: uplink, CPU, memory available, Wi-Fi clients, weakest client
+  signal and storage, each with a proportion bar instead of a bare number
+- Branching network graph: Internet → router → radio → SSID → client, and
+  router → wired → port → client. Band, generation, channel and width sit on
+  the radio node, the negotiated speed on the port, dBm and a coloured dot on
+  each station, live `↓/↑` on every branch. Idle ports collapse to one line,
+  long branches collapse behind a `还有 N 个` toggle, and below 981 px the
+  graph becomes an indented list.
 - Top talkers: the busiest hosts right now with proportional bars, plus how
   long the quiet ones have been silent (needs per-device accounting, which is
   off by default — see Appearance)
-- Uplink topology (Internet → WAN → router → LAN → Wi-Fi)
+- Health verdict: one sentence plus a chip per check, naming what is wrong
+- Today's event timeline, built from the polls the dashboard already runs
 - Memory, swap and load rings
 - Device list and quick actions
 - Wi-Fi radio count and the first configured SSID
-- Traffic trend that survives a browser restart (samples are kept per day),
-  with KPI tiles carrying a proportion bar instead of a bare number
+- Traffic trend that survives a browser restart (samples are kept per day)
 
 **Navigation**
 - Grouped sidebar with a mobile drawer, built by the theme itself — no
@@ -69,7 +74,9 @@ stylesheets, scripts or package metadata with them.
 **Devices** (`/cgi-bin/luci/admin/clients`)
 - Merges DHCP leases, ARP/neighbour hints and IPv6 addresses
 - Search filter, online state, interface name and lease time
-- Per-device live down/up rate and last-seen columns, sortable by rate
+- Per-device live down/up rate, last-activity and connection counts
+- A link column that names the radio and signal, or the bridge port and its
+  negotiated speed, for each host — the same reading the graph draws
 
 **Media library**
 - Uploads are streamed to `/tmp/lucent-upload/` in 192 KiB chunks and

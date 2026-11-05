@@ -75,21 +75,6 @@ function memOf(info) {
 	};
 }
 
-function cpuOf(net, info) {
-	var cores = Number(net.cores) || 0;
-	var per = util.arr(net.cpus).map(function (v) { return Number(v); })
-		.filter(function (v) { return isFinite(v) && v >= 0; });
-
-	if (per.length)
-		return Math.min(100, Math.round(per.reduce(function (a, b) { return a + b; }, 0) / per.length));
-
-	var load = util.arr(info.load)[0];
-	if (load != null)
-		return Math.max(0, Math.min(100, Math.round((Number(load) / 65535) * 100 / Math.max(1, cores))));
-
-	return 0;
-}
-
 function countsOf(hints, leases) {
 	var list = util.hosts(hints, leases);
 	return {
@@ -338,7 +323,7 @@ return baseclass.extend({
 		Promise.all(jobs).then(function (r) {
 			var info = r[0] || {}, net = r[1] || {}, devices = r[2] || {};
 			var mem = memOf(info);
-			var cpu = cpuOf(net, info);
+			var cpu = util.cpu(net, info);
 
 			self.set('cpu', cpu + '%');
 			self.dial('cpu', cpu);
