@@ -536,7 +536,7 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 		return chline.join(' · ');
 	}
 
-	function ssidKids(dev) {
+	function ssidKids(dev, showRate) {
 		var stations = util.arr(assoc[dev]);
 
 		return {
@@ -547,9 +547,11 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 			dots: stations.length ? stations.map(function (s) {
 				return signalClass(s && s.signal).trim();
 			}) : null,
-			gr: dev,
+			/* with one VAP on a radio the radio box already carries that
+			   netdev's rate; a second box with the same number is noise */
+			gr: showRate ? dev : undefined,
 			kind: 'ssid',
-			live: 'gr-' + dev,
+			live: showRate ? 'gr-' + dev : undefined,
 			cap: 6,
 			kids: stations.map(function (s) { return deviceLeaf(s.mac, false, seen); })
 		};
@@ -574,7 +576,7 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 			kind: 'radio',
 			live: 'gr-' + dev,
 			cap: 4,
-			kids: nets.map(ssidKids)
+			kids: nets.map(function (d) { return ssidKids(d, nets.length > 1); })
 		};
 	}
 
