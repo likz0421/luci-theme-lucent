@@ -139,6 +139,29 @@ suite() {
 	rm -rf "$WORK"
 }
 
+echo "--- packaging ownership"
+# luci.mk turns po/<BCP-47>/*.po into luci-i18n-lucent-<lang>, which installs
+# $(LUCI_LIBRARYDIR)/i18n/lucent.<lang>.lmo and DEPENDS on the theme. If the
+# theme also ships that exact file, two packages own one path: apk refuses the
+# install ("trying to overwrite") and refuses the removal. Feed builds must
+# therefore leave the translations to the generated package; only the
+# standalone CI packages, which never run luci.mk, bundle them.
+# only the recipe lines count — the comment above them explains why they must
+# not come back
+PREPARE_BODY=$(awk '/^define Build\/Prepare\/luci-theme-lucent/{on=1;next} /^endef/{on=0} on && !/^[[:space:]]*#/' "$ROOT/Makefile")
+if printf '%s\n' "$PREPARE_BODY" | grep -q 'i18n'; then
+	no "Makefile Build/Prepare does not bundle translations" "luci-i18n-lucent-* would collide with the theme"
+else
+	ok "Makefile Build/Prepare does not bundle translations"
+fi
+for f in scripts/build-ipk.sh scripts/build-apk.sh; do
+	if grep -q 'i18n/\*\.lmo\|i18n/lucent' "$ROOT/$f"; then
+		ok "$f ships translations (no luci.mk involved)"
+	else
+		no "$f ships translations" "standalone package would install without Chinese"
+	fi
+done
+
 suite "$ROOT/install.sh" "install.sh"
 suite "$ROOT/scripts/onekey-template.sh" "onekey-template.sh"
 

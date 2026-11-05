@@ -176,7 +176,8 @@ case "$1" in
     shift
     case "$1" in
       -e) if [ -n "$2" ] && grep -qx "$2" "$db"; then exit 0; else exit 1; fi ;;
-      -D) if grep -qx 'luci-i18n-lucent-zh-cn' "$db"; then echo "luci-i18n-lucent-zh-cn"; fi; exit 0 ;;
+      -r) if grep -qx 'luci-i18n-lucent-zh-cn' "$db"; then echo "luci-i18n-lucent-zh-cn"; fi; exit 0 ;;
+      "") cat "$db"; exit 0 ;;
       info) cat "$db"; exit 0 ;;
     esac ;;
   del)
@@ -233,6 +234,72 @@ if [ "$RC3" = "0" ]; then
 else
 	no "audit passes" "rc=$RC3: $(printf '%s' "$OUT3" | tail -2 | tr '\n' ' ')"
 fi
+
+rm -rf "$FAKE"
+
+echo "--- a language package that cannot go must keep its files"
+# If something still pins luci-i18n-lucent-zh-cn, deleting its .lmo by hand
+# turns it into an empty shell — and the audit must then complain about the
+# package record, not about the legitimately-present files.
+FAKE=$(mktemp -d)
+BIN="$FAKE/bin"
+mkdir -p "$BIN" "$FAKE/etc/crontabs" "$FAKE/usr/lib/lua/luci/i18n" "$FAKE/tmp" "$FAKE/var/run"
+mkdir -p "$FAKE/usr/libexec/rpcd" "$FAKE/usr/share/lucent" "$FAKE/www/luci-static/lucent"
+touch "$FAKE/usr/lib/lua/luci/i18n/lucent.zh-cn.lmo"
+
+printf 'luci-theme-lucent\nluci-i18n-lucent-zh-cn\nsome-other-thing\n' > "$FAKE/db"
+{
+	echo '#!/bin/sh'
+	echo 'db="'"$FAKE"'/db"'
+	cat <<'SHEOF'
+case "$1" in
+  info)
+    shift
+    case "$1" in
+      -e) if [ -n "$2" ] && grep -qx "$2" "$db"; then exit 0; else exit 1; fi ;;
+      -r) if grep -qx 'luci-i18n-lucent-zh-cn' "$db"; then echo "luci-i18n-lucent-zh-cn"; fi; exit 0 ;;
+      "") cat "$db"; exit 0 ;;
+      info) cat "$db"; exit 0 ;;
+    esac ;;
+  del)
+    # the theme goes; the language package is pinned by something else
+    for p in "$@"; do
+      [ "$p" = "luci-theme-lucent" ] && grep -vx 'luci-theme-lucent' "$db" > "$db.tmp" || true
+    done
+    if grep -qx 'luci-i18n-lucent-zh-cn' "$db"; then
+      mv "$db.tmp" "$db" 2>/dev/null || true
+      echo "ERROR: luci-i18n-lucent-zh-cn is required by some-other-thing" >&2
+      exit 1
+    fi
+    mv "$db.tmp" "$db"; exit 0 ;;
+esac
+exit 0
+SHEOF
+} > "$BIN/apk"
+printf '#!/bin/sh\n[ "$1" = "-q" ] && shift\ncase "$1" in get) exit 1 ;; *) exit 0 ;; esac\n' > "$BIN/uci"
+chmod +x "$BIN"/*
+
+sed -e 's|/www/|@F@/www/|g' -e 's|/usr/|@F@/usr/|g' -e 's|/etc/|@F@/etc/|g' \
+	-e 's|/tmp/|@F@/tmp/|g' -e 's|/var/|@F@/var/|g' \
+	"$ROOT/uninstall.sh" | sed "s|@F@|$FAKE|g" > "$FAKE/script.sh"
+PATH="$BIN:$PATH"
+OUT4=$(sh "$FAKE/script.sh" 2>&1)
+RC4=$?
+
+if [ -e "$FAKE/usr/lib/lua/luci/i18n/lucent.zh-cn.lmo" ]; then
+	ok "the live language package keeps its .lmo"
+else
+	no "the live language package keeps its .lmo" "file deleted while the package is still registered"
+fi
+case "$OUT4" in
+	*"包记录:luci-i18n-lucent-zh-cn"*) ok "audit names the surviving package record" ;;
+	*) no "audit names the surviving package record" "$(printf '%s' "$OUT4" | tail -2 | tr '\n' ' ')" ;;
+esac
+case "$OUT4" in
+	*i18n/lucent.zh-cn.lmo*) no "kept files are not reported as leftovers" "audit flagged the .lmo" ;;
+	*) ok "kept files are not reported as leftovers" ;;
+esac
+[ "$RC4" != "0" ] && ok "uninstall fails loudly while a package record survives" || no "uninstall fails loudly" "claimed success"
 
 rm -rf "$FAKE"
 

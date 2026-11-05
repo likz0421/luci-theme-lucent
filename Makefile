@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=0.2
+PKG_VERSION:=0.3
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard
@@ -55,15 +55,21 @@ define Package/luci-theme-lucent/postrm
 }
 endef
 
-# luci.mk 只打包 luasrc/ucode/htdocs/root/src 五个目录;仓库根的 install.sh 与
-# i18n/*.lmo 不在其中。借 Build/Prepare/<pkgname> 钩子(root 拷贝之后执行)把它们
-# 塞进 root 树,这样 SDK/feed 源码构建出的包也带在线更新助手的完整功能。
+# luci.mk 只打包 luasrc/ucode/htdocs/root/src 五个目录，仓库根的 install.sh 不在
+# 其中，借 Build/Prepare/<pkgname> 钩子(root 拷贝之后执行)把它塞进 root 树，这样
+# SDK/feed 源码构建出的包也带在线更新助手的完整功能。
+#
+# i18n/*.lmo 这里**不能**再放：只要 po/<BCP-47>/*.po 存在，luci.mk 就会用
+# LuciTranslation 生成 luci-i18n-lucent-<lang> 子包，把同一个
+# $(LUCI_LIBRARYDIR)/i18n/lucent.<lang>.lmo 装进那个包里，并且让它
+# DEPENDS:=luci-theme-lucent。两边都塞的话同一个文件被两个包声明，apk 安装时报
+# trying to overwrite、卸载时报依赖未清 —— 真机上就是这么坏的。CI 里
+# build-ipk/build-apk 直接打包整个树、不经过 luci.mk，所以那两个包仍然自带翻译。
 define Build/Prepare/luci-theme-lucent
-	mkdir -p $(PKG_BUILD_DIR)/root/usr/share/lucent $(PKG_BUILD_DIR)/root/usr/lib/lua/luci/i18n
+	mkdir -p $(PKG_BUILD_DIR)/root/usr/share/lucent
 	$(CP) ./install.sh $(PKG_BUILD_DIR)/root/usr/share/lucent/install.sh
 	chmod 0755 $(PKG_BUILD_DIR)/root/usr/share/lucent/install.sh
 	printf '$(PKG_VERSION)-r$(PKG_RELEASE)\n' > $(PKG_BUILD_DIR)/root/usr/share/lucent/version
-	$(CP) ./i18n/*.lmo $(PKG_BUILD_DIR)/root/usr/lib/lua/luci/i18n/
 endef
 
 include $(TOPDIR)/feeds/luci/luci.mk

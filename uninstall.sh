@@ -17,7 +17,7 @@ PKG=luci-theme-lucent
 # it, leaving the record behind — which makes the next install trip over file
 # ownership again. Drop our own dependents in the same transaction.
 if command -v apk >/dev/null 2>&1 && apk info -e "$PKG" >/dev/null 2>&1; then
-	DEPS=$(apk info -D "$PKG" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+	DEPS=$(apk info -r "$PKG" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
 	if [ -n "$DEPS" ]; then
 		echo "→ apk del $DEPS $PKG（语言包分包依赖主题）"
 		apk del $DEPS "$PKG" >/dev/null 2>&1 || true
@@ -45,9 +45,22 @@ rm -rf /usr/share/lucent
 rm -f /usr/share/luci/menu.d/luci-theme-lucent.json
 rm -f /usr/share/rpcd/acl.d/luci-theme-lucent.json
 rm -f /usr/libexec/rpcd/luci.lucent
-# every locale the theme ships, not just the zh-cn names we happen have today
-rm -f /usr/lib/lua/luci/i18n/lucent*.lmo
-rm -f /etc/uci-defaults/30_luci-theme-lucent
+# Every locale the theme ships. But if a luci-i18n-lucent-* package is still
+# registered, those files belong to it — deleting them would leave a live
+# package with nothing installed, which is how the "uninstalled but still
+# broken" state was created in the first place.
+OUR_I18N=""
+if command -v apk >/dev/null 2>&1; then
+	OUR_I18N=$(apk info 2>/dev/null | grep '^luci-i18n-lucent' || true)
+elif command -v opkg >/dev/null 2>&1; then
+	OUR_I18N=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+fi
+if [ -n "$OUR_I18N" ]; then
+	echo "→ 语言包仍在数据库中（$OUR_I18N），保留它的 .lmo，交给包管理器处理"
+else
+	rm -f /usr/lib/lua/luci/i18n/lucent*.lmo
+fi
+rm -f /etc/uci-defaults/30_luci-theme-lucent /etc/uci-defaults/luci-i18n-lucent-*
 
 if [ "${KEEP_CONFIG:-0}" != "1" ]; then
 	rm -f /etc/config/lucent
@@ -101,11 +114,19 @@ for p in /www/luci-static/lucent \
 		LEFT="$LEFT $p"
 	fi
 done
-for p in /usr/lib/lua/luci/i18n/lucent*.lmo /tmp/lucent-* /var/run/lucent-*; do
+for p in /tmp/lucent-* /var/run/lucent-*; do
 	if [ -e "$p" ]; then
 		LEFT="$LEFT $p"
 	fi
 done
+# 语言包还在册时它的 .lmo 是合法存在的，不算残留
+if [ -z "$OUR_I18N" ]; then
+	for p in /usr/lib/lua/luci/i18n/lucent*.lmo; do
+		if [ -e "$p" ]; then
+			LEFT="$LEFT $p"
+		fi
+	done
+fi
 if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
 	LEFT="$LEFT luci.themes.Lucent"
 fi
@@ -121,8 +142,10 @@ if command -v apk >/dev/null 2>&1; then
 		fi
 	done
 elif command -v opkg >/dev/null 2>&1; then
-	for p in "$PKG" $(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true); do
-		if opkg status "$p" >/dev/null 2>&1; then
+	# `opkg status <unknown>` can still exit 0, so read the installed list
+	OPKG_LIST=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 || true)
+	for p in "$PKG" $(printf '%s\n' "$OPKG_LIST" | grep '^luci-i18n-lucent' || true); do
+		if printf '%s\n' "$OPKG_LIST" | grep -qx "$p"; then
 			LEFT="$LEFT 包记录:$p"
 		fi
 	done

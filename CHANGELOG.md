@@ -8,6 +8,50 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.3 — 2026-11-05
+
+A second pass over the same install/remove cycle, because 0.2 fixed the
+symptom and left the cause standing.
+
+### Fixed
+
+- **The root cause is gone.** `Build/Prepare` no longer copies `i18n/*.lmo`
+  into the theme package. `luci.mk` turns `po/zh_Hans/lucent.po` into
+  `luci-i18n-lucent-zh-cn`, which installs that exact `.lmo` path and
+  `DEPENDS:=luci-theme-lucent` — with both in place, two packages owned one
+  file, which is precisely what made apk refuse the install *and* the removal.
+  Feed/SDK builds now have a single owner per file; the standalone CI packages,
+  which never run `luci.mk`, still bundle their translations.
+- **`apk info -D` is not reverse dependencies.** 0.2's "remove the language
+  package in the same transaction" therefore never found anything on a real
+  router — `-D` is not that; `-r` is. The dependency lookup was silently
+  returning the wrong list, so the removal still failed exactly as before.
+- **Uninstall no longer deletes files a live package owns.** If
+  `luci-i18n-lucent-*` is still registered (something else pins it), its
+  `.lmo` files are left alone instead of being hand-deleted into an empty
+  shell — that half-state was the origin of the whole collision.
+- **The self-audit does not flag legitimately kept files.** It reports the
+  surviving package record, not the `.lmo` the language package still owns.
+- **The opkg package-record check reads `opkg list-installed`.** `opkg status
+  <unknown>` can exit 0, so the previous check could have declared every
+  removal incomplete.
+- **`/etc/uci-defaults/luci-i18n-lucent-*` is removed too** — the generated
+  language package drops a defaults script there that nothing else cleaned.
+
+### Verified
+
+- `sh tests/uninstall-audit.sh`: two scenarios now. One where apk refuses the
+  theme while the language package depends on it — both records must end up
+  gone. Another where the language package itself cannot be removed: the
+  `.lmo` must survive, the audit must name the package record rather than the
+  files, and the run must exit non-zero instead of claiming success.
+- `sh tests/install-logic.sh`: added a packaging assertion that reads the
+  `Build/Prepare` recipe (comments excluded) and fails if translations are
+  bundled into the theme again, plus that the CI builders still ship them —
+  the two build paths have different owners and that difference is the fix.
+- `sh tests/install-apk-retry.sh` and `node tests/run-harness.js`
+  (15 scenarios / 844 assertions) remain clean.
+
 ## 0.2 — 2026-11-05
 
 Found from a real router's transcript, not from the test bench.

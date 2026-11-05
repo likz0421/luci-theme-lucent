@@ -291,7 +291,7 @@ do_uninstall() {
 
 	if command -v apk >/dev/null 2>&1; then
 		if apk info -e "$PKG_NAME" >/dev/null 2>&1; then
-			DEPS=$(apk info -D "$PKG_NAME" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+			DEPS=$(apk info -r "$PKG_NAME" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
 			if [ -n "$DEPS" ]; then
 				echo "  一并移除依赖主题的语言包：$DEPS"
 				apk del $DEPS "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
@@ -314,11 +314,22 @@ do_uninstall() {
 	rm -rf /www/luci-static/resources/view/lucent
 	rm -rf /usr/share/ucode/luci/template/themes/lucent
 	rm -rf /usr/share/lucent
-	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json
-	rm -f /usr/share/rpcd/acl.d/luci-theme-lucent.json
-	rm -f /usr/libexec/rpcd/luci.lucent
-	rm -f /usr/lib/lua/luci/i18n/lucent*.lmo
-	rm -f /etc/uci-defaults/30_luci-theme-lucent
+	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json \
+		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
+		/usr/libexec/rpcd/luci.lucent \
+		/etc/uci-defaults/30_luci-theme-lucent /etc/uci-defaults/luci-i18n-lucent-*
+	# 语言包还在册时不要删它的 .lmo，否则那个包变成空壳、下次安装再次冲突
+	OUR_I18N=""
+	if command -v apk >/dev/null 2>&1; then
+		OUR_I18N=$(apk info 2>/dev/null | grep '^luci-i18n-lucent' || true)
+	elif command -v opkg >/dev/null 2>&1; then
+		OUR_I18N=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+	fi
+	if [ -n "$OUR_I18N" ]; then
+		echo "→ 语言包仍在数据库中（$OUR_I18N），保留其 .lmo 由包管理器负责"
+	else
+		rm -f /usr/lib/lua/luci/i18n/lucent*.lmo
+	fi
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
@@ -360,11 +371,18 @@ do_uninstall() {
 			LEFT="$LEFT $p"
 		fi
 	done
-	for p in /usr/lib/lua/luci/i18n/lucent*.lmo /tmp/lucent-* /var/run/lucent-*; do
+	for p in /tmp/lucent-* /var/run/lucent-*; do
 		if [ -e "$p" ]; then
 			LEFT="$LEFT $p"
 		fi
 	done
+	if [ -z "$OUR_I18N" ]; then
+		for p in /usr/lib/lua/luci/i18n/lucent*.lmo; do
+			if [ -e "$p" ]; then
+				LEFT="$LEFT $p"
+			fi
+		done
+	fi
 	if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
 		LEFT="$LEFT luci.themes.Lucent"
 	fi

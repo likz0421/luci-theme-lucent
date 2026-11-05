@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="0.2-r1"
-LUCENT_TAG_DEFAULT="v0.2"
+LUCENT_VERSION_DEFAULT="0.3-r1"
+LUCENT_TAG_DEFAULT="v0.3"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -595,7 +595,7 @@ do_uninstall() {
 			# 有包依赖主题时 apk 会拒绝删除，而本主题早前的语言包分包正是这种
 			# 依赖。把它们放进同一次事务，否则包记录会留在数据库里，下次安装又
 			# 报文件所有权冲突。
-			DEPS=$(apk info -D "$PKG_NAME" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+			DEPS=$(apk info -r "$PKG_NAME" 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
 			if [ -n "$DEPS" ]; then
 				log "  一并移除依赖主题的语言包：$DEPS"
 				apk del $DEPS "$PKG_NAME" >"$TMP/pkg.log" 2>&1 || cat "$TMP/pkg.log"
@@ -619,8 +619,20 @@ do_uninstall() {
 	rm -f /usr/share/luci/menu.d/luci-theme-lucent.json \
 		/usr/share/rpcd/acl.d/luci-theme-lucent.json \
 		/usr/libexec/rpcd/luci.lucent \
-		/usr/lib/lua/luci/i18n/lucent*.lmo \
-		/etc/uci-defaults/30_luci-theme-lucent
+		/etc/uci-defaults/30_luci-theme-lucent /etc/uci-defaults/luci-i18n-lucent-*
+	# 语言包还登记在案时不要动它的 .lmo：删掉文件而包还在，下次安装又会撞
+	# 文件所有权，而且那个包从此变成空壳。
+	OUR_I18N=""
+	if have apk; then
+		OUR_I18N=$(apk info 2>/dev/null | grep '^luci-i18n-lucent' || true)
+	elif have opkg; then
+		OUR_I18N=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true)
+	fi
+	if [ -n "$OUR_I18N" ]; then
+		log "→ 语言包仍在数据库中（$OUR_I18N），保留其 .lmo 由包管理器负责"
+	else
+		rm -f /usr/lib/lua/luci/i18n/lucent*.lmo
+	fi
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
@@ -661,11 +673,19 @@ do_uninstall() {
 			LEFT="$LEFT $p"
 		fi
 	done
-	for p in /usr/lib/lua/luci/i18n/lucent*.lmo /tmp/lucent-* /var/run/lucent-*; do
+	for p in /tmp/lucent-* /var/run/lucent-*; do
 		if [ -e "$p" ]; then
 			LEFT="$LEFT $p"
 		fi
 	done
+	# 语言包还在册时它的 .lmo 是合法存在的，不算残留
+	if [ -z "$OUR_I18N" ]; then
+		for p in /usr/lib/lua/luci/i18n/lucent*.lmo; do
+			if [ -e "$p" ]; then
+				LEFT="$LEFT $p"
+			fi
+		done
+	fi
 	if uci -q get luci.themes.Lucent >/dev/null 2>&1; then
 		LEFT="$LEFT luci.themes.Lucent"
 	fi
@@ -677,8 +697,10 @@ do_uninstall() {
 			fi
 		done
 	elif have opkg; then
-		for p in "$PKG_NAME" $(opkg list-installed 2>/dev/null | cut -d' ' -f1 | grep '^luci-i18n-lucent' || true); do
-			if opkg status "$p" >/dev/null 2>&1; then
+		# `opkg status <unknown>` can still exit 0, so read the installed list
+		OLIST=$(opkg list-installed 2>/dev/null | cut -d' ' -f1 || true)
+		for p in "$PKG_NAME" $(printf '%s\n' "$OLIST" | grep '^luci-i18n-lucent' || true); do
+			if printf '%s\n' "$OLIST" | grep -qx "$p"; then
 				LEFT="$LEFT 包记录:$p"
 			fi
 		done
