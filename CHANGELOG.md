@@ -8,6 +8,37 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.7 — 2026-11-05
+
+### Fixed
+
+- **"An update is already running" could become permanent.** The lock was
+  tested with `kill -0 <pid>` alone. When a finished job left its pid file
+  behind — which happens whenever nobody polled the status before the page
+  closed — that number was later reused by an unrelated live process, so every
+  update attempt was refused forever, with no way to recover from inside the
+  UI. The liveness test now also reads `/proc/<pid>/cmdline` and only treats
+  the lock as held when that process really is our job script; a recycled PID
+  is recognised as stale and dropped. When `/proc` cannot be read the old
+  behaviour is kept rather than refusing to act.
+- **Each background job now clears its own lock** when it finishes (update,
+  package install, update check and package-count jobs), so nothing depends on
+  a browser staying open to poll the status.
+
+### Verified
+
+- `sh tests/lock-staleness.sh`: new suite. It starts a real `sh <job path>`
+  process and asserts the lock is held for that job path but **not** for a
+  different one — the PID-reuse case that caused this — plus the no-file and
+  dead-pid cases, and that all four job scripts remove their own pid file.
+- `node tests/run-harness.js` (16 scenarios / 952 assertions) and
+  `sh tests/install-logic.sh` remain clean.
+
+### Note
+
+A router already stuck in this state can clear it without waiting for the
+update: `rm -f /var/run/lucent-update.pid`.
+
 ## 0.6 — 2026-11-05
 
 ### Changed

@@ -22,6 +22,29 @@ CHECKPID="$RUN/lucent-check.pid"
 CHECKJOB="$RUN/lucent-check.job.sh"
 INSTALLER="/usr/share/lucent/install.sh"
 
+# Is the lock really held by our own job? `kill -0` alone is not enough: PIDs
+# get reused, so a job that finished without anyone polling its status leaves a
+# pid file whose number later belongs to some unrelated live process — and then
+# the UI reports "An update is already running" forever, with no way out from
+# inside the page. When the process is ours, /proc/<pid>/cmdline names the job
+# script; when it is not, the lock is stale and gets dropped.
+job_alive() {
+	local pid cmd
+	pid=$(cat "$1" 2>/dev/null)
+	[ -n "$pid" ] || return 1
+	kill -0 "$pid" 2>/dev/null || return 1
+	if [ -r "/proc/$pid/cmdline" ]; then
+		cmd=$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+		if [ -n "$cmd" ]; then
+			case "$cmd" in
+				*"$2"*) return 0 ;;
+				*) return 1 ;;
+			esac
+		fi
+	fi
+	return 0
+}
+
 mkdir -p "$TMPDIR" 2>/dev/null || true
 
 err() {
@@ -323,7 +346,7 @@ plugin_install() {
 		exit 0
 	fi
 
-	[ -f "$PID" ] && kill -0 "$(cat "$PID" 2>/dev/null)" 2>/dev/null && \
+	job_alive "$PID" "$IJOB" && \
 		err "Another installation is still running"
 
 	rm -f "$CODE" "$LOG" "$PID"
@@ -332,6 +355,7 @@ plugin_install() {
 #!/bin/sh
 apk add '$pkg' >'$LOG' 2>&1
 echo \$? >'$CODE'
+rm -f '$PID'
 EOF
 	else
 		cat > "$IJOB" <<EOF
@@ -339,6 +363,7 @@ EOF
 opkg update >'$LOG' 2>&1
 opkg install '$pkg' >>'$LOG' 2>&1
 echo \$? >'$CODE'
+rm -f '$PID'
 EOF
 	fi
 	chmod 755 "$IJOB"
@@ -361,7 +386,7 @@ plugin_status() {
 	local pid code running=0
 	pid=$(cat "$PID" 2>/dev/null)
 	code=$(cat "$CODE" 2>/dev/null)
-	[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && running=1
+	job_alive "$PID" "$IJOB" && running=1
 	[ "$running" = 0 ] && rm -f "$PID"
 
 	json_init
@@ -420,7 +445,7 @@ pkg_updates() {
 		esac
 	fi
 
-	if [ -f "$PKGUPPID" ] && kill -0 "$(cat "$PKGUPPID" 2>/dev/null)" 2>/dev/null; then
+	if job_alive "$PKGUPPID" "$PKGUPJOB"; then
 		json_init
 		json_add_int checking 1
 		json_dump
@@ -440,6 +465,7 @@ else
 fi
 case "\$n" in ''|*[!0-9]*) n=-1 ;; esac
 { printf '%s\\n' "\$(date +%s)"; printf '{"count":%d}\\n' "\$n"; } >'$PKGUPCACHE.tmp' && mv -f '$PKGUPCACHE.tmp' '$PKGUPCACHE'
+rm -f '$PKGUPPID'
 EOF
 	chmod 755 "$PKGUPJOB"
 
@@ -889,7 +915,7 @@ theme_check() {
 		esac
 	fi
 
-	if [ -f "$CHECKPID" ] && kill -0 "$(cat "$CHECKPID" 2>/dev/null)" 2>/dev/null; then
+	if job_alive "$CHECKPID" "$CHECKJOB"; then
 		cur=$(theme_current)
 		json_init
 		json_add_string current "$cur"
@@ -912,6 +938,7 @@ rm -f /tmp/lucent-check.sh
 case "\$out" in
 '{'*) printf '%s\\n%s\\n' "\$(date +%s)" "\$out" >'$CHECKCACHE.tmp' && mv -f '$CHECKCACHE.tmp' '$CHECKCACHE' ;;
 esac
+rm -f '$CHECKPID'
 EOF
 	chmod 755 "$CHECKJOB"
 
@@ -931,7 +958,7 @@ EOF
 
 theme_update() {
 	[ -f "$INSTALLER" ] || err "The update helper is missing"
-	[ -f "$UPPID" ] && kill -0 "$(cat "$UPPID" 2>/dev/null)" 2>/dev/null && \
+	job_alive "$UPPID" "$UPJOB" && \
 		err "An update is already running"
 
 	rm -f "$UPCODE" "$UPLOG" "$UPPID" "$CHECKCACHE"
@@ -952,6 +979,7 @@ c=\$(uci -q get lucent.main.update_cn)
 sh /tmp/lucent-update.sh update >'$UPLOG' 2>&1
 echo \$? >'$UPCODE'
 rm -f /tmp/lucent-update.sh
+rm -f '$UPPID'
 EOF
 	chmod 755 "$UPJOB"
 
@@ -974,7 +1002,7 @@ theme_status() {
 	local pid code running=0
 	pid=$(cat "$UPPID" 2>/dev/null)
 	code=$(cat "$UPCODE" 2>/dev/null)
-	[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && running=1
+	job_alive "$UPPID" "$UPJOB" && running=1
 	[ "$running" = 0 ] && rm -f "$UPPID"
 
 	json_init
