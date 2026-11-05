@@ -1054,3 +1054,55 @@ body.ltc-search-open{overflow:hidden}
 	.cbi-page-actions,.ltc-dock{background:var(--card)}
 }
 .ltc-search-head input:focus{outline:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 38%,transparent)}
+
+/* ------------------------------------------------------------- verdict strip */
+/* .ltc-card sets flex-direction:column, which stacked the head above the
+   chips and centred both; this card is a row. */
+.ltc-verdict{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px}
+.ltc-verdict-head{display:flex;align-items:center;gap:12px;min-width:0}
+.ltc-verdict-head h3{margin:0;font-size:16px}
+.ltc-verdict-head p{margin:2px 0 0;font-size:12px}
+.ltc-verdict-dot{
+	flex:none;width:14px;height:14px;border-radius:50%;background:var(--ok);
+	box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 18%,transparent);
+	animation:ltc-breathe 2.6s var(--ease) infinite;
+}
+.ltc-verdict.warn .ltc-verdict-dot{background:var(--warn);box-shadow:0 0 0 4px color-mix(in srgb,var(--warn) 20%,transparent)}
+.ltc-verdict-list{display:flex;flex-wrap:wrap;gap:6px}
+.ltc-vchip{
+	display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid var(--line);
+	border-radius:999px;background:var(--card-2);color:var(--text-2);font-size:11.5px;
+}
+.ltc-vchip.bad{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 9%,var(--card-2))}
+
+/* ---------------------------------------------------------- tree leaf detail */
+.ltc-tdot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--text-3)}
+.ltc-tdot.good{background:var(--ok)}
+.ltc-tdot.ok{background:var(--warn)}
+.ltc-tdot.weak{background:var(--bad)}
+.ltc-tnode.leaf{display:flex;align-items:center;gap:8px}
+.ltc-tnode.leaf .ic{width:auto;height:auto;background:none}
+.ltc-tnode.priv .tname{font-style:italic;opacity:.85}
+.tsig{
+	flex:none;font:10.5px var(--mono);color:var(--text-3);padding:1px 6px;border-radius:7px;
+	background:color-mix(in srgb,var(--card-2) 70%,transparent);
+}
+.tsig.good{color:var(--ok)}
+.tsig.weak{color:var(--bad)}
+.ltc-band{
+	flex:none;font:600 9.5px var(--mono);letter-spacing:.02em;padding:2px 6px;border-radius:6px;
+	background:var(--tint);color:var(--accent-2);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);
+}
+.ltc-band.b5{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 26%,transparent)}
+.ltc-band.b6{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 26%,transparent)}
+.tgen{flex:none;font-size:10.5px;color:var(--text-3)}
+
+/* ------------------------------------------------------------------ timeline */
+.ltc-timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.ltc-tl{display:flex;align-items:baseline;gap:9px;padding:5px 2px;font-size:12px;color:var(--text-2)}
+.ltc-tl i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--text-3);transform:translateY(-1px)}
+.ltc-tl.join i{background:var(--ok)}
+.ltc-tl.leave i{background:var(--text-3)}
+.ltc-tl.up i{background:var(--ok)}
+.ltc-tl.down i{background:var(--bad)}
+.ltc-tl time{flex:none;font:10.5px var(--mono);color:var(--text-3)}

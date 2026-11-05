@@ -204,9 +204,19 @@ var MOCK = {
 var ASSOC = {
 	wlan0: [
 		{ mac: 'aa:bb:cc:00:00:01', signal: -48, rx_bytes: 1000, tx_bytes: 200 },
-		{ mac: '11:22:33:44:55:66', signal: -71 }
+		{ mac: '11:22:33:44:55:66', signal: -71 },
+		/* locally-administered first octet: 0xDA & 0x02 -> randomised MAC */
+		{ mac: 'da:bb:cc:dd:ee:ff', signal: -83 }
 	],
 	wlan1: []
+};
+
+/* iwinfo <dev>.info, which is what the band badge and the channel/width line
+   come from. A build without the ACL grant answers {} instead, which util.js
+   must survive without inventing a badge. */
+var RADIO = {
+	wlan0: { channel: 1, frequency: 2412, htmode: 'HE40' },
+	wlan1: { channel: 36, frequency: 5180, htmode: 'HE160' }
 };
 
 /* Root menu node in the shape /admin/menu serves: children keyed by node name,
@@ -249,6 +259,8 @@ var rpc = { declare: function (spec) {
 		var key = spec.object + '.' + spec.method;
 		if (key === 'iwinfo.assoclist' || key === 'luci-rpc.getWirelessAssocList')
 			return Promise.resolve({ results: ASSOC[arguments[0]] || [] });
+		if (key === 'iwinfo.info')
+			return Promise.resolve(RADIO[arguments[0]] || {});
 		if (key === 'luci.lucent.host_rates' && MOCK['luci.lucent.host_rates'].bump) {
 			var r = MOCK['luci.lucent.host_rates'].rates['192.168.1.30'];
 			r.rx_rate += 900000;
@@ -612,8 +624,13 @@ if (menuNoStore) {
 		if (!noisy) {
 			/* an unconnected port belongs in the idle summary, not in the list */
 			check('active ports shown', ports.length >= 3, ports.length + ' port rows');
-			check('wired port speed shown', /1000 Mb\/s/.test(portText), portText.slice(0, 70));
+			check('wired port speed shown', /1 Gbit\/s/.test(portText), portText.slice(0, 70));
 			check('ssid on radio node', /MyHome-2\.4G/.test(portText));
+			check('band badge from iwinfo.info', /2\.4 GHz/.test(portText), portText.slice(0, 90));
+			check('channel and width shown', /channel 1 · 40 MHz/i.test(portText) || /信道 1 · 40 MHz/.test(portText), portText.slice(0, 90));
+			check('wifi generation label', /Wi-Fi 6/.test(portText), portText.slice(0, 90));
+			check('station signal in dBm', /dBm/.test(portText) || /-48 dBm/.test(document.body.textContent), 'no dBm on any leaf');
+			check('randomised MAC marked private', /私有设备|Private device/.test(document.body.textContent), 'private leaf missing');
 			check('stations + fdb leaves', leaves.length >= 2, leaves.length + ' leaves');
 			check('phone placed under radio', /phone/.test(leafText), leafText.slice(0, 90));
 			check('laptop placed under lan1', /laptop/.test(leafText));
@@ -621,6 +638,51 @@ if (menuNoStore) {
 			check('per-host rate in tree', !!document.querySelector('[data-live=hr-192-168-1-30]'),
 				document.querySelector('[data-live=hr-192-168-1-30]') && document.querySelector('[data-live=hr-192-168-1-30]').textContent);
 		}
+
+		/* ---- verdict strip, band summary, event timeline ---- */
+		var verdict = document.querySelector('.ltc-verdict');
+		check('verdict strip rendered', !!verdict && verdict.querySelectorAll('.ltc-vchip').length >= 5,
+			verdict && verdict.querySelectorAll('.ltc-vchip').length + ' chips');
+		/* the noisy tree has no weak station, so "everything is fine" is the
+		   correct verdict there; only the baseline must name the -83 dBm client */
+		if (!noisy) {
+			check('verdict names the weak-signal client', !verdict || /weak|-83 dBm/.test(verdict.textContent),
+				verdict && verdict.textContent.slice(0, 90));
+		}
+		else {
+			check('verdict stays clean without weak clients', !!verdict && /healthy/i.test(verdict.textContent),
+				verdict && verdict.textContent.slice(0, 60));
+		}
+		check('busiest band summarised', !!document.querySelector('[data-live=path-band]'), 'cell missing');
+		check('weakest client signal summarised',
+			/(-83|–)/.test((document.querySelector('[data-live=path-sig]') || {}).textContent || ''),
+			(document.querySelector('[data-live=path-sig]') || {}).textContent);
+		check('timeline card rendered', !!document.querySelector('.ltc-timeline') ||
+			/Nothing has changed hands today yet/.test(document.body.textContent), 'no timeline card');
+
+		/* The count-up tween once overshot below zero when rAF timestamps ran
+		   behind performance.now(), and the KPI row read "-118%". Scoped to the
+		   dashboard's own row: the clients page has counters that are legitimately
+		   zero (IPv4-only devices), and those are not this bug. */
+		var kpiRow = document.querySelector('.ltc-kpis');
+		var negKpi = [].slice.call(kpiRow ? kpiRow.querySelectorAll('.ltc-kpi b') : [])
+			.filter(function (b) { return /-\d/.test(b.textContent); })
+			.map(function (b) { return b.textContent; });
+		check('no negative KPI values', !negKpi.length, negKpi.join(' '));
+
+		/* …and none of them may sit at zero while its own sub line counts
+		   devices or percentages above zero */
+		var zeroKpi = [].slice.call(kpiRow ? kpiRow.querySelectorAll('.ltc-kpi') : [])
+			.filter(function (k) {
+				var b = k.querySelector('b');
+				return b && /^0(\.0+)?(%| MiB)?$/.test(b.textContent.trim());
+			})
+			.map(function (k) {
+				return ((k.querySelector('small') || {}).textContent || '?') + '=' +
+					(k.querySelector('b') || {}).textContent + ' / ' +
+					((k.querySelector('span') || {}).textContent || '');
+			});
+		check('KPI values do not reset to zero', !zeroKpi.length, zeroKpi.join('  |  '));
 		check('idle ports collapsed', !!document.querySelector('.ltc-tnode.other'),
 			document.querySelectorAll('.ltc-tnode.other').length + ' summary rows');
 

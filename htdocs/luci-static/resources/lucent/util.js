@@ -30,6 +30,54 @@ var callHostRates = rpc.declare({ object: 'luci.lucent', method: 'host_rates' })
    had the luci-rpc wrapper, so assocList() tries both. */
 var callAssocIwinfo = rpc.declare({ object: 'iwinfo', method: 'assoclist', params: [ 'device' ] });
 var callAssocLegacy = rpc.declare({ object: 'luci-rpc', method: 'getWirelessAssocList', params: [ 'ifname' ] });
+var callRadioInfo = rpc.declare({ object: 'iwinfo', method: 'info', params: [ 'device' ] });
+
+/* iwinfo reports the PHY mode as htmode, spelled differently per driver:
+   HE40/HE80/HE160 and EHT* on ax/ac-be chips, VHT80 for ac, HT20/40 for n, and
+   sometimes just "20 MHz" on older builds. Width may be inside it or absent. */
+function wifiGeneration(ht) {
+	var h = String(ht || '').toUpperCase();
+
+	if (/^EHT/.test(h))
+		return 'Wi-Fi 7';
+	if (/^HE|^AX/.test(h))
+		return 'Wi-Fi 6';
+	if (/^VHT|^AC/.test(h))
+		return 'Wi-Fi 5';
+	if (/^HT|^LN/.test(h))
+		return 'Wi-Fi 4';
+	return '';
+}
+
+function wifiWidth(ht) {
+	var s = String(ht || '').toUpperCase();
+	var m = s.match(/(\d+)\s*MHZ/);
+	var n;
+
+	if (m)
+		return Number(m[1]);
+
+	/* drivers usually say HE40 / VHT80 / HT20 with no unit at all */
+	m = s.match(/(\d+)$/);
+	if (!m)
+		return null;
+	n = Number(m[1]);
+	return [20, 40, 80, 160, 320].indexOf(n) >= 0 ? n : null;
+}
+
+/* Boundaries in MHz: 2.4 band ends at 2.5, the 5 GHz band runs to 5.925 where
+   6 GHz starts — 5180 is channel 36, not 6 GHz. */
+function wifiBand(freq) {
+	var f = Number(freq);
+
+	if (!isFinite(f) || f <= 0)
+		return '';
+	if (f < 2500)
+		return '2.4 GHz';
+	if (f < 5925)
+		return '5 GHz';
+	return '6 GHz';
+}
 
 function arr(v) {
 	if (v == null)
@@ -191,8 +239,7 @@ function pct(part, total) {
 }
 
 /* iwinfo exposes the association list either as an array or keyed by MAC, and
-   the signal field name differs across drivers. */
-function stationsOf(res) {
+   the signal field name differs across drivers. */function stationsOf(res) {
 	if (res && !Array.isArray(res) && res.results)
 		res = res.results;
 
@@ -211,6 +258,32 @@ function stationsOf(res) {
 			tx: Number(s.tx_bytes || s.tx || 0)
 		};
 	}).filter(function (s) { return s.mac; });
+}
+
+/* Channel, width and generation for one radio netdev. Returns null when the
+   build has no iwinfo ubus object or the ACL does not grant info — the tree
+   then draws the branch without those badges rather than guessing. */
+function radioInfo(dev) {
+	if (!dev)
+		return Promise.resolve(null);
+
+	return L.resolveDefault(callRadioInfo(dev), null).then(function (res) {
+		if (!res || typeof res !== 'object')
+			return null;
+
+		var ht = String(res.htmode || '');
+		var freq = Number(res.frequency);
+
+		return {
+			channel: res.channel != null ? Number(res.channel) : null,
+			frequency: isFinite(freq) ? freq : null,
+			band: wifiBand(res.frequency),
+			width: wifiWidth(ht),
+			generation: wifiGeneration(ht)
+		};
+	}, function () {
+		return null;
+	});
 }
 
 /* MAC -> bridge port, from the helper's fdb dump. */
@@ -644,6 +717,8 @@ return baseclass.extend({
 	markMenu: markMenu,
 	menuMark: menuMark,
 	stations: stationsOf,
+	radioInfo: radioInfo,
+	wifiBand: wifiBand,
 	fdbMap: fdbMap,
 	ip4: ip4,
 	ip6: ip6,

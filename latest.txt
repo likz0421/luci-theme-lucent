@@ -1,1 +1,1 @@
-luci-theme-lucent_0.7-r1_all.ipk
+luci-theme-lucent_0.8-r1_all.ipk

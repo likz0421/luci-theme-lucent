@@ -8,6 +8,70 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.8 — 2026-11-05
+
+Modelled on the dashboards the user supplied as references. Feature ideas only —
+no code was copied from any third-party theme.
+
+### Added
+
+- **Radio badges in the topology tree.** Each wireless branch now carries its
+  band (`2.4 GHz` / `5 GHz` / `6 GHz`), the generation decoded from `htmode`
+  (Wi-Fi 4/5/6/7) and `channel N · W MHz`, read from `iwinfo <dev>.info`.
+  A build whose ACL does not grant `info` simply loses the badges instead of
+  throwing.
+- **Per-client signal on the leaves.** Every associated station shows its
+  dBm, coloured green/amber/red, and a MAC with the locally-administered bit
+  set is labelled "私有设备" in italics with an amber dot rather than being
+  dumped as a bare address.
+- **Health verdict strip.** The six things the dashboard already knows —
+  uplink, CPU, memory, storage, Wi-Fi, client signal — collapse into one
+  sentence: "一切正常" or "N 项需要注意" with the failing checks named, plus a
+  chip per check so the pass/fail set is scannable at a glance.
+- **Two more summary cells**: *Busiest band* (which band carries the Wi-Fi
+  traffic, with its share) and *Weakest client* (the lowest dBm seen).
+- **Today's event timeline** — our own feature, built from nothing but the
+  10-second polls the dashboard already performs: it records devices coming
+  online and going offline and uplink drops/recoveries, and answers the
+  questions people actually ask ("什么时候断的网", "谁刚才掉线了") without any
+  kernel accounting or extra daemon.
+
+### Fixed
+
+- **KPI numbers could render negative.** The count-up tween computed its
+  progress from `performance.now()` but received rAF timestamps; when those
+  run behind — a throttled tab, or a virtual-time harness — progress went
+  negative and the easing overshot below the start, so "Memory 56%" displayed
+  as "-118%". Progress is now clamped to [0,1], the clock starts at the first
+  frame, the landing value is written exactly, and a second chain on the same
+  element cancels the first.
+- **KPI numbers reset to zero on the first poll.** The initial value was
+  written straight into the text by `render()` while the tween read only its
+  own `_num`, so the first live update animated from 0. It now falls back to
+  the number already displayed.
+- **`5180 MHz` was classified as 6 GHz.** The 5 GHz band runs to 5925; channel
+  36 is 5 GHz.
+- **Bandwidth was lost for most drivers.** `HE40`/`VHT80`/`HT20` encode the
+  width as a bare suffix with no "MHz", so the width parse found nothing and
+  the channel line read "channel 1" alone.
+- **Port speeds now read "1 Gbit/s"** like the reference rather than
+  "1000 Mb/s".
+- The verdict headline agrees in number ("1 thing needs attention"), and the
+  strip lays out as a row instead of inheriting the card's column direction.
+
+### Verified
+
+- `node tests/run-harness.js`: 16 scenarios, 1,124 assertions. New checks cover
+  band badge, channel+width, generation, dBm on leaves, private-MAC marking,
+  the verdict chips and their weak-client wording, the two summary cells, the
+  timeline, and two assertions that pin the KPI tween bugs (no negative value,
+  no value collapsing to zero) to the dashboard's own row.
+- `sh tests/install-logic.sh`: new radio-parsing unit tests — `HE40`→40,
+  `VHT160`→160, `HT20`→20, `2412`→2.4 GHz, `5180`→5 GHz, `5955`→6 GHz, and
+  the generation mapping — written after the harness caught those two bugs.
+- All 351 translatable literals in the JS have `.po` entries (verified by
+  script, not by eye), and the `.lmo` was recompiled from them.
+
 ## 0.7 — 2026-11-05
 
 ### Fixed

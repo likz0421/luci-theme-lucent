@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="0.7-r1"
-LUCENT_TAG_DEFAULT="v0.7"
+LUCENT_VERSION_DEFAULT="0.8-r1"
+LUCENT_TAG_DEFAULT="v0.8"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 

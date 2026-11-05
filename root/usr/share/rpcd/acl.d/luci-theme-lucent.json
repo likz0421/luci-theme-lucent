@@ -7,7 +7,7 @@
 				"system": [ "board", "info" ],
 				"network.interface": [ "dump" ],
 				"luci-rpc": [ "getHostHints", "getDHCPLeases", "getNetworkDevices", "getWirelessDevices", "getBoardJSON", "getConnsPerHost", "getWirelessAssocList" ],
-				"iwinfo": [ "assoclist" ],
+				"iwinfo": [ "assoclist", "info" ],
 				"dhcp": [ "ipv4leases", "ipv6leases" ],
 				"uci": [ "get", "order", "changes", "revert" ]
 			},

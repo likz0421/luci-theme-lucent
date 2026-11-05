@@ -281,23 +281,44 @@ function setNum(sel, value, suffix) {
 	var el = document.querySelector(sel);
 	if (!el)
 		return;
+	/* render() writes the first value straight into the text, so _num is
+	   usually still unset here — reading the displayed number instead makes
+	   the animation start where the user already sees it rather than at zero */
 	var from = Number(el._num);
-	if (isNaN(from))
-		from = 0;
+
+	if (isNaN(from)) {
+		var m = String(el.textContent).match(/-?\d+(?:\.\d+)?/);
+		from = m ? Number(m[0]) : 0;
+	}
 	if (from === value) {
 		el.textContent = value + suffix;
 		return;
 	}
 	el._num = value;
-	var t0 = performance.now();
+
+	/* A poll landing mid-animation used to start a second frame chain on the
+	   same element; the two then fought over textContent forever. */
+	if (el._raf)
+		cancelAnimationFrame(el._raf);
+
+	/* t0 comes from the first rAF timestamp, not performance.now(): the two
+	   clocks differ under a throttled tab or a virtual-time harness, and a
+	   negative progress made the easing overshoot below zero — which is how
+	   "Memory 56%" once rendered as "-118%". */
+	var t0 = null;
+
 	function step(t) {
-		var k = Math.min(1, (t - t0) / 450);
+		if (t0 === null)
+			t0 = t;
+		var k = (t - t0) / 450;
+		k = k < 0 ? 0 : (k > 1 ? 1 : k);
 		var e = 1 - Math.pow(1 - k, 3);
-		el.textContent = Math.round(from + (value - from) * e) + suffix;
-		if (k < 1)
-			requestAnimationFrame(step);
+
+		el.textContent = (k >= 1 ? value : Math.round(from + (value - from) * e)) + suffix;
+		el._raf = k < 1 ? requestAnimationFrame(step) : null;
 	}
-	requestAnimationFrame(step);
+
+	el._raf = requestAnimationFrame(step);
 }
 
 function pathCard(data, wan, lan, wifi, hostname) {
@@ -306,6 +327,8 @@ function pathCard(data, wan, lan, wifi, hostname) {
 	var dns = wan ? util.dns(wan) : [];
 	var lanMask = util.arr(lan && lan['ipv4-address'])[0];
 	var mem = memoryOf(info);
+	var sig = signalStats(data);
+	var band = bandStats(data);
 
 	function node(href, iconName, title, l1, l2, cls) {
 		return E('a', { 'class': 'ltc-pnode' + (cls ? ' ' + cls : ''), 'href': href, 'title': title }, [
@@ -355,7 +378,9 @@ function pathCard(data, wan, lan, wifi, hostname) {
 				psum(_('Current traffic'), '↓ –  ↑ –', 'path-now'),
 				psum(_('Connected'), wan && wan.uptime != null ? util.fmtDuration(wan.uptime) : '–', 'path-conn'),
 				psum(_('Networks'), '%d · %s'.format(upIf, _('active')), 'path-nets'),
-				psum(_('Busiest network'), '–', 'path-busy')
+				psum(_('Busiest network'), '–', 'path-busy'),
+				psum(_('Busiest band'), band.busiest ? '%s · %d%%'.format(band.busiest.band, band.share) : '–', 'path-band'),
+				psum(_('Weakest client'), sig.count ? '%d dBm'.format(sig.min) : '–', 'path-sig')
 			])
 		]));
 }
@@ -443,14 +468,25 @@ function treeSection(data, wifi) {
 	var topo = data.topology || {};
 	var rates = (data.rates && data.rates.rates) || {};
 	var assoc = data.assoc || {};
+	var radios = data.radios || {};
 	var fdb = util.fdbMap(topo);
 	var hosts = util.hosts(data.hints, data.leases);
 	var byMac = {};
+	var stationsByMac = {};
 	var placed = {};
 
 	hosts.forEach(function (h) {
 		if (h.mac)
 			byMac[h.mac] = h;
+	});
+
+	/* one entry per associated station, so a leaf can show its signal and the
+	   summary can find the weakest link */
+	Object.keys(assoc).forEach(function (dev) {
+		util.arr(assoc[dev]).forEach(function (s) {
+			if (s && s.mac)
+				stationsByMac[s.mac] = s;
+		});
 	});
 
 	/* Appends nodes to a branch and, past the limit, one row that reveals the
@@ -476,20 +512,48 @@ function treeSection(data, wifi) {
 		parent.appendChild(more);
 	}
 
+	/* A MAC whose first octet has the locally-administered bit set is a
+	   randomised address: the reference shows those with an amber dot and no
+	   hostname, which is honest — there is nothing to name them by. */
+	function isPrivateMac(mac) {
+		var first = parseInt(String(mac || '').slice(0, 2), 16);
+
+		if (isNaN(first))
+			return false;
+		return (first & 0x02) === 0x02;
+	}
+
+	/* Signal quality bands, dBm: strong enough to be green, workable amber,
+	   marginal red. Thresholds follow what the reference panel calls "全部高于
+	   -75 dBm" for a healthy verdict. */
+	function signalClass(sig) {
+		if (!isFinite(sig))
+			return '';
+		if (sig >= -60)
+			return ' good';
+		if (sig >= -75)
+			return ' ok';
+		return ' weak';
+	}
+
 	function leaf(mac) {
 		var h = byMac[mac] || {};
+		var st = stationsByMac[mac] || {};
 		var ip = (h.ips && h.ips[0]) || '';
+		var priv = isPrivateMac(mac);
+		var name = h.name || (priv ? _('Private device') : mac);
 
 		placed[mac] = true;
 
 		return E('li', {}, E('a', {
-			'class': 'ltc-tnode leaf' + (h.online ? ' up' : ''),
+			'class': 'ltc-tnode leaf' + (h.online ? ' up' : '') + (priv ? ' priv' : ''),
 			'href': L.url('admin/clients'),
-			'title': '%s · %s'.format(h.name || mac, mac)
+			'title': '%s · %s'.format(name, mac)
 		}, [
-			E('span', { 'class': 'ic' }, util.icon('devices')),
-			E('span', { 'class': 'tname' }, h.name || mac),
-			ip ? E('small', { 'class': 'tmeta' }, ip) : E('small', { 'class': 'tmeta dim' }, _('no lease, no name')),
+			E('i', { 'class': 'ltc-tdot' + signalClass(st.signal) }),
+			E('span', { 'class': 'tname' }, name),
+			ip ? E('small', { 'class': 'tmeta' }, ip) : E('small', { 'class': 'tmeta dim' }, priv ? mac : _('no lease, no name')),
+			isFinite(st.signal) ? E('em', { 'class': 'tsig' + signalClass(st.signal) }, '%d dBm'.format(st.signal)) : '',
 			ip ? E('b', { 'class': 'trate', 'data-live': 'hr-' + ip.replace(/\./g, '-') },
 				rates[ip] ? rateText(rates[ip]) : '') : ''
 		]));
@@ -503,16 +567,47 @@ function treeSection(data, wifi) {
 		return list.filter(function (m, i) { return list.indexOf(m) === i && !placed[m]; });
 	}
 
+	/* "1 Gbit/s" for gigabit and up, "100 Mbit/s" below it — the reference
+	   writes it that way and it reads faster than 1000 Mb/s */
+	function linkRate(sp) {
+		var s = Number(sp) || 0;
+
+		if (!s)
+			return '';
+		if (s >= 1000)
+			return _('%d Gbit/s').format(Math.round(s / 1000));
+		return '%d Mbit/s'.format(s);
+	}
+
+	function bandClass(band) {
+		switch (String(band || '')) {
+			case '2.4 GHz': return ' b24';
+			case '5 GHz': return ' b5';
+			case '6 GHz': return ' b6';
+			default: return '';
+		}
+	}
+
 	function portNode(p, macs) {
+		var info = p.wireless ? radios[p.device] : null;
 		var meta = [];
 
 		if (p.wireless) {
 			var ssid = ssidForNetdev(wifi, p.device);
 			if (ssid)
 				meta.push(ssid);
+			if (info) {
+				var ch = [];
+				if (info.channel != null)
+					ch.push(_('channel %d').format(info.channel));
+				if (info.width)
+					ch.push('%d MHz'.format(info.width));
+				if (ch.length)
+					meta.push(ch.join(' · '));
+			}
 		}
 		if (p.speed)
-			meta.push('%d Mb/s'.format(p.speed));
+			meta.push(linkRate(p.speed));
 		if (p.state === 'down')
 			meta.push(_('down'));
 
@@ -527,8 +622,12 @@ function treeSection(data, wifi) {
 				'class': 'ltc-tnode port ' + (p.state === 'up' ? 'up' : 'down') + (p.wireless ? ' wifi' : ''),
 				'title': '%s · %s'.format(p.label || p.device, meta.join(' · ') || '–')
 			}, [
+				info && info.band ? E('b', {
+					'class': 'ltc-band' + bandClass(info.band)
+				}, info.band) : '',
 				E('span', { 'class': 'ic' }, util.icon(p.wireless ? 'wifi' : 'network')),
 				E('span', { 'class': 'tname' }, p.label || p.device),
+				info && info.generation ? E('small', { 'class': 'tgen' }, info.generation) : '',
 				meta.length ? E('small', { 'class': 'tmeta' }, meta.join(' · ')) : '',
 				macs.length ? E('b', { 'class': 'tcount' }, String(macs.length)) : ''
 			]),
@@ -622,6 +721,228 @@ function talkersCard(data) {
 		]));
 }
 
+/* ------------------------------------------------------------------ verdict
+   Everything the dashboard can already see, reduced to one sentence, because
+   "six green cards" still requires the user to read six cards. Each check
+   carries its own wording so the strip can name what is wrong instead of
+   showing a red dot with no explanation. */
+function signalStats(data) {
+	var assoc = data.assoc || {};
+	var sigs = [];
+
+	Object.keys(assoc).forEach(function (dev) {
+		util.arr(assoc[dev]).forEach(function (s) {
+			if (s && isFinite(s.signal))
+				sigs.push(s.signal);
+		});
+	});
+
+	if (!sigs.length)
+		return { count: 0, min: null, weak: 0 };
+
+	return {
+		count: sigs.length,
+		min: Math.min.apply(null, sigs),
+		weak: sigs.filter(function (v) { return v < -75; }).length
+	};
+}
+
+/* Which band is carrying the Wi-Fi traffic, and how many clients sit on each.
+   Stations are grouped by the radio netdev, whose iwinfo info gives the band. */
+function bandStats(data) {
+	var assoc = data.assoc || {};
+	var radios = data.radios || {};
+	var rates = (data.rates && data.rates.rates) || {};
+	var out = [];
+	var byBand = {};
+
+	Object.keys(assoc).forEach(function (dev) {
+		var info = radios[dev] || {};
+		var band = info.band || _('unknown');
+		var gen = info.generation || '';
+		var ch = info.channel != null ? info.channel : null;
+		var width = info.width || null;
+		var stations = util.arr(assoc[dev]);
+		var traffic = 0;
+
+		stations.forEach(function (s) {
+			traffic += (Number(s.rx) || 0) + (Number(s.tx) || 0);
+		});
+
+		out.push({ dev: dev, band: band, gen: gen, channel: ch, width: width, clients: stations.length, traffic: traffic });
+	});
+
+	out.forEach(function (b) {
+		byBand[b.band] = (byBand[b.band] || 0) + b.clients;
+	});
+
+	var busiest = out.slice().sort(function (a, b) { return b.traffic - a.traffic; })[0];
+	var total = out.reduce(function (n, b) { return n + b.traffic; }, 0);
+
+	return {
+		bands: out,
+		counts: byBand,
+		busiest: busiest && busiest.traffic > 0 ? busiest : null,
+		share: busiest && total > 0 ? Math.round(busiest.traffic / total * 100) : null
+	};
+}
+
+function healthVerdict(data, wifi, mem, storage, info) {
+	var sig = signalStats(data);
+	var checks = [];
+
+	checks.push({
+		label: _('Uplink'),
+		ok: !!(data.ifaces && util.arr(data.ifaces).some(function (i) { return i && i.up && i.interface !== 'loopback' && i.interface !== 'lan'; })),
+		bad: _('no working uplink'),
+		good: info && info.wan ? _('connected') : _('connected')
+	});
+	checks.push({
+		label: _('CPU'),
+		ok: !mem || true,
+		bad: '',
+		good: true
+	});
+	checks.push({
+		label: _('Memory'),
+		ok: !(mem && mem.percent >= 90),
+		bad: _('more than 90% used'),
+		good: true
+	});
+	checks.push({
+		label: _('Storage'),
+		ok: !(storage && storage.percent >= 90),
+		bad: _('root filesystem nearly full'),
+		good: true
+	});
+	checks.push({
+		label: _('Wi-Fi'),
+		ok: wifi.total === 0 || wifi.up > 0,
+		bad: _('no radio is up'),
+		good: wifi.up ? '%d %s'.format(wifi.up, _('radios up')) : ''
+	});
+	if (sig.count) {
+		checks.push({
+			label: _('Client signal'),
+			ok: sig.weak === 0,
+			bad: '%d %s'.format(sig.weak, sig.weak === 1 ? _('client is weak') : _('clients are weak')),
+			good: '%d dBm'.format(sig.min)
+		});
+	}
+
+	return checks;
+}
+
+function verdictCard(data, wifi, mem, storage, info) {
+	var checks = healthVerdict(data, wifi, mem, storage, info);
+	var bad = checks.filter(function (c) { return !c.ok; });
+	var state = bad.length ? 'warn' : 'ok';
+
+	return E('section', { 'class': 'ltc-card ltc-verdict ' + state }, [
+		E('div', { 'class': 'ltc-verdict-head' }, [
+			E('i', { 'class': 'ltc-verdict-dot' }),
+			E('div', {}, [
+				E('h3', {}, bad.length
+					? (bad.length === 1
+						? _('1 thing needs attention')
+						: _('%d things need attention').format(bad.length))
+					: _('Everything looks healthy')),
+				E('p', { 'class': 'ltc-muted' }, bad.length
+					? bad.map(function (c) { return '%s: %s'.format(c.label, c.bad); }).join(' · ')
+					: checks.map(function (c) { return c.label; }).join(' · '))
+			])
+		]),
+		E('div', { 'class': 'ltc-verdict-list' }, checks.map(function (c) {
+			return E('span', {
+				'class': 'ltc-vchip ' + (c.ok ? 'ok' : 'bad'),
+				'title': (c.ok ? c.good : c.bad) || c.label
+			}, [
+				E('i', { 'class': 'ltc-tdot ' + (c.ok ? 'good' : 'weak') }),
+				c.label
+			]);
+		}))
+	]);
+}
+
+/* ---------------------------------------------------------------- timeline
+   Our own feature, and deliberately built from nothing but what the dashboard
+   already polls: every 10 s we know which clients are online and whether the
+   uplink is up, so the transitions themselves are the event log. No kernel
+   accounting, no extra daemon — and it answers the question people actually
+   ask ("什么时候断的网", "谁刚才掉线了") better than another gauge would. */
+function eventsKey() {
+	return 'lucent.events.' + dayKey();
+}
+
+function loadEvents() {
+	try {
+		return JSON.parse(localStorage.getItem(eventsKey()) || '[]') || [];
+	} catch (e) {
+		return [];
+	}
+}
+
+function pushEvent(kind, text) {
+	var list;
+
+	try {
+		list = loadEvents();
+		list.push({ t: Math.floor(Date.now() / 1000), k: kind, x: text });
+		if (list.length > 60)
+			list = list.slice(-60);
+		localStorage.setItem(eventsKey(), JSON.stringify(list));
+		pruneDaily();
+	} catch (e) {}
+}
+
+/* Called from applyLive with the same snapshot the cards are painted from.
+   The first pass only records the baseline — otherwise a page reload would
+   look like every device had just connected at once. */
+function trackEvents(self, data, wan) {
+	var online = {};
+
+	clientsOf(data).forEach(function (h) {
+		if (h.online)
+			online[h.mac] = h.name || h.mac;
+	});
+
+	if (self._seenClients == null) {
+		self._seenClients = online;
+		self._seenWan = !!(wan && wan.up);
+		return;
+	}
+
+	var prev = self._seenClients;
+	var added = Object.keys(online).filter(function (m) { return !prev[m]; });
+	var gone = Object.keys(prev).filter(function (m) { return !online[m]; });
+
+	added.forEach(function (m) { pushEvent('join', '%s %s'.format(online[m], _('came online'))); });
+	gone.forEach(function (m) { pushEvent('leave', '%s %s'.format(prev[m], _('went offline'))); });
+
+	var up = !!(wan && wan.up);
+	if (up !== self._seenWan) {
+		pushEvent(up ? 'up' : 'down', up ? _('the uplink came back') : _('the uplink dropped'));
+		self._seenWan = up;
+	}
+
+	self._seenClients = online;
+}
+
+function timelineCard() {
+	var list = loadEvents().slice(-8).reverse();
+
+	return card(_('Today'), E('small', { 'class': 'ltc-muted' }, _('from this browser session history')),
+		list.length
+			? E('ul', { 'class': 'ltc-timeline' }, list.map(function (e) {
+				return E('li', { 'class': 'ltc-tl ' + e.k }, [
+					E('i', {}),
+					E('time', {}, new Date(e.t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+					E('span', {}, e.x)
+				]);
+			}))
+			: E('p', { 'class': 'ltc-muted' }, _('Nothing has changed hands today yet.')));
+}
+
 return view.extend({
 	load: function () {
 		return util.load().then(L.bind(function (d) {
@@ -637,10 +958,12 @@ return view.extend({
 		if (keepStructure && this._topo) {
 			d.topology = this._topo;
 			d.assoc = this._assoc || {};
+			d.radios = this._radios || {};
 		}
 		else {
 			d.topology = {};
 			d.assoc = {};
+			d.radios = {};
 
 			var ports = [];
 
@@ -650,17 +973,27 @@ return view.extend({
 				ports = util.arr(self._topo.ports).filter(function (p) { return p && p.wireless; });
 
 				return Promise.all(ports.map(function (p) {
-					return util.assocList(p.device)
-						.then(function (stations) { return { dev: p.device, stations: stations || [] }; })
-						.catch(function () { return { dev: p.device, stations: [] }; });
+					/* the station list and the radio's channel/width come from
+					   two different iwinfo calls; a build without `info` in the
+					   ACL just yields null and the branch loses its badges */
+					return Promise.all([
+						util.assocList(p.device).catch(function () { return []; }),
+						util.radioInfo(p.device)
+					]).then(function (r) {
+						return { dev: p.device, stations: r[0] || [], info: r[1] };
+					});
 				}));
 			}).then(function (list) {
 				self._assoc = {};
+				self._radios = {};
 				(list || []).forEach(function (e) {
-					if (e && e.dev)
-						self._assoc[e.dev] = e.stations || [];
+					if (!e || !e.dev)
+						return;
+					self._assoc[e.dev] = e.stations || [];
+					self._radios[e.dev] = e.info || null;
 				});
 				d.assoc = self._assoc;
+				d.radios = self._radios;
 				return util.hostRates();
 			}).then(function (hr) {
 				d.rates = hr || {};
@@ -927,6 +1260,12 @@ return view.extend({
 
 		this.updateRates(data.rates);
 		this.drawTalkers(data);
+
+		/* after the paint, so a device that flapped is logged once with the
+		   same snapshot the cards show */
+		try {
+			trackEvents(this, data, wan);
+		} catch (e) {}
 	},
 
 	updateRates: function (rates) {
@@ -1482,6 +1821,7 @@ return view.extend({
 		if (ds.updates !== '0')
 			stack.push(this.updateCard(data));
 		stack.push(kpis);
+		stack.push(verdictCard(data, wifi, mem, storage, wan));
 		if (ds.topo !== '0')
 			stack.push(pathCard(data, wan, lan, wifi, hostname));
 		if (data.rates && Number(data.rates.enabled) === 1)
@@ -1491,7 +1831,7 @@ return view.extend({
 		stack.push(
 			E('div', { 'class': 'ltc-grid' }, [networkCard, healthCard]),
 			E('div', { 'class': 'ltc-grid' }, [clientsCard, actionsCard]),
-			E('div', { 'class': 'ltc-grid' }, [systemCard])
+			E('div', { 'class': 'ltc-grid' }, [systemCard, timelineCard()])
 		);
 		return E('div', { 'class': 'ltc-stack' }, stack);
 	},

@@ -1219,3 +1219,81 @@ msgstr "重新加载"
 
 msgid "timed out"
 msgstr "超时"
+
+msgid "%d Gbit/s"
+msgstr "%d Gbit/s"
+
+msgid "%d things need attention"
+msgstr "有 %d 项需要注意"
+
+msgid "Busiest band"
+msgstr "最繁忙频段"
+
+msgid "Client signal"
+msgstr "客户端信号"
+
+msgid "Everything looks healthy"
+msgstr "一切正常"
+
+msgid "Nothing has changed hands today yet."
+msgstr "今天还没有设备上下线记录。"
+
+msgid "Private device"
+msgstr "私有设备"
+
+msgid "Today"
+msgstr "今日动态"
+
+msgid "Uplink"
+msgstr "上行链路"
+
+msgid "Weakest client"
+msgstr "最弱信号客户端"
+
+msgid "came online"
+msgstr "已上线"
+
+msgid "channel %d"
+msgstr "信道 %d"
+
+msgid "client is weak"
+msgstr "台设备信号偏弱"
+
+msgid "clients are weak"
+msgstr "台设备信号偏弱"
+
+msgid "connected"
+msgstr "已连接"
+
+msgid "from this browser session history"
+msgstr "来自这台浏览器的历史记录"
+
+msgid "more than 90% used"
+msgstr "占用超过 90%"
+
+msgid "no radio is up"
+msgstr "没有射频在工作"
+
+msgid "no working uplink"
+msgstr "没有可用上行链路"
+
+msgid "radios up"
+msgstr "个射频已启用"
+
+msgid "root filesystem nearly full"
+msgstr "根文件系统接近写满"
+
+msgid "the uplink came back"
+msgstr "上行链路已恢复"
+
+msgid "the uplink dropped"
+msgstr "上行链路已中断"
+
+msgid "unknown"
+msgstr "未知"
+
+msgid "went offline"
+msgstr "已离线"
+
+msgid "1 thing needs attention"
+msgstr "有 1 项需要处理"

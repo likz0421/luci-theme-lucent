@@ -194,5 +194,37 @@ PATH="$SAV"
 
 rm -rf "$W"
 
+echo "--- radio parsing"
+# Both of these were real bugs caught by the harness: HE40 carries the width
+# with no "MHz" suffix, and 5180 MHz is channel 36 on 5 GHz, not 6 GHz.
+RW=$(mktemp -d)
+{
+	printf 'var L={resolveDefault:function(){return Promise.resolve(null)}};var rpc={declare:function(){return function(){return Promise.resolve({})}}};\n'
+	awk '/^function wifiGeneration/,/^}$/' "$ROOT/htdocs/luci-static/resources/lucent/util.js"
+	awk '/^function wifiWidth/,/^}$/' "$ROOT/htdocs/luci-static/resources/lucent/util.js"
+	awk '/^function wifiBand/,/^}$/' "$ROOT/htdocs/luci-static/resources/lucent/util.js"
+	printf 'module.exports={wifiGeneration:wifiGeneration,wifiWidth:wifiWidth,wifiBand:wifiBand};\n'
+} > "$RW/radio.js"
+node -e '
+const r = require(process.argv[1]);
+const eq = (got, want, what) => console.log((String(got) === String(want) ? "PASS " : "FAIL ") + what + " — got " + got + " want " + want);
+eq(r.wifiWidth("HE40"), 40, "HE40 width");
+eq(r.wifiWidth("VHT160"), 160, "VHT160 width");
+eq(r.wifiWidth("HT20"), 20, "HT20 width");
+eq(r.wifiWidth("160 MHz"), 160, "spaced MHz");
+eq(r.wifiWidth(""), null, "empty htmode");
+eq(r.wifiBand(2412), "2.4 GHz", "2.4 band");
+eq(r.wifiBand(5180), "5 GHz", "5 GHz at channel 36");
+eq(r.wifiBand(5955), "6 GHz", "6 GHz starts at 5925");
+eq(r.wifiBand(0), "", "missing frequency");
+eq(r.wifiGeneration("HE160"), "Wi-Fi 6", "HE is ax");
+eq(r.wifiGeneration("EHT320"), "Wi-Fi 7", "EHT is be");
+eq(r.wifiGeneration("VHT80"), "Wi-Fi 5", "VHT is ac");
+eq(r.wifiGeneration("HT40"), "Wi-Fi 4", "HT is n");
+eq(r.wifiGeneration(""), "", "unknown mode");
+' "$RW/radio.js" 2>&1 | tee "$RW/out"
+fails=$((fails + $(grep -c '^FAIL' "$RW/out" || true)))
+rm -rf "$RW"
+
 echo
 [ "$fails" = 0 ] && echo "all logic checks passed" || { echo "$fails FAILED"; exit 1; }
