@@ -18,6 +18,33 @@ var MENU_ICONS = {
 	logout: 'x'
 };
 
+/* The rail rule, in one place:
+   - below 981px the sidebar is a drawer, so rail must never apply at all;
+   - an explicit choice the user made with the toggle always wins;
+   - otherwise a laptop-width window (981–1280px) starts collapsed, because
+     264px of menu plus content is cramped there, and wider screens start open.
+   header.ut repeats this in an inline script so the first paint does not
+   flash from full to collapsed; tests/harness.html asserts the two thresholds
+   agree, because that is exactly the kind of pair that drifts. */
+var RAIL_MIN = 981;
+var RAIL_AUTO_MAX = 1281;
+
+function railAuto() {
+	var root = document.documentElement;
+	var pref = null;
+
+	if (window.innerWidth < RAIL_MIN)
+		return;
+	try {
+		pref = localStorage.getItem('lucent.rail');
+	} catch (e) {}
+
+	if (pref === '0' || pref === '1')
+		root.dataset.rail = pref;
+	else
+		root.dataset.rail = window.innerWidth < RAIL_AUTO_MAX ? '1' : '0';
+}
+
 /* Small, dependency-light front-end helpers shared by the theme pages. */
 return baseclass.extend({
 	init: function () {
@@ -364,28 +391,62 @@ return baseclass.extend({
 		});
 	},
 
+	/* The collapse control sits on the divider between the sidebar and the
+	   content, not in the footer row: next to the theme and info buttons it was
+	   a third identical 36px square, which nobody found. Two chevrons plus a
+	   label that appears on hover make it read as "collapse this column". */
 	initRail: function () {
 		var side = document.querySelector('.ltc-side');
-		var foot = document.querySelector('.ltc-side-foot');
 		var root = document.documentElement;
-		if (!side || !foot || foot.querySelector('[data-ltc-rail]'))
+		if (!side || side.querySelector('[data-ltc-rail]'))
 			return;
 
+		/* the template bootstrap already does this before first paint; doing it
+		   here too means the rule holds even on a page rendered without it */
+		railAuto();
 		var btn = E('button', {
 			'type': 'button',
-			'class': 'ltc-icon-btn ltc-rail-btn',
+			'class': 'ltc-rail-toggle',
 			'data-ltc-rail': '',
-			'title': _('Collapse sidebar')
+			'aria-controls': 'ltc-side'
 		});
-		btn.appendChild(util.icon('chev'));
+		btn.appendChild(E('span', { 'class': 'ic' }, util.icon('chevrons')));
+		btn.appendChild(E('span', { 'class': 'lbl' }, ''));
+
+		var paint = function () {
+			var on = root.dataset.rail === '1';
+			btn.setAttribute('title', on ? _('Expand sidebar') : _('Collapse sidebar'));
+			btn.setAttribute('aria-expanded', on ? 'false' : 'true');
+			btn.lastChild.textContent = on ? _('Expand sidebar') : _('Collapse sidebar');
+		};
+
 		btn.addEventListener('click', function () {
 			var on = root.dataset.rail === '1';
 			root.dataset.rail = on ? '0' : '1';
 			try {
+				/* an explicit choice wins over the width rule, permanently,
+				   until the user picks the other one */
 				localStorage.setItem('lucent.rail', on ? '0' : '1');
 			} catch (e) {}
+			paint();
 		});
-		foot.appendChild(btn);
+
+		side.appendChild(btn);
+		paint();
+
+		var prev = root.dataset.rail;
+		window.addEventListener('resize', function () {
+			var pref = null;
+			try {
+				pref = localStorage.getItem('lucent.rail');
+			} catch (e) {}
+			/* only users who never touched the button follow the width rule */
+			if (pref === '0' || pref === '1')
+				return;
+			railAuto();
+			if (root.dataset.rail !== prev)
+				paint();
+		});
 	},
 
 	markActive: function () {
@@ -449,5 +510,11 @@ return baseclass.extend({
 		el.className = 'ltc-toast show' + (kind ? ' ' + kind : '');
 		clearTimeout(el._timer);
 		el._timer = setTimeout(function () { el.className = 'ltc-toast'; }, 3200);
-	}
+	},
+
+	/* exported so the harness can assert the width rule, and so a page that
+	   boots without the template still settles on the same answer */
+	railAuto: railAuto,
+	RAIL_MIN: RAIL_MIN,
+	RAIL_AUTO_MAX: RAIL_AUTO_MAX
 });

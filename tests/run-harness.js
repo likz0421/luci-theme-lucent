@@ -27,7 +27,7 @@ const TYPES = {
 
 const ALL = ['#base', '#dhcpwan', '#menu-reject', '#menu-empty', '#menu-noclass', '#menu-throw',
 	'#menu-noload', '#menu-nomatch', '#menu-hang', '#menu-cache', '#menu-nostore', '#manyports',
-	'#tree-noisy', '#rail', '#drawer'];
+	'#tree-noisy', '#rail', '#rail-auto', '#drawer'];
 
 const wantShot = process.argv.includes('--shot');
 const only = process.argv.slice(2).filter(a => !a.startsWith('--') && a !== '');
@@ -102,12 +102,15 @@ async function run(port) {
 		const base = (flag === '#base' || flag === '#tall') ? '' : flag;
 		const tall = flag === '#tall';
 		const narrow = base === '#drawer';
+		/* a laptop window: wide enough for the desktop shell, narrow enough
+		   that the width rule is supposed to collapse the sidebar by itself */
+		const laptop = base === '#rail-auto';
 		const opt = {
 			/* #menu-noload waits 19 s for the core.js watchdog and the other menu
 			   scenarios wait out the 8 s source deadlines — that is virtual time,
 			   not wall clock */
 			budget: base === '#menu-noload' ? 34000 : (/^#menu-/.test(base) ? 24000 : 13000),
-			width: narrow ? 390 : 1500,
+			width: narrow ? 390 : (laptop ? 1100 : 1500),
 			height: narrow ? 844 : (tall ? 2700 : 900)
 		};
 

@@ -812,6 +812,9 @@ msgstr "可用内存"
 msgid "Collapse sidebar"
 msgstr "折叠侧边栏"
 
+msgid "Expand sidebar"
+msgstr "展开侧边栏"
+
 msgid "WAN device"
 msgstr "WAN 设备"
 

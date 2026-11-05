@@ -560,6 +560,12 @@ var PATHS = {
 	],
 	chev: [
 		'M14.5 6.5 8.5 12l6 5.5'
+	],
+	/* two chevrons read as "collapse this whole column"; a single one looks
+	   like just another setting button */
+	chevrons: [
+		'M13 6.5 7.5 12l5.5 5.5',
+		'M18.5 6.5 13 12l5.5 5.5'
 	]
 };
 

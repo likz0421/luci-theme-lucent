@@ -309,11 +309,29 @@ a.ltc-si-row:hover b{color:var(--accent-2)}
 }
 .ltc-icon-btn:hover{background:var(--card-2);color:var(--text)}
 .ltc-icon-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.ltc-rail-btn{display:none}
+.ltc-rail-toggle{display:none}
 /* rail mode is desktop-only: on phones the sidebar is a drawer and these
    rules (font-size:0, 64px grid, flyouts) would wreck the whole layout */
 @media (min-width:981px){
-	.ltc-rail-btn{display:inline-flex}
+	/* Anchored to the divider, not to the footer row: as a third 36px square
+	   next to the theme and info buttons nobody found it. .ltc-side is sticky,
+	   so this positions against the sidebar and hangs half over the border. */
+	.ltc-rail-toggle{
+		position:absolute;top:88px;right:-13px;z-index:60;display:inline-flex;align-items:center;
+		height:28px;padding:0 5px;border:1px solid var(--line);border-radius:999px;
+		background:var(--card);color:var(--text-2);box-shadow:var(--shadow);cursor:pointer;
+		transition:color .18s,border-color .18s;
+	}
+	.ltc-rail-toggle .ic{display:grid;place-items:center;width:18px;height:18px;flex:none}
+	.ltc-rail-toggle svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+	/* the words only appear when you point at it, so the pill stays small */
+	.ltc-rail-toggle .lbl{
+		max-width:0;font-size:11.5px;white-space:nowrap;overflow:hidden;opacity:0;
+		transition:max-width .22s var(--ease),opacity .18s,margin .22s var(--ease);
+	}
+	.ltc-rail-toggle:hover,.ltc-rail-toggle:focus-visible{color:var(--text);border-color:var(--accent)}
+	.ltc-rail-toggle:hover .lbl,.ltc-rail-toggle:focus-visible .lbl{max-width:120px;opacity:1;margin-left:6px}
+	.ltc-rail-toggle:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 	[data-rail="1"] .ltc-shell{grid-template-columns:64px minmax(0,1fr)}
 	[data-rail="1"] .ltc-brand{justify-content:center}
 	[data-rail="1"] .ltc-brand-t{display:none}
@@ -329,7 +347,7 @@ a.ltc-si-row:hover b{color:var(--accent-2)}
 	[data-rail="1"] .ltc-nav ul.dropdown-menu a{justify-content:flex-start;gap:7px;padding:6px 9px;font-size:12.5px}
 	[data-rail="1"] .ltc-modes{display:none}
 	[data-rail="1"] .ltc-side-foot{justify-content:center}
-	[data-rail="1"] .ltc-rail-btn svg{transform:rotate(180deg)}
+	[data-rail="1"] .ltc-rail-toggle svg{transform:rotate(180deg)}
 	/* collapsed rail keeps only the two rings — enough to read the box at a glance */
 	[data-rail="1"] .ltc-side-info{max-height:none;padding:4px 2px;border:0;background:none;overflow:visible}
 	[data-rail="1"] .ltc-side-info .ltc-si-head{flex-direction:column;gap:4px}

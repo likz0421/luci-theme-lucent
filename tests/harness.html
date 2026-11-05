@@ -717,6 +717,64 @@ if (menuNoStore) {
 		var gw = document.querySelector('[data-live=gateway]');
 		check('dhcp gateway read', !dhcpwan || (gw && gw.textContent === '10.0.0.1'), gw && gw.textContent);
 
+		/* ---- sidebar collapse control ----
+		   It used to be a third identical 36px square in the footer row, which
+		   is why the report was "I cannot find the entry point". */
+		var railBtn = document.querySelector('[data-ltc-rail]');
+		check('rail toggle rendered', !!railBtn, railBtn && railBtn.className);
+		check('rail toggle sits on the sidebar edge, not the footer row',
+			!!railBtn && railBtn.parentElement === document.querySelector('.ltc-side'),
+			railBtn && railBtn.parentElement && (railBtn.parentElement.className || railBtn.parentElement.tagName));
+		check('rail toggle carries its own words',
+			!!railBtn && /sidebar/i.test(railBtn.textContent), railBtn && railBtn.textContent);
+
+		/* the width rule, with both bounds: below 981 the sidebar is a drawer
+		   and rail must not be set at all — that is the 3.6.9 regression, where
+		   auto-collapse reached phones and left a sliver column on screen.
+		   No stored preference here, so the window decides. */
+		var wantRail = window.innerWidth < 981 ? undefined : (window.innerWidth < 1281 ? '1' : '0');
+		check('rail follows the width rule',
+			document.documentElement.dataset.rail === wantRail,
+			'window ' + window.innerWidth + ' -> ' + document.documentElement.dataset.rail + ' want ' + wantRail);
+		check('no rail mode on a phone window',
+			window.innerWidth >= 981 || document.documentElement.dataset.rail === undefined,
+			'window ' + window.innerWidth + ' rail=' + document.documentElement.dataset.rail);
+
+		/* header.ut repeats the thresholds inline to avoid a first-paint flash;
+		   two copies of one rule is exactly what drifts, so assert they agree.
+		   The CSS gate matters the same way: rail styles must never reach a
+		   phone, which is what wrecked 3.6.9. */
+		Promise.all([
+			fetch('../ucode/template/themes/lucent/header.ut').catch(function () { return { ok: false }; }),
+			fetch('../htdocs/luci-static/lucent/theme.css').catch(function () { return { ok: false }; })
+		]).then(function (rs) {
+			return Promise.all(rs.map(function (r) { return r && r.ok ? r.text() : ''; }));
+		}).then(function (txt) {
+			var tpl = txt[0], css = txt[1];
+
+			if (!tpl)
+				REPORT.push('SKIP header.ut threshold parity (template not served)');
+			else {
+				var mins = tpl.match(/innerWidth >= (\d+)/);
+				var maxs = tpl.match(/innerWidth < (\d+)/);
+				check('header.ut and core.js agree on the rail minimum',
+					!!mins && +mins[1] === registry.core.RAIL_MIN, (mins && mins[1]) + ' vs ' + registry.core.RAIL_MIN);
+				check('header.ut and core.js agree on the auto-collapse maximum',
+					!!maxs && +maxs[1] === registry.core.RAIL_AUTO_MAX, (maxs && maxs[1]) + ' vs ' + registry.core.RAIL_AUTO_MAX);
+			}
+
+			if (!css)
+				REPORT.push('SKIP rail css gate (stylesheet not served)');
+			else {
+				var desktop = css.indexOf('@media (min-width:981px)');
+				var pill = css.indexOf('.ltc-rail-toggle{');
+				check('rail pill styles are inside the desktop media query',
+					desktop >= 0 && pill > desktop, 'gate@' + desktop + ' pill@' + pill);
+				check('rail pill is hidden outside desktop',
+					/^\.ltc-rail-toggle\{display:none\}/m.test(css), 'no global hide');
+			}
+		});
+
 		if (/#rail/.test(FLAGS))
 			document.documentElement.dataset.rail = '1';
 		if (/#drawer/.test(FLAGS))

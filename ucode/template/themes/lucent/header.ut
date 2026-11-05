@@ -71,9 +71,18 @@
 			var mode = root.dataset.mode || 'auto';
 			var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 			root.dataset.theme = dark ? 'dark' : 'light';
+			/* Same rule as railAuto() in lucent/core.js — thresholds are
+			   asserted equal by tests/harness.html, since this copy exists only
+			   to avoid a flash from full sidebar to collapsed on first paint. */
 			try {
-				if (innerWidth >= 981 && localStorage.getItem('lucent.rail') === '1')
-					root.dataset.rail = '1';
+				var pref = null;
+				if (innerWidth >= 981) {
+					try { pref = localStorage.getItem('lucent.rail'); } catch (e) {}
+					if (pref === '0' || pref === '1')
+						root.dataset.rail = pref;
+					else
+						root.dataset.rail = innerWidth < 1281 ? '1' : '0';
+				}
 			} catch (e) {}
 		})();
 	</script>

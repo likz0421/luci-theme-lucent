@@ -8,6 +8,42 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.6 — 2026-11-05
+
+### Changed
+
+- **The collapse control moved out of the footer row.** It used to be a third
+  36px bordered square next to the theme and info toggles, distinguished only
+  by a small single chevron and a hover tooltip — which is why the report was
+  "I cannot find the entry point" even though the button was in the DOM and
+  working. It is now a pill straddling the divider between the sidebar and the
+  content, with a double chevron and the words "折叠侧边栏 / 展开侧边栏" that
+  slide in on hover or keyboard focus. Desktop-only, as rail mode already was.
+
+### Added
+
+- **The sidebar collapses itself on laptop widths.** Below 981px the sidebar is
+  a drawer and rail never applies — that bound is enforced in the rule, not
+  just in CSS, and is asserted separately because it is the 3.6.9 regression
+  (auto-collapse reaching phones and leaving a sliver column). Between 981 and
+  1280px it starts collapsed, wider than that it starts open. A choice the
+  user made with the toggle always wins and is remembered; the resize listener
+  only re-evaluates the width rule for people who have never pressed it.
+- `header.ut` repeats the same rule in its inline bootstrap so the first paint
+  does not flash from full to collapsed. Because two copies of one rule is how
+  they drift, the harness now fetches both files and asserts the thresholds are
+  identical.
+
+### Verified
+
+- `node tests/run-harness.js`: 16 scenarios, 952 assertions. New checks cover
+  the toggle existing, living on `.ltc-side` rather than the footer row,
+  carrying its own label, following the width rule, never applying on a phone
+  window, the CSS gate keeping the pill desktop-only, and the two threshold
+  copies agreeing.
+- Screenshots at 1500px (open sidebar, pill on the divider) and 1100px
+  (auto-collapsed 64px rail, pill showing the expand direction).
+
 ## 0.5 — 2026-11-05
 
 ### Fixed
