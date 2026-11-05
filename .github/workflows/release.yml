@@ -85,7 +85,10 @@ jobs:
           git fetch --no-tags origin "$DEFAULT_BRANCH"
           git worktree add /tmp/main "origin/$DEFAULT_BRANCH"
           cp dist/latest.txt dist/latest-apk.txt dist/latest-onekey.txt /tmp/main/
-          REL=$(sed -n 's/^PKG_RELEASE:=//p' /tmp/main/Makefile)
+          # The assets were built from the TAG, so the -r suffix has to come
+          # from the tag too. Reading main's PKG_RELEASE names an asset that
+          # was never produced whenever main moved ahead after the tag.
+          REL=$(sed -n 's/^PKG_RELEASE:=//p' Makefile)
           sed -i \
             -e "s|^LUCENT_VERSION_DEFAULT=.*|LUCENT_VERSION_DEFAULT=\"${VER}-r${REL}\"|" \
             -e "s|^LUCENT_TAG_DEFAULT=.*|LUCENT_TAG_DEFAULT=\"${TAG}\"|" \
@@ -98,5 +101,15 @@ jobs:
             echo "pointers already current"
           else
             git commit -m "release: point latest files to ${TAG}"
-            git push origin "HEAD:$DEFAULT_BRANCH"
+            # main can move between the fetch and this push (a merged PR, or a
+            # release started by another tag); a plain push is rejected after
+            # the release is already live, which leaves every old client
+            # pointing at the previous version forever.
+            for i in 1 2 3; do
+              git fetch --no-tags origin "$DEFAULT_BRANCH" &&
+              git rebase "origin/$DEFAULT_BRANCH" &&
+              git push origin "HEAD:$DEFAULT_BRANCH" && break
+              echo "push rejected, retry $i after rebasing onto the new main"
+              sleep $((i * 3))
+            done
           fi

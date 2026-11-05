@@ -141,7 +141,7 @@ window.L = {
 var NOW = Math.floor(Date.now() / 1000);
 var MOCK = {
 	'system.board': { boardname: 'OpenWrt', hostname: 'OpenWrt', model: 'Test Router', kernel: '6.12.112', system: 'test arch', release: { description: 'OpenWrt 25.12.6', revision: 'r33311' } },
-	'system.info': { uptime: 46213, localtime: NOW, memory: { total: 506507264, free: 120586240, buffered: 33554432, cache: 67108864 }, load: [16384, 8192, 4096] },
+	'system.info': { uptime: 46213, localtime: NOW, memory: { total: 506507264, free: 120586240, buffered: 33554432, cached: 67108864 }, load: [16384, 8192, 4096] },
 	'network.interface.dump': { 'interface': [
 		{ interface: 'loopback', up: true },
 		{ interface: 'wan', up: true, proto: 'pppoe', device: 'pppoe-wan', l3_device: 'pppoe-wan', uptime: 3600,
@@ -160,10 +160,17 @@ var MOCK = {
 		{ macaddr: 'aa:bb:cc:00:00:02', hostname: 'laptop', ipaddr: '192.168.1.31', expires: NOW + 86400 }
 	] },
 	'luci-rpc.getWirelessDevices': {
-		radio0: { up: true, interfaces: [{ ifname: 'wlan0', config: { ssid: 'MyHome-2.4G' } }] },
-		radio1: { up: true, interfaces: [{ ifname: 'wlan1', config: { ssid: 'MyHome-5G' } }] }
+		/* a real dump carries the wifi-iface section, network included — the
+		   devices page reads it for its 网络 column */
+		radio0: { up: true, interfaces: [{ ifname: 'wlan0', section: 'wlancfg1', config: { ssid: 'MyHome-2.4G', network: 'lan' } }] },
+		radio1: { up: true, interfaces: [{ ifname: 'wlan1', section: 'wlancfg2', config: { ssid: 'MyHome-5G', network: 'lan' } }] }
 	},
-	'luci-rpc.getNetworkDevices': { 'pppoe-wan': { statistics: { rx_bytes: 1258291200, tx_bytes: 356515840 } }, 'br-lan': { statistics: { rx_bytes: 999, tx_bytes: 888 } } },
+	'luci-rpc.getNetworkDevices': { 'pppoe-wan': { statistics: { rx_bytes: 1258291200, tx_bytes: 356515840 } }, 'br-lan': { statistics: { rx_bytes: 999, tx_bytes: 888 } },
+		/* a real build reports every netdev it knows, bridge ports included —
+		   without these the graph's branch pills could never be proven to fill */
+		lan1: { statistics: { rx_bytes: 52000000, tx_bytes: 8100000 } },
+		wlan0: { statistics: { rx_bytes: 88000000, tx_bytes: 4400000 } },
+		wlan1: { statistics: { rx_bytes: 1200000, tx_bytes: 300000 } } },
 	'luci.lucent.storage': { '/': { total: 103079215, free: 76545000 } },
 	'luci-rpc.getConnsPerHost': { '192.168.1.30': { count: 12 }, '192.168.1.31': { count: 3 } },
 	'luci.lucent.overview': { version: '3.9.0-r1', cores: 4, cpus: [42, 17, 63, 8], load1: '0.25', load5: '0.31', processes_running: 2, processes_total: 128, conntrack: 85, conntrack_max: 28160, temp_c: 46 },
@@ -414,7 +421,9 @@ if (menuNoStore) {
 			extra.push({ device: 'lan' + pi, state: pi % 3 ? 'up' : 'down', wireless: 0, speed: 1000, label: 'lan' + pi });
 		MOCK['luci.lucent.topology'].ports = [{ device: 'wlan0', state: 'up', wireless: 1, label: 'wlan0' },
 			{ device: 'wlan1', state: 'up', wireless: 1, label: 'wlan1' }].concat(extra);
-		MOCK['luci.lucent.topology'].fdb = [];
+		/* one host alone on one port, so the "l port → show its speed" shape of
+		   the link column is exercised somewhere */
+		MOCK['luci.lucent.topology'].fdb = [{ mac: 'AA:BB:CC:00:00:02', port: 'lan5' }];
 	}
 
 	/* what the ONU actually reports: 22 unconnected FTTR ports and a pile of
@@ -675,8 +684,10 @@ if (menuNoStore) {
 				check('every host placed on a branch', !/Other devices/.test(graph.textContent), 'catch-all needed');
 			}
 			else {
-				/* nothing the bridge can point at still has to appear */
-				check('unplaced hosts get their own branch', under('stray', /laptop/), 'strays missing');
+				/* #manyports now carries one forwarding entry, so the laptop has
+				   a real home: it must hang under its port, not the catch-all */
+				check('a placed host is not in the catch-all', under('port', /laptop/),
+					leafText.slice(0, 120));
 			}
 			check('per-host rate in graph', !!document.querySelector('[data-live=leaf-192-168-1-30]'),
 				document.querySelector('[data-live=leaf-192-168-1-30]') && document.querySelector('[data-live=leaf-192-168-1-30]').textContent);
@@ -749,17 +760,36 @@ if (menuNoStore) {
 		check('talker rates formatted', !!first && /↓/.test(first.querySelector('.val').textContent),
 			first && first.querySelector('.val').textContent);
 
-		/* ---- devices page link, rate and activity columns ---- */
+		/* ---- devices page: the reference's five columns ---- */
 		var heads = document.querySelectorAll('.ltc-content .table .table-titles .th');
 		var rateCells = document.querySelectorAll('.ltc-rate');
 		var linkCells = document.querySelectorAll('.ltc-linkcell b');
 		var headText = Array.prototype.map.call(heads, function (h) { return h.textContent; }).join('|');
-		check('devices table has the nine columns', heads.length >= 9, heads.length + ' columns');
-		check('link and activity headers present', /Link/.test(headText) && /Last activity|最后活动/.test(headText), headText);
+		check('devices table has the five columns', heads.length === 5, heads.length + ' columns');
+		check('column set is the reference set',
+			/Device/.test(headText) && /Link/.test(headText) && /Network/.test(headText) &&
+			/Live/.test(headText) && /Last activity/.test(headText), headText);
 		if (!noisy) check('devices rate cells filled', rateCells.length >= 2 && /↓/.test(rateCells[0].textContent),
 			rateCells.length + ' cells');
-		if (!manyp && !noisy) check('link column names the path', linkCells.length >= 2 && /Wired|有线|Wireless|无线/.test(linkCells[0].textContent),
-			linkCells.length + ' links: ' + (linkCells[0] || {}).textContent);
+		if (!manyp && !noisy) {
+			/* a Wi-Fi host names its SSID; a port carrying several hosts
+			   collapses to "Shared port · N devices" instead of repeating the
+			   same speed on every row */
+			var links = Array.prototype.map.call(linkCells, function (b) { return b.textContent; });
+			check('link column names the SSID', links.some(function (t) { return /MyHome/.test(t); }), links.join(' / '));
+			check('shared port is aggregated', links.indexOf(_('Shared port')) >= 0, links.join(' / '));
+			check('network column is filled',
+				[].slice.call(document.querySelectorAll('.ltc-clients tr:nth-child(n+2) .ltc-netcell b'))
+					.every(function (b) { return b.textContent === 'lan'; }),
+				[].slice.call(document.querySelectorAll('.ltc-clients tr:nth-child(n+2) .ltc-netcell b'))
+					.map(function (b) { return b.textContent; }).join('/'));
+		}
+		else if (manyp) {
+			var mlinks = Array.prototype.map.call(linkCells, function (b) { return b.textContent; });
+			/* with an empty forwarding table every port holds one host, so the
+			   speed is the fact worth showing */
+			check('a lone port shows its speed', mlinks.some(function (t) { return /Gbit\/s/.test(t); }), mlinks.slice(0, 4).join(' / '));
+		}
 		else if (noisy) check('an unplaceable host says so', !linkCells.length &&
 			document.querySelectorAll('.ltc-linkcell').length >= 2, linkCells.length + ' named links');
 

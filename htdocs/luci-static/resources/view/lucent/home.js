@@ -11,31 +11,41 @@ function line(label, value, key) {
 	]);
 }
 
-/* The reference puts one live sentence under the title instead of a
-   marketing line: what the uplink is, how long it has been up, how much
-   memory is still free and how many clients the radios carry. */
-function heroChain(wanIp, uptime, availPct, wifiClients) {
-	return [
-		_('uplink %s').format(wanIp),
-		_('up %s').format(uptime),
-		'%d%% %s'.format(availPct, _('memory free')),
-		plural(wifiClients, 'Wi-Fi client', 'Wi-Fi clients')
-	].join(' · ');
+/* The reference writes one identity line under the headline — what this box
+   is, what it runs, what time it thinks it is and how many hosts it holds.
+   Statistics live in the tiles; this line answers "which router am I on?". */
+function heroChain(model, release, when, clients) {
+	return [model, release, when, plural(clients, 'client', 'clients')]
+		.filter(Boolean).join(' · ');
 }
 
 /* A KPI card with one number and one small line leaves most of the tile empty;
    `meter` puts a proportion under it, which is the information the number
-   alone withholds (26% of what, and how full is that?). */
-function kpi(label, value, sub, key, meter) {
+   alone withholds (26% of what, and how full is that?). `word` is the
+   reference's habit of putting the qualifier inside the big line — 可用 87%
+   reads faster than a label that has to be matched to a number by eye. */
+function kpi(label, value, sub, key, meter, word, state) {
 	return E('div', { 'class': 'ltc-kpi' }, [
 		E('small', {}, label),
-		E('b', key ? { 'data-live': key } : {}, value),
+		/* the reference marks every tile that passes and leaves the failing
+		   ones plain, so a wall of green is itself the answer */
+		E('i', { 'class': 'ltc-kcheck ' + (state || 'ok'), 'data-live': key ? key + '-state' : undefined },
+			util.icon('check')),
+		E('b', {}, [word ? E('em', { 'class': 'kword' }, word + ' ') : '',
+			E('span', key ? { 'data-live': key } : {}, value)]),
 		E('span', key ? { 'data-live': key + '-sub' } : {}, sub),
 		meter != null ? E('i', { 'class': 'ltc-kmeter' }, E('u', {
 			'style': 'width:%d%%'.format(Math.max(2, Math.min(100, Math.round(meter)))),
 			'data-live': key ? key + '-meter' : ''
 		})) : ''
 	]);
+}
+
+function kstate(key, ok) {
+	var el = document.querySelector('[data-live=' + key + '-state]');
+
+	if (el)
+		el.className = 'ltc-kcheck ' + (ok ? 'ok' : 'warn');
 }
 
 function ring(label, value, percent, key) {
@@ -97,24 +107,25 @@ function plural(n, one, many) {
 	return '%d %s'.format(n, n === 1 ? _(one) : _(many));
 }
 
-function memoryOf(info) {
-	var mem = info.memory || {};
-	var swap = info.swap || {};
-	var cache = (Number(mem.buffered || mem.buffers) || 0) + (Number(mem.cache) || 0);
-	var avail = mem.available != null ? Number(mem.available) : (mem.free || 0) + cache;
-	var used = Math.max(0, (mem.total || 0) - Math.min(mem.total || 0, avail));
-	var swapUsed = (swap.total || 0) - (swap.free || 0);
+/* "实时 · 4 秒前" has to age between polls or it is a lie, and it has to be
+   honest about how stale the numbers on screen are. */
+function tickSince(self) {
+	var el = document.querySelector('[data-live=hero-since]');
 
-	return {
-		total: mem.total || 0,
-		used: Math.max(0, used),
-		avail: Math.min(mem.total || 0, avail),
-		cache: Math.min(mem.total || 0, cache),
-		percent: util.pct(used, mem.total),
-		swapTotal: swap.total || 0,
-		swapUsed: Math.max(0, swapUsed),
-		swapPercent: util.pct(swapUsed, swap.total)
-	};
+	if (!el)
+		return;
+
+	var s = Math.round((Date.now() - (self._since || Date.now())) / 1000);
+	var txt = s < 3 ? _('just now') : _('%ds ago').format(s);
+
+	if (el.textContent !== txt)
+		el.textContent = txt;
+}
+
+/* One memory model, shared with the sidebar panel, so the two can never
+   disagree about what "used" means. */
+function memoryOf(info) {
+	return util.mem(info);
 }
 
 function loadsOf(info) {
@@ -146,16 +157,6 @@ function clientsOf(data) {
 	return util.hosts(data.hints, data.leases);
 }
 
-/* Stations associated across all radios: "2 devices" on its own says nothing
-   about where they hang off, and the Wi-Fi half is what a user asks next. */
-function assocCount(data) {
-	var assoc = (data && data.assoc) || {};
-
-	return Object.keys(assoc).reduce(function (n, k) {
-		return n + util.arr(assoc[k]).length;
-	}, 0);
-}
-
 /* Traffic history survives page navigation, tab close and a browser restart:
    sessionStorage would leave the trend card empty on every fresh page, which
    is the "half an empty card" the day-to-day complaint is about. Keyed by day
@@ -178,7 +179,7 @@ function pruneDaily() {
 		var drop = [];
 
 		Object.keys(localStorage).forEach(function (k) {
-			if (/^lucent\.(hist|peak|quote)\./.test(k) && k.slice(k.lastIndexOf('.') + 1) !== dayKey())
+			if (/^lucent\.(hist|peak|quote|events)\./.test(k) && k.slice(k.lastIndexOf('.') + 1) !== dayKey())
 				drop.push(k);
 		});
 		drop.forEach(function (k) { localStorage.removeItem(k); });
@@ -319,6 +320,42 @@ function setNum(sel, value, suffix) {
 	el._raf = requestAnimationFrame(step);
 }
 
+/* The interface moving the most bytes right now, from the same counter deltas
+   the tiles use. Null until there is a second sample to diff against. */
+function busiestIface(self, data) {
+	var now = Date.now();
+	var best = null;
+
+	self._lastDev = self._lastDev || {};
+
+	util.arr(data.ifaces).forEach(function (i) {
+		if (!i || !i.up || i.interface === 'loopback')
+			return;
+
+		var dn = i['l3_device'] || i.device;
+		var dd = dn && data.devices && data.devices[dn];
+		var ds = dd && (dd.stats || dd.statistics);
+
+		if (!ds)
+			return;
+
+		var p = self._lastDev[i.interface];
+
+		if (p) {
+			var dt = Math.max(1, (now - p.t) / 1000);
+			var rx = Math.max(0, (Number(ds.rx_bytes) - p.rx) / dt);
+			var tx = Math.max(0, (Number(ds.tx_bytes) - p.tx) / dt);
+
+			if (!best || rx + tx > best.rx + best.tx)
+				best = { name: i.interface, rx: rx, tx: tx };
+		}
+
+		self._lastDev[i.interface] = { t: now, rx: Number(ds.rx_bytes) || 0, tx: Number(ds.tx_bytes) || 0 };
+	});
+
+	return best;
+}
+
 /* Per-netdev throughput, keyed by the name the tree shows (wlan0, lan1, …).
    The interface-level sampler above only knows logical interfaces; a branch
    needs the counters of the device that carries it, and those live in
@@ -418,25 +455,34 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 	   thing afterwards by measuring the boxes, which keeps this markup plain. */
 	function gnode(o) {
 		var inner = [];
+		var txt = E('div', { 'class': 'gtxt' }, [
+			E('b', {}, o.title),
+			o.l1 ? E('small', { 'class': 'g1' }, o.l1) : '',
+			o.l2 ? E('small', { 'class': 'g2' }, o.l2) : ''
+		]);
 
 		if (o.badge)
 			inner.push(E('b', { 'class': 'ltc-band' + (o.badgeCls || '') }, o.badge));
 		if (o.icon)
 			inner.push(E('span', { 'class': 'ic' }, util.icon(o.icon)));
 
-		inner.push(E('div', { 'class': 'gtxt' }, [
-			E('b', {}, o.title),
-			o.l1 ? E('small', { 'class': 'g1' }, o.l1) : '',
-			o.l2 ? E('small', { 'class': 'g2' }, o.l2) : ''
-		]));
+		inner.push(txt);
+
+		/* a branch carries its rate as a third line, like the reference; only a
+		   leaf wears it as a pill, because a leaf is one line by design */
+		if (o.live) {
+			var pill = E('small', { 'class': 'grate', 'data-live': o.live }, '–');
+
+			if (o.cls && o.cls.indexOf('leaf') === 0)
+				txt.appendChild(pill);
+			else
+				inner.push(pill);
+		}
 
 		if (o.dots)
 			inner.push(E('span', { 'class': 'ltc-gdots' }, o.dots.map(function (cls) {
 				return E('i', { 'class': cls });
 			})));
-
-		if (o.live)
-			inner.push(E('small', { 'class': 'grate', 'data-live': o.live }, '–'));
 
 		var box = E('div', { 'class': 'ltc-grow' });
 		box.appendChild(E(o.href ? 'a' : 'div', {
@@ -512,12 +558,14 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 			cls: 'leaf' + (h.online ? ' up' : '') + (priv ? ' priv' : ''),
 			icon: wired ? 'devices' : 'laptop',
 			href: L.url('admin/clients'),
+			/* one line, like the reference: who it is, how it sounds, how fast
+			   it is going. The address belongs to the devices page and the
+			   tooltip, not to a box 210 px wide */
 			title: h.name || (priv ? _('Private device') : mac),
-			l1: ip || (priv ? mac : _('no lease, no name')),
 			l2: bits.join(' · '),
 			dots: !wired && isFinite(st.signal) ? [signalClass(st.signal).trim()] : null,
 			live: ip ? 'leaf-' + ip.replace(/\./g, '-') : undefined,
-			title2: '%s · %s'.format(h.name || mac, mac)
+			title2: '%s · %s%s'.format(h.name || mac, mac, ip ? ' · ' + ip : '')
 		};
 	}
 
@@ -724,7 +772,11 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 		title: _('Internet'),
 		l1: wan ? (util.ip4(wan) || _('Connected')) : _('Down'),
 		l2: dns.length ? 'DNS ' + dns[0] : '',
-		live: 'path-down',
+		/* filled by the same netdev diff as every other branch, keyed by the
+		   device the uplink actually runs over */
+		gr: (wan && (wan['l3_device'] || wan.device)) || undefined,
+		kind: 'wan',
+		live: 'gr-' + ((wan && (wan['l3_device'] || wan.device)) || 'wan'),
 		kids: [{
 			cls: 'me up',
 			icon: 'router',
@@ -746,6 +798,9 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 				psum(_('Clients'), String(connectedCount(data) || hosts.length), 'path-clients',
 					clientSplit(data), 'path-clients-sub'),
 				psum(_('Current traffic'), '↓ –', 'path-now', '↑ –', 'path-now-sub'),
+				psum(_('Connected'), wan && wan.uptime != null ? util.fmtDuration(wan.uptime) : '–',
+					'path-conn', wan ? '%s · %s'.format(wan.proto || '', wan.device || '') : '', 'path-conn-sub'),
+				psum(_('Busiest network'), '–', 'path-busy', '', 'path-busy-sub'),
 				psum(_('Busiest band'), band.busiest ? band.busiest.band : '–', 'path-band',
 					band.busiest ? '%d%% %s'.format(band.share, _('of Wi-Fi traffic')) : '', 'path-band-sub'),
 				psum(_('Weakest client'), sig.count ? '%d dBm'.format(sig.min) : '–', 'path-sig',
@@ -863,6 +918,19 @@ function linkRate(sp) {
 	return '%d Mbit/s'.format(s);
 }
 
+/* "↓ 4.9M ↑ 303K": inside a graph leaf or a summary cell there is no room for
+   "MiB/s", and the long form lives on the devices page and the tiles. */
+function shortRate(n) {
+	n = Number(n) || 0;
+
+	if (n >= 1048576)
+		return '%.1fM'.format(n / 1048576);
+	if (n >= 1024)
+		return '%dK'.format(Math.round(n / 1024));
+
+	return '%dB'.format(Math.round(n));
+}
+
 function lanIpOf(lan) {
 	var a = util.arr(lan && lan['ipv4-address'])[0];
 	if (!a)
@@ -871,10 +939,18 @@ function lanIpOf(lan) {
 	return a.address + mask;
 }
 
+/* the long form, for the talker list where there is room for it */
 function rateText(r) {
 	if (!r)
 		return '–';
 	return '↓ %s ↑ %s'.format(util.fmtRate(r.rx_rate), util.fmtRate(r.tx_rate));
+}
+
+/* the compact form, for a graph leaf that has to stay one line wide */
+function rateShort(r) {
+	if (!r)
+		return '–';
+	return '↓ %s ↑ %s'.format(shortRate(r.rx_rate), shortRate(r.tx_rate));
 }
 
 /* netifd only puts `valid` on IPv6 address entries, so a DHCPv4 lease has to be
@@ -1120,25 +1196,25 @@ function healthVerdict(data, wifi, mem, storage, info) {
 		label: _('Uplink'),
 		ok: !!(data.ifaces && util.arr(data.ifaces).some(function (i) { return i && i.up && i.interface !== 'loopback' && i.interface !== 'lan'; })),
 		bad: _('no working uplink'),
-		good: info && info.wan ? _('connected') : _('connected')
+		good: _('connected')
 	});
 	checks.push({
 		label: _('CPU'),
-		ok: !mem || true,
-		bad: '',
-		good: true
+		ok: util.cpu(data.net || {}, data.info) < 90,
+		bad: _('CPU saturated'),
+		good: _('load normal')
 	});
 	checks.push({
 		label: _('Memory'),
 		ok: !(mem && mem.percent >= 90),
 		bad: _('more than 90% used'),
-		good: true
+		good: _('memory free')
 	});
 	checks.push({
 		label: _('Storage'),
 		ok: !(storage && storage.percent >= 90),
 		bad: _('root filesystem nearly full'),
-		good: true
+		good: _('space available')
 	});
 	checks.push({
 		label: _('Wi-Fi'),
@@ -1158,28 +1234,39 @@ function healthVerdict(data, wifi, mem, storage, info) {
 	return checks;
 }
 
-function verdictCard(data, wifi, mem, storage, info) {
+/* The reference puts the verdict in the page headline, not in a card below the
+   fold, so the same sentence is computed in one place and used twice. */
+function verdictOf(data, wifi, mem, storage, info) {
 	var checks = healthVerdict(data, wifi, mem, storage, info);
 	var bad = checks.filter(function (c) { return !c.ok; });
-	var state = bad.length ? 'warn' : 'ok';
 
-	return E('section', { 'class': 'ltc-card ltc-verdict ' + state }, [
-		E('div', { 'class': 'ltc-verdict-head' }, [
+	return {
+		checks: checks,
+		bad: bad,
+		state: bad.length > 1 ? 'bad' : (bad.length ? 'warn' : 'ok'),
+		text: bad.length
+			? (bad.length === 1 ? _('1 thing needs attention') : _('%d things need attention').format(bad.length))
+			: _('Everything looks healthy'),
+		detail: bad.map(function (c) { return '%s: %s'.format(c.label, c.bad); }).join(' · ')
+	};
+}
+
+function verdictCard(data, wifi, mem, storage, info) {
+	var v = verdictOf(data, wifi, mem, storage, info);
+
+	return E('section', { 'class': 'ltc-card ltc-verdict ' + v.state, 'data-verdict': '' }, [
+		E('div', { 'class': 'ltc-verdict-head', 'hidden': !v.bad.length }, [
 			E('i', { 'class': 'ltc-verdict-dot' }),
 			E('div', {}, [
-				E('h3', {}, bad.length
-					? (bad.length === 1
-						? _('1 thing needs attention')
-						: _('%d things need attention').format(bad.length))
-					: _('Everything looks healthy')),
-				E('p', { 'class': 'ltc-muted' }, bad.length
-					? bad.map(function (c) { return '%s: %s'.format(c.label, c.bad); }).join(' · ')
-					: checks.map(function (c) { return c.label; }).join(' · '))
+				E('h3', { 'data-live': 'verdict-text' }, v.text),
+				E('p', { 'class': 'ltc-muted', 'data-live': 'verdict-detail' },
+					v.detail || _('all checks passed'))
 			])
 		]),
-		E('div', { 'class': 'ltc-verdict-list' }, checks.map(function (c) {
+		E('div', { 'class': 'ltc-verdict-list' }, v.checks.map(function (c, i) {
 			return E('span', {
 				'class': 'ltc-vchip ' + (c.ok ? 'ok' : 'bad'),
+				'data-vchip': String(i),
 				'title': (c.ok ? c.good : c.bad) || c.label
 			}, [
 				E('i', { 'class': 'ltc-tdot ' + (c.ok ? 'good' : 'weak') }),
@@ -1363,8 +1450,9 @@ return view.extend({
 		if (!el)
 			return;
 
-		var now = new Date();
-		var key = 'lucent.quote.' + [now.getFullYear(), now.getMonth() + 1, now.getDate()].join('-');
+		/* the same padded key pruneDaily compares against, or the cache is
+		   deleted on the very day it was written */
+		var key = 'lucent.quote.' + dayKey();
 		var cached = null;
 		try {
 			cached = localStorage.getItem(key);
@@ -1440,9 +1528,8 @@ return view.extend({
 		setNum('[data-live=memory]', availPct, '%');
 		set('[data-live=memory-sub]', '%s / %s'.format(util.fmtBytes(mem.avail), util.fmtBytes(mem.total)));
 		meter('memory', availPct);
-		set('[data-live=wan-sub]', wan
-			? [wan.proto || wan.device || '', util.fmtDuration(wan.uptime || 0)].join(' · ')
-			: _('No default route'));
+		/* wan and wan-sub belong to the counter diff below — writing them here
+		   as well made the tile flip format between rounds */
 
 		var netInfo = data.net || {};
 		var cpuPct = util.cpu(netInfo, data.info);
@@ -1455,6 +1542,11 @@ return view.extend({
 			? '%s °C · %s'.format(netInfo.temp_c, _('%d cores').format(Number(netInfo.cores) || 0))
 			: _('load %s').format(loads.length ? loads[0].toFixed(2) : '–'));
 		meter('cpu', cpuPct);
+		kstate('cpu', cpuPct < 90);
+		kstate('memory', availPct > 10);
+		kstate('storage', !(storage && storage.percent >= 90));
+		kstate('kpi-wifi', wifiLive.total === 0 || wifiLive.up > 0);
+		kstate('kpi-signal', !sigLive.weak);
 		set('[data-live=kpi-wifi]', plural(wifiLive.up, 'radio on', 'radios on'));
 		set('[data-live=kpi-wifi-sub]', plural(wifiLive.ssids.length,
 			'SSID broadcasting', 'SSIDs broadcasting'));
@@ -1482,10 +1574,12 @@ return view.extend({
 		var liveLease = leaseRemaining(data, wan);
 		if (liveLease !== '–')
 			set('[data-live=lease]', liveLease);
-		if (storage)
+		if (storage) {
 			setNum('[data-live=storage]', storage.percent, '%');
+			meter('storage', storage.percent);
+		}
 		set('[data-live=storage-sub]', storage
-			? '%s / %s'.format(util.fmtBytes(storage.used), util.fmtBytes(storage.total)) : '–');
+			? '%s %s'.format(_('free'), util.fmtBytes(storage.free)) : '–');
 
 		var net = data.net || {};
 		if (net.cores != null)
@@ -1507,8 +1601,16 @@ return view.extend({
 				var rx = Math.max(0, (Number(stats.rx_bytes) - this._lastStats.rx) / dt);
 				var tx = Math.max(0, (Number(stats.tx_bytes) - this._lastStats.tx) / dt);
 				set('[data-live=wan]', '↓ ' + util.fmtRate(rx));
-				set('[data-live=wan-sub]', [util.fmtDuration(wan.uptime || 0), wan.proto || '',
-					devName || ''].filter(Boolean).join(' · '));
+				kstate('wan', !!wan.up);
+				/* the reference writes the uplink tile as rate · port · link,
+				   which is the three things worth knowing about a WAN */
+				var wport = util.arr((data.topology || {}).ports).filter(function (p) {
+					return p && p.device === devName;
+				})[0];
+				set('[data-live=wan-sub]', ['↑ ' + util.fmtRate(tx), devName || wan.proto || '',
+					wport && wport.speed >= 1000 ? _('gigabit link')
+						: (wport && wport.speed >= 100 ? _('fast ethernet link') : '')]
+					.filter(Boolean).join(' · '));
 				set('[data-live=path-now]', '↓ ' + util.fmtRate(rx));
 				set('[data-live=path-now-sub]', '↑ %s · %s %s'.format(
 					util.fmtRate(tx), _('via'), devName || wan.proto || ''));
@@ -1538,35 +1640,6 @@ return view.extend({
 			this._lastLan = { t: lnow, rx: Number(lanStats.rx_bytes) || 0, tx: Number(lanStats.tx_bytes) || 0 };
 		}
 
-		/* busiest network = interface with the highest combined rate */
-		var self = this;
-		var bn = '', brx = 0, btx = 0, bv = -1;
-		this._lastDev = this._lastDev || {};
-		var dnow = Date.now();
-		data.ifaces.forEach(function (i) {
-			if (!i || !i.up || i.interface === 'loopback')
-				return;
-			var dn = i['l3_device'] || i.device;
-			var dd = dn && data.devices && data.devices[dn];
-			var ds = dd && (dd.stats || dd.statistics);
-			if (!ds)
-				return;
-			var p = self._lastDev[i.interface];
-			if (p) {
-				var pdt = Math.max(1, (dnow - p.t) / 1000);
-				var prx = Math.max(0, (Number(ds.rx_bytes) - p.rx) / pdt);
-				var ptx = Math.max(0, (Number(ds.tx_bytes) - p.tx) / pdt);
-				if (prx + ptx > bv) {
-					bv = prx + ptx;
-					bn = i.interface;
-					brx = prx;
-					btx = ptx;
-				}
-			}
-			self._lastDev[i.interface] = { t: dnow, rx: Number(ds.rx_bytes) || 0, tx: Number(ds.tx_bytes) || 0 };
-		});
-		if (bn)
-			set('[data-live=path-busy]', '%s ↓ %s ↑ %s'.format(bn, util.fmtRate(brx), util.fmtRate(btx)));
 		if (wan && wan.uptime != null)
 			set('[data-live=path-conn]', util.fmtDuration(wan.uptime));
 
@@ -1603,20 +1676,47 @@ return view.extend({
 
 		/* the hero answers "is this page current?" without a click: every live
 		   line in it is rewritten here, and the dot says what it means */
-		var heroIp = wan ? (util.ip4(wan) || _('Connected')) : _('Down');
-		var heroAvail = util.pct(mem.avail, mem.total);
-		var heroWifi = assocCount(data);
+		/* the headline is the verdict, the line under it is identity, and the
+		   pill says how old the numbers on screen are */
+		var boardLive = data.board || {};
+		var relLive = (boardLive.release && (boardLive.release.description || boardLive.release.revision))
+			|| boardLive.description || '';
+		var vLive = verdictOf(data, wifiState(data.wifi), mem, storage, data.info);
 
-		set('[data-live=hero-uptime]', util.fmtDuration(data.info.uptime));
-		set('[data-live=hero-lan]', lan ? util.ip4(lan) : '–');
-		set('[data-live=hero-wan]', heroIp);
-		set('[data-live=hero-devices]', String(clients.length));
-		set('[data-live=hero-chain]', heroChain(heroIp, util.fmtDuration(data.info.uptime), heroAvail, heroWifi));
-		set('[data-live=hero-since]', _('just now'));
+		set('[data-live=hero-verdict]', vLive.text);
+		set('[data-live=verdict-text]', vLive.text);
+		set('[data-live=verdict-detail]', vLive.detail || _('all checks passed'));
+		set('[data-live=hero-chain]', heroChain(boardLive.model || boardLive.system || '', relLive,
+			data.info.localtime ? new Date(data.info.localtime * 1000).toLocaleString() : '', clients.length));
+
+		this._since = Date.now();
+		tickSince(this);
 
 		var heroDot = document.querySelector('[data-live=hero-dot]');
 		if (heroDot)
-			heroDot.className = 'ltc-dot' + (wan && wan.up ? '' : ' off');
+			heroDot.className = 'ltc-dot ' + vLive.state;
+
+		var vcard = document.querySelector('[data-verdict]');
+		if (vcard) {
+			vcard.className = 'ltc-card ltc-verdict ' + vLive.state;
+			var vhead = vcard.querySelector('.ltc-verdict-head');
+			if (vhead)
+				vhead.hidden = !vLive.bad.length;
+		}
+
+		[].slice.call(document.querySelectorAll('[data-vchip]')).forEach(function (el) {
+			var c = vLive.checks[Number(el.getAttribute('data-vchip'))];
+
+			if (!c)
+				return;
+
+			el.className = 'ltc-vchip ' + (c.ok ? 'ok' : 'bad');
+			el.title = (c.ok ? c.good : c.bad) || c.label;
+
+			var d = el.querySelector('.ltc-tdot');
+			if (d)
+				d.className = 'ltc-tdot ' + (c.ok ? 'good' : 'weak');
+		});
 
 		this.updateRates(data.rates);
 		this.drawTalkers(data);
@@ -1657,6 +1757,16 @@ return view.extend({
 
 		set('[data-live=path-clients]', String(connectedCount(data) || clients.length));
 
+		/* the Internet box shows the downlink, the router box the uptime, and
+		   the busiest interface gets its own box — all three were being
+		   computed and thrown away */
+		var busy = busiestIface(this, data);
+		var busyNode = document.querySelector('[data-live=path-busy]');
+
+		if (busyNode && busy)
+			busyNode.textContent = '%s ↓ %s ↑ %s'.format(
+				busy.name, shortRate(busy.rx), shortRate(busy.tx));
+
 		/* the curves follow the boxes, and the boxes move when rates appear */
 		drawGraphLinks();
 
@@ -1681,11 +1791,8 @@ return view.extend({
 		}
 
 		Object.keys(hosts).forEach(function (ip) {
-			var key = ip.replace(/\./g, '-');
-			var text = rateText(hosts[ip]);
-
-			paint(document.querySelector('[data-live=hr-' + key + ']'), text);
-			paint(document.querySelector('[data-live=leaf-' + key + ']'), text);
+			paint(document.querySelector('[data-live=leaf-' + ip.replace(/\./g, '-') + ']'),
+				rateShort(hosts[ip]));
 		});
 	},
 
@@ -2078,22 +2185,20 @@ return view.extend({
 		var cpu = util.cpu(net, info);
 		var availPct = util.pct(mem.avail, mem.total);
 		var sig = signalStats(data);
-		var wifiClients = assocCount(data);
-		var chain = heroChain(wanIp, uptime, availPct, wifiClients);
+		var chain = heroChain(board.model || board.system || hostname, release,
+			info.localtime ? new Date(info.localtime * 1000).toLocaleString() : '', clients.length);
+
+		var verdict = verdictOf(data, wifi, mem, storage, info);
 
 		var hero = E('section', { 'class': 'ltc-hero ltc-card' }, [
-			E('div', {}, [
+			E('div', { 'class': 'ltc-hero-main' }, [
 				E('div', { 'class': 'ltc-hero-top' }, [
-					E('i', { 'class': 'ltc-dot' + (wan && wan.up ? '' : ' off'), 'data-live': 'hero-dot' }),
-					E('span', { 'class': 'ltc-badge plain' }, [
-						E('b', {}, hostname),
-						' · ',
-						release || _('OpenWrt')
-					])
+					E('i', { 'class': 'ltc-dot ' + verdict.state, 'data-live': 'hero-dot' }),
+					E('h1', { 'data-live': 'hero-verdict' }, verdict.text)
 				]),
-				E('h1', {}, greeting + ', ' + hostname),
 				E('p', { 'class': 'ltc-hero-sub', 'data-live': 'hero-chain' }, chain),
-				greetingOn ? E('p', { 'class': 'ltc-hero-quote', 'data-quote': '' }, dailyFallback()) : '',
+				greetingOn ? E('p', { 'class': 'ltc-hero-quote', 'data-quote': '' },
+					'%s, %s — %s'.format(greeting, hostname, dailyFallback())) : '',
 				E('div', { 'class': 'ltc-hero-actions' }, [
 					E('a', { 'class': 'ltc-btn primary', 'href': L.url('admin/clients') }, _('View devices')),
 					E('a', { 'class': 'ltc-btn', 'href': L.url('admin/system/appearance') }, _('Appearance')),
@@ -2105,39 +2210,30 @@ return view.extend({
 					E('span', {}, _('Live')),
 					E('b', { 'data-live': 'hero-since' }, _('just now'))
 				]),
-				line(_('WAN'), wanIp, 'hero-wan'),
-				line(_('LAN'), lanIp, 'hero-lan'),
-				line(_('Devices'), String(clients.length), 'hero-devices'),
-				line(_('Uptime'), uptime, 'hero-uptime'),
-				line(_('Model'), board.model || board.system || '–'),
-				E('a', { 'class': 'ltc-hero-custom', 'href': L.url('admin/system/appearance') }, _('Customize') + ' →')
+				E('a', { 'class': 'ltc-hero-custom', 'href': L.url('admin/system/appearance') }, [
+					E('span', { 'class': 'ic' }, util.icon('sliders')),
+					_('Customize')
+				])
 			])
 		]);
 
-		/* The reference row, card for card: what the uplink is, how busy the
-		   CPU is, how much memory is still free (not how much is gone), how
-		   many clients the radios carry, the weakest signal among them and how
-		   full the storage is. Devices, traffic and uptime did not disappear —
-		   they moved to the hero line, the trend badge and the path summary. */
-		var cpu = util.cpu(net, info);
-		var availPct = util.pct(mem.avail, mem.total);
-		var sig = signalStats(data);
-		var wifiClients = assocCount(data);
-
 		var kpis = E('div', { 'class': 'ltc-kpis' }, [
-			kpi(_('Uplink'), '↓ –', wan ? [wan.proto || wan.device || '', util.fmtDuration(wan.uptime || 0)].join(' · ')
-				: _('No default route'), 'wan'),
+			kpi(_('Uplink'), '↓ –', '↑ –', 'wan', null, '', !!(wan && wan.up)),
 			kpi(_('CPU'), '%d%%'.format(cpu), net.temp_c != null
 				? '%s °C · %s'.format(net.temp_c, _('%d cores').format(Number(net.cores) || 0))
-				: _('load %s').format(loads.length ? loads[0].toFixed(2) : '–'), 'cpu', cpu),
-			kpi(_('Memory available'), '%d%%'.format(availPct),
-				'%s / %s'.format(util.fmtBytes(mem.avail), util.fmtBytes(mem.total)), 'memory', availPct),
+				: _('load %s').format(loads.length ? loads[0].toFixed(2) : '–'), 'cpu', cpu, '', cpu < 90),
+			kpi(_('Memory'), '%d%%'.format(availPct),
+				'%s / %s'.format(util.fmtBytes(mem.avail), util.fmtBytes(mem.total)), 'memory', availPct,
+				_('available'), availPct > 10),
 			kpi(_('Wi-Fi'), plural(wifi.up, 'radio on', 'radios on'),
-				plural(wifi.ssids.length, 'SSID broadcasting', 'SSIDs broadcasting'), 'kpi-wifi'),
+				plural(wifi.ssids.length, 'SSID broadcasting', 'SSIDs broadcasting'), 'kpi-wifi', null, '',
+				wifi.total === 0 || wifi.up > 0),
 			kpi(_('Signal'), sig.count ? (sig.weak ? plural(sig.weak, 'weak link', 'weak links') : _('all strong')) : '–',
 				sig.count ? (sig.weak ? _('weakest %d dBm').format(sig.min) : _('all above %d dBm').format(-75))
-					: _('no stations'), 'kpi-signal'),
-			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storageStr, 'storage', storage ? storage.percent : null)
+					: _('no stations'), 'kpi-signal', null, '', !sig.weak),
+			kpi(_('Storage'), storage ? storage.percent + '%' : '–', storage
+				? '%s %s'.format(_('free'), util.fmtBytes(storage.free)) : '–', 'storage',
+				storage ? storage.percent : null, _('used'), !(storage && storage.percent >= 90))
 		]);
 
 		var leaseRem = leaseRemaining(data, wan);
@@ -2270,6 +2366,15 @@ return view.extend({
 			};
 			window.addEventListener('resize', window._lucentGraphResize);
 		}
+
+		/* one ticker for the age pill, replaced rather than stacked on every
+		   render so navigating home twice cannot double-tick */
+		var sinceView = this;
+		if (window._lucentSinceTimer)
+			clearInterval(window._lucentSinceTimer);
+		window._lucentSinceTimer = setInterval(function () {
+			tickSince(sinceView);
+		}, 1000);
 		if (data.rates && Number(data.rates.enabled) === 1)
 			stack.push(talkersCard(data));
 		if (ds.trend !== '0')

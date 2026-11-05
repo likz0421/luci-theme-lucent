@@ -72,6 +72,10 @@ default_prerm $0 $@
 SH
 cat > "$C/postrm" <<'SH'
 #!/bin/sh
+# opkg runs the OLD package's postrm with "upgrade" after unpacking the new
+# files. Without this guard an upgrade deletes the theme it just installed and
+# resets mediaurlbase to bootstrap: "update complete", blank LuCI, no updater.
+[ "$1" = "remove" ] || [ "$1" = "deconfigure" ] || exit 0
 [ -n "${IPKG_INSTROOT}" ] || {
 	uci -q delete luci.themes.Lucent
 	[ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ] && \
@@ -86,6 +90,7 @@ cat > "$C/postrm" <<'SH'
 	rm -rf /usr/share/lucent
 	rm -f /etc/config/lucent
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.json /var/run/lucent-*.prev /var/run/lucent-*.cur /var/run/lucent-*.txt /var/run/lucent-*.traffic \
 		/tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.* \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh
 	if [ -w /etc/crontabs/root ]; then

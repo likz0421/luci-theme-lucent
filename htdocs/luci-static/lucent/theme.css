@@ -584,6 +584,16 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-heromenu{font-style:normal;font:10.5px var(--mono);color:var(--text-3);white-space:nowrap}
 .ltc-hero .ltc-badge{white-space:normal;max-width:100%}
 .ltc-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+/* the headline is the health verdict, so it must read as a headline and the
+   dot in front of it carries the same answer at a glance */
+.ltc-hero-main{min-width:0}
+.ltc-hero-top h1{font-size:25px;line-height:1.2}
+.ltc-hero-side{align-items:flex-end;justify-content:flex-start;gap:9px}
+.ltc-hero-custom .ic{display:flex}
+.ltc-hero-custom .ic svg{width:15px;height:15px}
+/* a qualifier inside the big number — 可用 87% — is what the reference writes,
+   and it reads without having to look back at the label */
+.kword{font-style:normal;font-weight:500;font-size:0.85em;color:var(--text-2)}
 
 .ltc-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
 
@@ -606,10 +616,22 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-stack>*:nth-child(4){animation-delay:.15s}
 .ltc-stack>*:nth-child(5){animation-delay:.2s}
 .ltc-stack>*:nth-child(6){animation-delay:.25s}
-.ltc-kpi{padding:14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0;display:flex;flex-direction:column}
+.ltc-kpi{position:relative;padding:14px 40px 14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0;display:flex;flex-direction:column}
+/* the reference ticks every tile that passes: a wall of green is itself the
+   answer, and one amber exclamation draws the eye straight to the problem */
+.ltc-kcheck{
+	position:absolute;right:13px;top:12px;width:20px;height:20px;border-radius:7px;
+	display:flex;align-items:center;justify-content:center;
+	background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)
+}
+.ltc-kcheck svg{width:12px;height:12px}
+.ltc-kcheck.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.ltc-kcheck.warn svg{display:none}
+.ltc-kcheck.warn::after{content:"!";font:700 13px/1 var(--mono)}
 .ltc-kpi small{display:block;color:var(--text-3);font-size:11.5px;margin-bottom:4px}
-.ltc-kpi b{display:block;font:600 22px/1.2 var(--serif);overflow-wrap:anywhere}
-.ltc-kpi span{display:block;color:var(--text-3);font-size:11.5px;margin-top:auto;padding-top:3px;overflow-wrap:anywhere}
+.ltc-kpi b{display:block;font:600 19px/1.25 var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltc-kpi b span{white-space:nowrap}
+.ltc-kpi > span{display:block;color:var(--text-3);font-size:11.5px;margin-top:auto;padding-top:3px;overflow-wrap:anywhere}
 .ltc-kmeter{display:block;height:4px;margin-top:8px;border-radius:99px;background:var(--card-2);overflow:hidden;flex:none}
 .ltc-kmeter u{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .7s var(--ease)}
 
@@ -733,6 +755,30 @@ a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--
 .ltc-linkcell{display:flex;flex-direction:column;gap:1px;min-width:0}
 .ltc-linkcell b{font-size:12px;font-weight:600}
 .ltc-linkcell small{font:10.5px var(--mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltc-netcell{display:flex;flex-direction:column;gap:1px}
+.ltc-netcell b{font-size:12px;font-weight:600}
+.ltc-netcell small{font:10.5px var(--mono);color:var(--text-3)}
+/* clients table, the reference's five columns */
+.ltc-searchrow{display:flex;align-items:center;gap:8px;margin:6px 0 12px}
+.ltc-searchbox{position:relative;flex:1;display:flex;min-width:0}
+.ltc-searchbox input{width:100%;padding-right:34px}
+.ltc-keychip{
+	position:absolute;right:9px;top:50%;transform:translateY(-50%);pointer-events:none;
+	font:10px var(--mono);color:var(--text-3);border:1px solid var(--line);border-radius:6px;
+	padding:1px 5px;background:var(--card-2);opacity:.65;transition:opacity .18s,color .18s
+}
+.ltc-keychip.on{opacity:1;color:var(--accent);border-color:var(--accent)}
+.ltc-funnel{flex:none;padding:5px 8px}
+.ltc-funnel.on{border-color:var(--accent);color:var(--accent);background:var(--tint)}
+.ltc-count{font-size:12.5px;color:var(--text-2);white-space:nowrap}
+.ltc-clients th:nth-child(1){width:32%}
+.ltc-clients th:nth-child(2){width:19%}
+.ltc-clients th:nth-child(3){width:14%}
+.ltc-clients th:nth-child(4){width:20%}
+.ltc-clients th:nth-child(5){width:15%}
+.ltc-rate .tot{font-weight:600;color:var(--text)}
+.ltc-rate .du{font-size:10px;color:var(--text-3)}
+.ltc-kico.off{opacity:.42}
 .ltc-acctnote{
 	display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;
 	padding:9px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--text-3);font-size:11.5px;
@@ -1143,8 +1189,8 @@ body.ltc-search-open{overflow:hidden}
 .ltc-grow{display:flex;align-items:center;gap:18px;position:relative}
 .ltc-gkids{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
 .ltc-gnode{
-	flex:none;position:relative;z-index:1;display:flex;align-items:center;gap:8px;
-	min-width:186px;max-width:252px;padding:10px 12px;border:1px solid var(--line);
+	flex:none;position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+	min-width:170px;max-width:228px;padding:10px 12px;border:1px solid var(--line);
 	border-radius:14px;background:var(--card);color:inherit;text-decoration:none!important;
 	box-shadow:var(--shadow);transition:border-color .18s,transform .18s var(--ease),box-shadow .18s;
 }
@@ -1152,24 +1198,31 @@ body.ltc-search-open{overflow:hidden}
 .ltc-gnode.down{opacity:.6}
 .ltc-gnode:hover{border-color:var(--accent);transform:translateX(2px)}
 /* a leaf carries four things in twenty lines of text; letting the rate drop to
-   its own row is what keeps the hostname from being cut to "ph…" */
+   the full MAC belong in the tooltip and on the devices page */
 .ltc-gnode.leaf{
-	min-width:0;max-width:212px;padding:6px 9px;border-radius:11px;background:var(--card-2);
-	box-shadow:none;gap:6px;flex-wrap:wrap;
+	min-width:0;max-width:196px;padding:5px 9px;border-radius:11px;background:var(--card-2);
+	box-shadow:none;gap:6px;flex-wrap:nowrap;
 }
-.ltc-gnode.leaf .gtxt{flex:1 1 62%;min-width:0}
-.ltc-gnode.leaf .grate{flex:0 1 auto;order:3;text-align:right}
+.ltc-gnode.leaf .gtxt{flex-direction:row;align-items:baseline;gap:7px;flex:1 1 auto;min-width:0}
+.ltc-gnode.leaf .gtxt b{flex:none;max-width:112px}
+.ltc-gnode.leaf .g2{flex:none}
+.ltc-gnode.leaf .grate{flex:none}
 .ltc-gnode.leaf:hover{transform:translateX(2px);background:var(--tint)}
 .ltc-gnode.priv .gtxt b{font-style:italic;opacity:.85}
 /* the SSID box is one step quieter than the radio it hangs under, and its dot
    row is allowed to wrap: eight clients on a 230px box would otherwise push
    the name out */
-.ltc-gnode.ssid{max-width:212px;background:var(--card-2)}
+.ltc-gnode.ssid{max-width:200px;background:var(--card-2)}
 .ltc-gnode.ssid.down{opacity:.7}
 .ltc-gnode.more{border-style:dashed;background:transparent;box-shadow:none;cursor:pointer;color:var(--text-2)}
 .ltc-gnode.more:hover{background:var(--tint)}
 .ltc-gnode.other{border-style:dashed;background:var(--card-2);box-shadow:none;color:var(--text-2)}
 .ltc-gnode .ic{flex:none;display:flex}
+/* a branch wears its rate as a third line, the way the reference does; the
+   pill is not allowed to squeeze the name off the box */
+.ltc-gnode > .gtxt{order:2}
+.ltc-gnode > .ltc-gdots{order:3}
+.ltc-gnode > .grate{flex:1 0 100%;order:5;margin-left:25px;padding:0;text-align:left;background:none}
 .ltc-gnode .ic svg{width:17px;height:17px}
 .ltc-gnode.leaf .ic svg{width:14px;height:14px;opacity:.75}
 .ltc-gnode.more .ic svg{transform:rotate(90deg);width:14px;height:14px}

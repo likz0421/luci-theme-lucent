@@ -6,9 +6,15 @@
 
 ROOT="/www/luci-static/lucent/media"
 URL="/luci-static/lucent/media"
+
 TMPDIR="/tmp/lucent-upload"
 TMP="$TMPDIR/file.bin"
 RUN="/var/run"
+# /tmp is world-writable and sticky: a predictable name there can be pre-created
+# by any local account, and root's redirect would then write through their
+# symlink. /var/run is root-owned, and the umask keeps the caches (which can
+# carry an update URL with a key in it) unreadable by anyone else.
+umask 077
 LOG="$RUN/lucent-install.log"
 CODE="$RUN/lucent-install.code"
 PID="$RUN/lucent-install.pid"
@@ -17,7 +23,7 @@ UPLOG="$RUN/lucent-update.log"
 UPCODE="$RUN/lucent-update.code"
 UPPID="$RUN/lucent-update.pid"
 UPJOB="$RUN/lucent-update.job.sh"
-CHECKCACHE="/tmp/lucent-check.json"
+CHECKCACHE="$RUN/lucent-check.json"
 CHECKPID="$RUN/lucent-check.pid"
 CHECKJOB="$RUN/lucent-check.job.sh"
 INSTALLER="/usr/share/lucent/install.sh"
@@ -218,7 +224,7 @@ wallpaper_fetch() {
 	query=$(printf '%s' "$query" | tr -cd 'A-Za-z0-9 _-' | cut -c1-60)
 	query=$(printf '%s' "$query" | sed 's/ /%20/g')
 
-	tmp="/tmp/lucent-wallpaper.json"
+	tmp="$RUN/lucent-wallpaper.json"
 	case "$provider" in
 		bing)
 			url="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN"
@@ -244,7 +250,7 @@ wallpaper_fetch() {
 			;;
 	esac
 
-	file="/tmp/lucent-wallpaper.img"
+	file="$RUN/lucent-wallpaper.img"
 	download "$url" "$file" || err "Cannot download the image"
 	ext=$(magic "$file")
 	case "$ext" in jpg|png|webp) ;; *) rm -f "$file"; err "The source did not return an image" ;; esac
@@ -429,7 +435,7 @@ wallpaper_auto() {
 }
 
 # Count upgradable system packages, cached and detached like theme_check.
-PKGUPCACHE="/tmp/lucent-pkgupdates.json"
+PKGUPCACHE="$RUN/lucent-pkgupdates.json"
 PKGUPPID="$RUN/lucent-pkgupdates.pid"
 PKGUPJOB="$RUN/lucent-pkgupdates.job.sh"
 
@@ -488,6 +494,12 @@ storage() {
 		size=$(df -kP "$mp" 2>/dev/null | awk 'NR==2{print $2}')
 		avail=$(df -kP "$mp" 2>/dev/null | awk 'NR==2{print $4}')
 		[ -n "$size" ] || continue
+		# df on a weird fs (or a busy awk-free build) can hand back a non-digit;
+		# $(( )) would then abort the whole method, not just this mount point
+		case "$size$avail" in
+			*[!0-9]*) continue ;;
+		esac
+		[ -n "$avail" ] || avail=0
 		json_add_object "$mp"
 		json_add_int total "$(( size * 1024 ))"
 		json_add_int free "$(( avail * 1024 ))"
@@ -547,7 +559,7 @@ overview() {
 	# Per-core busy percent from /proc/stat deltas between polls.
 	local prev cur cpubars
 	cpubars=""
-	prev=$(cat /tmp/lucent-cpu.prev 2>/dev/null)
+	prev=$(cat $RUN/lucent-cpu.prev 2>/dev/null)
 	cur=$(awk '/^cpu[0-9]/{t=0;idle=$5+$6;for(n=2;n<=NF;n++)t+=$n;printf "%d %d\n", t, idle}' /proc/stat 2>/dev/null)
 	if [ -n "$prev" ] && [ -n "$cur" ]; then
 		cpubars=$(printf '%s\n' "$prev" | awk -v cur="$cur" '
@@ -561,7 +573,7 @@ overview() {
 				}
 			}')
 	fi
-	[ -n "$cur" ] && printf '%s\n' "$cur" > /tmp/lucent-cpu.prev
+	[ -n "$cur" ] && printf '%s\n' "$cur" > $RUN/lucent-cpu.prev
 
 	json_init
 	json_add_string version "$ver"
@@ -588,8 +600,8 @@ overview() {
 # account bytes per flow (nf_conntrack_acct), so summing the two tuples of each
 # entry per inner IP and diffing against the previous snapshot gives down/up
 # rate, flow count and how long a host has been silent.
-HOSTCUR="/tmp/lucent-host.cur"
-HOSTPREV="/tmp/lucent-host.prev"
+HOSTCUR="$RUN/lucent-host.cur"
+HOSTPREV="$RUN/lucent-host.prev"
 
 lan_prefixes() {
 	local ip mask bits o1 o2 o3 rest
@@ -824,15 +836,15 @@ topology() {
 				if (port ~ /^br-/) next
 				print mac, port
 			}
-		' | head -n 200 > /tmp/lucent-fdb.txt
+		' | head -n 200 > "$RUN/lucent-fdb.txt"
 		while read -r mac p; do
 			[ -n "$mac" ] || continue
 			json_add_object
 			json_add_string mac "$mac"
 			json_add_string port "$p"
 			json_close_object
-		done < /tmp/lucent-fdb.txt
-		rm -f /tmp/lucent-fdb.txt
+		done < $RUN/lucent-fdb.txt
+		rm -f $RUN/lucent-fdb.txt
 	fi
 	json_close_array
 	json_dump
@@ -843,7 +855,7 @@ topology() {
 # Today's counters are the current WAN byte totals minus a baseline captured
 # on the first call of the day; a reconnect resets the kernel counters, which
 # shows up as a negative delta and is clamped to zero.
-DAYFILE="/tmp/lucent-day.traffic"
+DAYFILE="$RUN/lucent-day.traffic"
 
 day_traffic() {
 	local i dev brx btx today ddate="" drx=0 dtx=0 rx tx
@@ -870,6 +882,11 @@ day_traffic() {
 	today=$(date +%Y-%m-%d 2>/dev/null)
 
 	[ -f "$DAYFILE" ] && read -r ddate drx dtx < "$DAYFILE" 2>/dev/null
+
+	# an old-format or hand-edited state file would make $(( )) abort the whole
+	# method, which the traffic card reads as "no data at all"
+	case "$drx" in '' | *[!0-9]*) drx=0 ;; esac
+	case "$dtx" in '' | *[!0-9]*) dtx=0 ;; esac
 
 	if [ "$ddate" != "$today" ]; then
 		drx=$brx; dtx=$btx
@@ -926,15 +943,15 @@ theme_check() {
 	fi
 
 	rm -f "$CHECKPID"
-	cp -f "$INSTALLER" /tmp/lucent-check.sh 2>/dev/null || err "Cannot stage the installer"
+	cp -f "$INSTALLER" $RUN/lucent-check.sh 2>/dev/null || err "Cannot stage the installer"
 	cat > "$CHECKJOB" <<EOF
 #!/bin/sh
 b=\$(uci -q get lucent.main.update_url)
 c=\$(uci -q get lucent.main.update_cn)
 [ "\$c" = 1 ] && export LUCENT_CN=1
 [ -n "\$b" ] && export LUCENT_BASE_URL="\$b"
-out=\$(sh /tmp/lucent-check.sh check 2>/dev/null)
-rm -f /tmp/lucent-check.sh
+out=\$(sh $RUN/lucent-check.sh check 2>/dev/null)
+rm -f $RUN/lucent-check.sh
 case "\$out" in
 '{'*) printf '%s\\n%s\\n' "\$(date +%s)" "\$out" >'$CHECKCACHE.tmp' && mv -f '$CHECKCACHE.tmp' '$CHECKCACHE' ;;
 esac
@@ -965,7 +982,7 @@ theme_update() {
 
 	# Snapshot the installer first: the package update overwrites
 	# /usr/share/lucent/install.sh while the shell is still reading it.
-	cp -f "$INSTALLER" /tmp/lucent-update.sh 2>/dev/null || err "Cannot stage the installer"
+	cp -f "$INSTALLER" $RUN/lucent-update.sh 2>/dev/null || err "Cannot stage the installer"
 
 	# Write a self-contained job script. All paths are baked-in constants and the
 	# mirror config is read fresh from uci inside the job, so nothing user-supplied
@@ -976,9 +993,9 @@ b=\$(uci -q get lucent.main.update_url)
 c=\$(uci -q get lucent.main.update_cn)
 [ "\$c" = 1 ] && export LUCENT_CN=1
 [ -n "\$b" ] && export LUCENT_BASE_URL="\$b"
-sh /tmp/lucent-update.sh update >'$UPLOG' 2>&1
+sh $RUN/lucent-update.sh update >'$UPLOG' 2>&1
 echo \$? >'$UPCODE'
-rm -f /tmp/lucent-update.sh
+rm -f $RUN/lucent-update.sh
 rm -f '$UPPID'
 EOF
 	chmod 755 "$UPJOB"

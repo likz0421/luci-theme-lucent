@@ -15,7 +15,11 @@
 			"file": { "/etc/config/lucent": [ "read" ] }
 		},
 		"write": {
-			"ubus": { "luci.lucent": [ "*" ], "uci": [ "set", "options", "commit" ] },
+			"ubus": {
+				"luci.lucent": [ "*" ],
+				"uci": [ "set", "options", "commit" ],
+				"file": [ "write" ]
+			},
 			"uci": [ "lucent" ],
 			"file": {
 				"/tmp/lucent-upload/*": [ "write" ],

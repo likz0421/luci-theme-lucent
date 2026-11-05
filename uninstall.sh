@@ -88,7 +88,8 @@ fi
 
 # ---- 5. runtime caches ----------------------------------------------------
 rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/lucent-upload
-rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur
+rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.json /var/run/lucent-*.prev /var/run/lucent-*.cur /var/run/lucent-*.txt /var/run/lucent-*.traffic
 rm -f /tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.*
 rm -f /var/run/lucent-*.pid /var/run/lucent-*.job.sh
 /etc/init.d/rpcd reload >/dev/null 2>&1 || true

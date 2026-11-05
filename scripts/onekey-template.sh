@@ -249,14 +249,23 @@ do_install() {
 			cp /etc/config/lucent "$TMP/lucent.conf"
 		fi
 
-		cp -R "$TMP/files/htdocs/." /www/
-		mkdir -p /usr/share/ucode/luci
-		cp -R "$TMP/files/ucode/." /usr/share/ucode/luci/
-		cp -R "$TMP/files/root/usr/." /usr/
-		mkdir -p /etc/uci-defaults
-		cp "$TMP/files/root/etc/uci-defaults/30_luci-theme-lucent" /etc/uci-defaults/
-		mkdir -p /usr/lib/lua/luci/i18n
-		cp "$TMP/files/i18n/"*.lmo /usr/lib/lua/luci/i18n/
+		# set -e would otherwise abort this chain on the first failing copy and
+		# leave a half-installed theme with no word about it
+		if cp -R "$TMP/files/htdocs/." /www/ &&
+			mkdir -p /usr/share/ucode/luci &&
+			cp -R "$TMP/files/ucode/." /usr/share/ucode/luci/ &&
+			cp -R "$TMP/files/root/usr/." /usr/ &&
+			mkdir -p /etc/uci-defaults &&
+			cp "$TMP/files/root/etc/uci-defaults/30_luci-theme-lucent" /etc/uci-defaults/ &&
+			mkdir -p /usr/lib/lua/luci/i18n &&
+			cp "$TMP/files/i18n/"*.lmo /usr/lib/lua/luci/i18n/ &&
+			mkdir -p /usr/share/lucent &&
+			cp "$TMP/files/root/usr/share/lucent/install.sh" /usr/share/lucent/install.sh 2>/dev/null; then
+			:
+		else
+			echo "× 文件方式也失败了：主题只装了一半，请贴出这一段报错"
+			exit 1
+		fi
 
 		if [ -f "$TMP/lucent.conf" ]; then
 			cp "$TMP/lucent.conf" /etc/config/lucent

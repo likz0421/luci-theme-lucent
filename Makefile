@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-lucent
-PKG_VERSION:=0.10
+PKG_VERSION:=0.11
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Lucent 3 — independent LuCI theme with a panel dashboard
@@ -29,6 +29,9 @@ endef
 
 define Package/luci-theme-lucent/postrm
 #!/bin/sh
+# opkg calls the OLD package's postrm with "upgrade" after unpacking the new
+# files, so an unguarded script deletes the theme that was just installed.
+[ "$$1" = "remove" ] || [ "$$1" = "deconfigure" ] || exit 0
 [ -n "$${IPKG_INSTROOT}" ] || {
 	uci -q delete luci.themes.Lucent
 	[ "$$(uci -q get luci.main.mediaurlbase)" = "/luci-static/lucent" ] && \
@@ -45,6 +48,7 @@ define Package/luci-theme-lucent/postrm
 		/usr/libexec/rpcd/luci.lucent \
 		/etc/uci-defaults/30_luci-theme-lucent
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.json /var/run/lucent-*.prev /var/run/lucent-*.cur /var/run/lucent-*.txt /var/run/lucent-*.traffic \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh
 	if [ -w /etc/crontabs/root ]; then
 		sed -i '/# lucent-wallpaper/d' /etc/crontabs/root 2>/dev/null
@@ -69,6 +73,10 @@ define Build/Prepare/luci-theme-lucent
 	mkdir -p $(PKG_BUILD_DIR)/root/usr/share/lucent
 	$(CP) ./install.sh $(PKG_BUILD_DIR)/root/usr/share/lucent/install.sh
 	chmod 0755 $(PKG_BUILD_DIR)/root/usr/share/lucent/install.sh
+	# the helper is exec'd by rpcd; a checkout without the exec bit (Windows,
+	# or any tar that dropped it) would ship a package whose every dashboard
+	# call silently returns null
+	chmod 0755 $(PKG_BUILD_DIR)/root/usr/libexec/rpcd/luci.lucent
 	printf '$(PKG_VERSION)-r$(PKG_RELEASE)\n' > $(PKG_BUILD_DIR)/root/usr/share/lucent/version
 endef
 

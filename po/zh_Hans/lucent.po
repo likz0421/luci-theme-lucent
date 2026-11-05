@@ -1423,3 +1423,42 @@ msgstr "个 SSID 正在广播"
 
 msgid "SSIDs broadcasting"
 msgstr "个 SSID 正在广播"
+
+msgid "Shared port"
+msgstr "共用端口"
+
+msgid "Port"
+msgstr "端口"
+
+msgid "Network"
+msgstr "网络"
+
+msgid "Live"
+msgstr "实时"
+
+msgid "CPU saturated"
+msgstr "CPU 已跑满"
+
+msgid "load normal"
+msgstr "负载正常"
+
+msgid "space available"
+msgstr "空间充足"
+
+msgid "all checks passed"
+msgstr "全部检查通过"
+
+msgid "by combined rate"
+msgstr "按上下行合计"
+
+msgid "gigabit link"
+msgstr "千兆链路"
+
+msgid "fast ethernet link"
+msgstr "百兆链路"
+
+msgid "Filter by name, address, port…"
+msgstr "按名称、地址、端口…筛选"
+
+msgid "Show only hosts with traffic"
+msgstr "只显示有流量的设备"

@@ -8,6 +8,100 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.11 — 2026-11-06
+
+A full re-audit of the repository — frontend, shell, packaging, ACL — plus the
+second reference image, which had never actually been compared against.
+Several of these were live-breaking on a real router.
+
+### Fixed — router side
+
+- **An upgrade could delete the theme it had just installed.** opkg runs the
+  *old* package's `postrm` with the argument `upgrade` after unpacking the new
+  files; both copies of the script ignored `$1` and removed
+  `/www/luci-static/lucent`, `/usr/share/lucent`, the rpcd helper, the ACL and
+  `/etc/config/lucent`, then reset `mediaurlbase` to bootstrap. On any opkg
+  target the in-page "Update" ended with "update complete" and a blank LuCI.
+  Both now act only on `remove`/`deconfigure`, and `tests/postrm-guard.sh`
+  proves it: 19 removals on `upgrade` before the guard, 0 after.
+- **The rpcd helper shipped without its exec bit** from a feed/SDK build (git
+  mode 644; `luci.mk` only copies `root/*`). rpcd cannot exec it, so every
+  dashboard, topology, media and update call returns null — the page renders,
+  the data is simply never there.
+- **Uploads were refused for any non-root session**: the ACL granted the
+  `/tmp/lucent-upload` *paths* but not the rpcd `file` *object* that
+  `file.write` is called through.
+- **`install.sh` could die before its own fallback.** `tag=$(resolve_latest)`
+  is a plain assignment, and under `set -e` a function returning 1 aborts the
+  script — so when `api.github.com` is unreachable the pointer-file fallback
+  at the end of that same function never ran, and the card showed
+  `{"latest":"","available":false}` forever.
+- **The retired 3.x line could hijack updates**: jsDelivr's index sorts `3.12`
+  above `0.10` and those releases' assets were deleted in November. A tag that
+  claims to be newer than the CI-maintained pointer is now distrusted, and any
+  3.x tag dropped.
+- **Helper state left `/tmp`.** `cpu.prev`, `host.cur/prev`, `fdb.txt`,
+  `day.traffic`, the check cache and two staged installer copies were
+  predictable names in a world-writable directory, redirected by root. They
+  live in `/var/run` under `umask 077`, which also stops a cache that can hold
+  an update URL with a key in it from being world-readable.
+- `df` handing back a non-digit, or an old-format state file, aborted the whole
+  `storage` / `day_traffic` method on an arithmetic error; both are validated.
+- The one-key installer's file-copy fallback was an unguarded `cp` chain under
+  `set -e`: one failure left a half-installed theme with no message. It now
+  reports and stops, and installs the helper copy the in-page updater needs.
+- Downloaded packages are checked against the release `SHA256SUMS` before
+  install, and the opkg path learned the two-packages-one-file recovery the apk
+  path already had.
+
+### Fixed — frontend
+
+- **`system.info` names the memory field `cached`** while both memory models
+  read `cache`: on every real router the cache slice was 0 and "used" was
+  overstated. One `util.mem()` now serves the dashboard and the sidebar, and
+  the harness mock carries the real field name so this cannot come back.
+- **The devices page claimed accounting was off on routers that had it on** —
+  `acctOn` read `data.rates`, which `util.load()` never returns.
+- **The daily quote deleted its own cache every day**: written unpadded
+  (`2026-11-6`), compared against the padded day key (`2026-11-06`), so every
+  poll wiped it and re-fetched the network. The event log was never pruned at
+  all (`pruneDaily` did not know about `lucent.events.*`).
+- **Live keys with no element, elements with no key**: LAN throughput and
+  "busiest network" were computed every poll and painted nothing; the Internet
+  node's rate pill and the storage meter were created and never written. The
+  busiest network has a cell now, the Internet pill fills, and the dead `hr-`
+  loop is gone.
+- The uplink tile was written twice per round in two different formats; health
+  chips whose tooltip read the literal `true` say what passed.
+- `poll.add` on the devices page stacked a sampler per visit, and the global
+  `F` handler stole the key on other pages. Both are guarded; the traffic
+  funnel's choice is remembered.
+
+### Changed — against the second reference image
+
+- The headline **is** the verdict, with the identity line under it
+  (model · release · clock · clients) and an ageing `实时 · N 秒前`; the
+  WAN/LAN/uptime fact column is gone, because the reference never had it.
+- Tiles are ticked when they pass; memory and storage carry their qualifier
+  inside the big number (`可用 44%`, `已用 26%`), and the uplink tile shows
+  `↑ … · port · link` under the downlink.
+- Graph leaves are one line (`● phone −48 dBm ↓4.9M ↑303K`); branch rates are
+  text lines rather than pills that squeeze the name off the box.
+- The devices page is the reference's five columns — 设备 / 链路 / 网络 / 实时 /
+  最后活动 — with shared-port aggregation (`共用端口 lan6 · 10 台设备`), a
+  total-led live cell scaled against the busiest host, last activity as the
+  default sort, `F` to focus the filter and a funnel that hides idle hosts.
+
+### Verified
+
+- `node tests/run-harness.js`: 16 scenarios, 1,385 assertions.
+- New `sh tests/postrm-guard.sh`, checked to be capable of failing: the same
+  script with the guard stripped reports 19 removals on `upgrade`.
+- `sh tests/install-logic.sh`, `sh tests/uninstall-audit.sh`,
+  `sh tests/lock-staleness.sh` all green.
+- 355 translatable literals, all with `.po` entries (`node tests/po-gap.js`);
+  `.lmo` rebuilt.
+
 ## 0.10 — 2026-11-06
 
 The remaining distance between 0.9 and the reference, closed.

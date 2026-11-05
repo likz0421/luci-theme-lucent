@@ -197,6 +197,33 @@ function storageOf(storage) {
 /* Busy CPU percent. netifd's per-core samples are the accurate source; the
    1-minute load average is the fallback, and luCInfo reports it scaled by
    65535 rather than in tasks-per-core. */
+/* One memory model for the whole theme. rpcd's system.info names the field
+   `cached` while some forks say `cache` — reading only one of them silently
+   zeroes the cache slice on a real router. `available` is what separates
+   "used" from "used plus reclaimable"; without it, free + cache is the best
+   estimate there is. */
+function memInfo(info) {
+	var m = (info && info.memory) || {};
+	var swap = (info && info.swap) || {};
+	var total = Number(m.total) || 0;
+	var cache = (Number(m.buffered || m.buffers) || 0)
+		+ (Number(m.cached != null ? m.cached : m.cache) || 0);
+	var avail = m.available != null ? Number(m.available) : (Number(m.free) || 0) + cache;
+	var used = Math.max(0, total - Math.min(total, avail));
+	var swapUsed = Math.max(0, (Number(swap.total) || 0) - (Number(swap.free) || 0));
+
+	return {
+		total: total,
+		used: used,
+		avail: Math.min(total, avail),
+		cache: Math.min(total, cache),
+		percent: pct(used, total),
+		swapTotal: Number(swap.total) || 0,
+		swapUsed: swapUsed,
+		swapPercent: pct(swapUsed, Number(swap.total) || 0)
+	};
+}
+
 function cpuPercent(net, info) {
 	var cores = Number(net && net.cores) || 0;
 	var per = arr(net && net.cpus).map(function (v) { return Number(v); })
@@ -718,6 +745,7 @@ return baseclass.extend({
 	gateway: gatewayOf,
 	dns: dnsOf,
 	storage: storageOf,
+	mem: memInfo,
 	cpu: cpuPercent,
 	checkUpdate: function () { return callThemeCheck(); },
 	startUpdate: function () { return callThemeUpdate(); },

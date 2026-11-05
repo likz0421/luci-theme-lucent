@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="0.10-r1"
-LUCENT_TAG_DEFAULT="v0.10"
+LUCENT_VERSION_DEFAULT="0.11-r1"
+LUCENT_TAG_DEFAULT="v0.11"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -240,6 +240,21 @@ report_bad() {
 	esac
 }
 
+# ---- 校验和 ---------------------------------------------------------------
+# 包是以 --allow-untrusted 安装的（OpenWrt 的包本来就没有签名），所以唯一的
+# 完整性来源是发布时一起生成的 SHA256SUMS。镜像被篡改或下载被截断时，宁可
+# 停下来说清楚，也不要装半个坏包上去。
+verify_sha() {
+	# verify_sha <下载到的文件> <SHA256SUMS> <清单里写的文件名>
+	local want have
+	want=$(awk -v f="$3" '$2 == f || $2 ~ ("/" f "$") {print $1; exit}' "$2" 2>/dev/null)
+	[ -n "$want" ] || return 0          # 清单里没有这个文件：不猜测，继续装
+	have=$(sha256sum "$1" 2>/dev/null | awk '{print $1}')
+	[ -n "$have" ] || have=$(sha256 -q "$1" 2>/dev/null)
+	[ -n "$have" ] || { log "  本机没有 sha256 工具，跳过校验"; return 0; }
+	[ "$want" = "$have" ]
+}
+
 # ---- 版本比较与在线检查 ----------------------------------------------------
 # 只保留版本号里合法的字符，避免把外部内容原样拼进 JSON。
 sanitize() { printf '%s' "$1" | tr -cd 'A-Za-z0-9._-'; }
@@ -394,8 +409,24 @@ get_latest() {
 		[ -n "$ptr" ] && { mark_via "pointer-file"; break; }
 	done
 
-	# 线上 tag 才是准的，命中时 mark_via 会覆盖上面的 pointer-file
-	tag=$(resolve_latest)
+	# 线上 tag 通常才是准的，但两个例外要挡掉：
+	#   1) 已下线的 3.x 线还留着 tag，而 jsDelivr 的"最新版本"按 semver 排，
+	#      会把 3.12 排在 0.10 前面 —— 那些 release 资源已经删了，选它必 404。
+	#   2) 指针文件是 CI 自己维护的；API 说它"更新"时，更可能是 API 在骗人。
+	# 另外 `tag=$(resolve_latest)` 在 set -e 下会在函数返回 1 时直接终止脚本，
+	# 于是 GitHub 不可达（国内常见）时连指针兜底都轮不到 —— 必须显式吃掉状态。
+	if ! tag=$(resolve_latest); then
+		tag=""
+	fi
+
+	case "$tag" in
+		3.*) [ -n "$ptr" ] && tag="" ;;
+		*) : ;;
+	esac
+
+	if [ -n "$tag" ] && [ -n "$ptr" ] && ver_newer "$tag" "${ptr%%-r*}"; then
+		tag=""
+	fi
 
 	if [ -n "$tag" ]; then
 		if [ "${ptr%%-r*}" = "$tag" ]; then
@@ -460,6 +491,20 @@ apk_conflict_owners() {
 		[ -n "$rel" ] || continue
 		apk info -W "/$rel" 2>/dev/null | head -n1
 	done | sort -u | tr -d ' \r'
+}
+
+# opkg 的冲突日志直接点名属主包（"conflicting package X owns ..."），但也可能
+# 只给文件路径；两种都试，拿不准就什么都不动，交给用户。
+opkg_conflict_owners() {
+	{
+		grep -o 'conflicting package [^ ]*' "$1" 2>/dev/null | sed 's/^conflicting package //'
+		grep -o 'trying to overwrite [^ ]*' "$1" 2>/dev/null | sed 's/^trying to overwrite //' |
+		while read -r rel; do
+			[ -n "$rel" ] || continue
+			opkg search "/$rel" 2>/dev/null | awk '$2 == "installed" {print $1}'
+			opkg search "$rel" 2>/dev/null | awk '$2 == "installed" {print $1}'
+		done
+	} | sort -u | tr -d ' \r'
 }
 
 do_install() {
@@ -531,6 +576,17 @@ do_install() {
 		exit 1
 	fi
 
+	# 校验和：清单本身可能来自同一个坏镜像，所以只在"清单里有这个文件"时判
+	# 不匹配；拿不到清单则退回原来的行为，不因此挡住安装
+	if try_download "SHA256SUMS" "$TMP/SHA256SUMS"; then
+		if ! verify_sha "$TMP/$PKGFILE" "$TMP/SHA256SUMS" "$PKGFILE"; then
+			log "校验和不匹配：$PKGFILE 可能被镜像或中间设备改动了，已停止安装。" >&2
+			log "换一个源重试：  LUCENT_BASE_URL=https://其它镜像 sh install.sh" >&2
+			exit 1
+		fi
+		log "  校验和一致"
+	fi
+
 	INSTALLED=0
 	if have apk; then
 		log "→ 使用 apk 安装…"
@@ -575,6 +631,24 @@ do_install() {
 			INSTALLED=1; log "  opkg: 完成"
 		else
 			cat "$TMP/pkg.log"
+			# opkg 的同文件冲突（本主题包 vs luci.mk 生成的 luci-i18n-lucent-*
+			# 分包）与 apk 那侧同源；只处理我们自己的语言包，别人的文件不动
+			OURS=""
+			for o in $(opkg_conflict_owners "$TMP/pkg.log"); do
+				case "$o" in
+					luci-i18n-lucent*) OURS="$OURS $o" ;;
+				esac
+			done
+			if [ -n "$OURS" ]; then
+				log "  冲突文件属于本主题早前的语言包分包：$OURS"
+				opkg remove $OURS >"$TMP/pkgdel.log" 2>&1 || cat "$TMP/pkgdel.log"
+				if opkg install "$TMP/$PKGFILE" >"$TMP/pkg2.log" 2>&1; then
+					INSTALLED=1; log "  opkg: 完成（已替换旧语言包）"
+				else
+					cat "$TMP/pkg2.log"
+					log "  也可以让 opkg 覆盖冲突文件后重试：opkg install -force-overwrite"
+				fi
+			fi
 		fi
 	else
 		# 无包管理器：解压 tar.gz 并用其中的离线安装脚本
@@ -662,6 +736,7 @@ do_uninstall() {
 	fi
 	rm -rf /tmp/lucent-upload /tmp/luci-indexcache* /tmp/luci-modulecache*
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.json /var/run/lucent-*.prev /var/run/lucent-*.cur /var/run/lucent-*.txt /var/run/lucent-*.traffic \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh \
 		/tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.*
 

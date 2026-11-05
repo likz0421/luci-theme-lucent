@@ -63,16 +63,9 @@ function areaPath(h, key, max) {
 }
 
 function memOf(info) {
-	var m = (info && info.memory) || {};
-	var total = Number(m.total) || 0;
-	var cache = (Number(m.buffered || m.buffers) || 0) + (Number(m.cache) || 0);
-	var avail = m.available != null ? Number(m.available) : (Number(m.free) || 0) + cache;
+	var m = util.mem(info);
 
-	return {
-		total: total,
-		used: Math.max(0, total - Math.min(total, avail)),
-		percent: util.pct(Math.max(0, total - Math.min(total, avail)), total)
-	};
+	return { total: m.total, used: m.used, percent: m.percent };
 }
 
 function countsOf(hints, leases) {

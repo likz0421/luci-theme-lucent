@@ -31,28 +31,30 @@ stylesheets, scripts or package metadata with them.
 - Settings are applied live and saved to `/etc/config/lucent`
 
 **Dashboard** (`/cgi-bin/luci/admin/home`)
-- Greeting, hostname, firmware and model, with one live sentence under the
-  title — uplink, uptime, memory free and Wi-Fi clients — and a `实时 · 刚刚`
-  row that says the page is current
-- Six KPI tiles with the reference's own meanings, not just its layout: the
-  uplink tile counts throughput, memory reports what is still available, the
-  Wi-Fi tile says how many radios are on and how many SSIDs broadcast, and the
-  signal tile gives a verdict ("1 weak link" / "all strong") with the weakest
-  reading underneath
+- The headline is the health verdict — "一切正常" or "N 项需要注意" — with a
+  status dot, and the identity line under it names the model, the release, the
+  clock and how many clients are attached. `实时 · N 秒前` ages honestly
+  between polls.
+- Six KPI tiles, each ticked when it passes: the uplink tile counts
+  throughput (with the port and link speed under it), CPU, memory **available**,
+  radios on and SSIDs broadcasting, the client-signal verdict, and storage
+  used.
 - Branching network graph: Internet → router → radio → SSID → client, and
   router → wired → port → client. Band, generation, channel and width sit on
-  the radio node, the negotiated speed on the port, dBm and a coloured dot on
-  each station, live `↓/↑` on every branch. Idle ports collapse to one line,
-  long branches collapse behind a `还有 N 个` toggle, and below 981 px the
-  graph becomes an indented list.
+  the radio node, the SSID and its row of signal dots on the next, dBm and a
+  compact live rate on each client. Idle ports collapse to one line, long
+  branches collapse behind a `还有 N 个` toggle, five columns scroll
+  horizontally instead of clipping, and below 981 px the graph becomes an
+  indented list.
+- A summary row under the graph: clients broken out by band and by wire,
+  current traffic with the port it comes through, uplink duration, the busiest
+  network and band, and whose reading the weakest signal belongs to.
 - Top talkers: the busiest hosts right now with proportional bars, plus how
   long the quiet ones have been silent (needs per-device accounting, which is
   off by default — see Appearance)
-- Health verdict: one sentence plus a chip per check, naming what is wrong
 - Today's event timeline, built from the polls the dashboard already runs
 - Memory, swap and load rings
 - Device list and quick actions
-- Wi-Fi radio count and the first configured SSID
 - Traffic trend that survives a browser restart (samples are kept per day)
 
 **Navigation**
@@ -75,11 +77,18 @@ stylesheets, scripts or package metadata with them.
 - Simplified Chinese (see below) and English UI
 
 **Devices** (`/cgi-bin/luci/admin/clients`)
-- Merges DHCP leases, ARP/neighbour hints and IPv6 addresses
-- Search filter, online state, interface name and lease time
-- Per-device live down/up rate, last-activity and connection counts
-- A link column that names the radio and signal, or the bridge port and its
-  negotiated speed, for each host — the same reading the graph draws
+- Five columns, the reference's five: 设备 / 链路 / 网络 / 实时 / 最后活动.
+  The name carries where it came from (DNS or nothing but the MAC) and the
+  address under it; the link column names the SSID and signal for Wi-Fi, the
+  port and negotiated speed for cable, and collapses ten hosts on one trunk to
+  `共用端口 lan6 · 10 台设备`.
+- Live column leads with the total, scales its bar against the busiest host on
+  the page, and shows the down/up split under it; last activity is sortable
+  and the table opens on it.
+- `F` focuses the filter, and the funnel toggle hides hosts with no traffic at
+  all — remembered per browser.
+- Merges DHCP leases, ARP/neighbour hints and IPv6 addresses; connection
+  counts ride under the network name.
 
 **Media library**
 - Uploads are streamed to `/tmp/lucent-upload/` in 192 KiB chunks and

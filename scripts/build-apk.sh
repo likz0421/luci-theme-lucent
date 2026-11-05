@@ -83,6 +83,7 @@ cat > "$S/post-deinstall" <<'SH'
 	rm -rf /usr/share/lucent
 	rm -f /etc/config/lucent
 	rm -f /tmp/lucent-*.json /tmp/lucent-*.prev /tmp/lucent-*.cur \
+		/var/run/lucent-*.json /var/run/lucent-*.prev /var/run/lucent-*.cur /var/run/lucent-*.txt /var/run/lucent-*.traffic \
 		/tmp/lucent-check.sh /tmp/lucent-update.sh /tmp/lucent-wallpaper.* \
 		/var/run/lucent-*.pid /var/run/lucent-*.job.sh
 	if [ -w /etc/crontabs/root ]; then
