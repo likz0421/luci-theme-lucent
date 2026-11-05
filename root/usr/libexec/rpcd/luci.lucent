@@ -52,6 +52,10 @@ job_alive() {
 }
 
 mkdir -p "$TMPDIR" 2>/dev/null || true
+# Only rpcd itself writes here (the browser streams chunks through
+# rpcd `file.write`, which runs as root), so the staging directory keeps the
+# root-only mode the umask gives it instead of the world-writable default.
+chmod 700 "$TMPDIR" 2>/dev/null || true
 
 err() {
 	json_init
