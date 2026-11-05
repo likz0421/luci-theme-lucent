@@ -381,10 +381,6 @@ function pathCard(data, wan, lan, wifiDump, hostname) {
 		]);
 	}
 
-	var upIf = util.arr(data.ifaces).filter(function (i) {
-		return i && i.up && i.interface !== 'loopback';
-	}).length;
-
 	var hosts = clientsOf(data);
 	var byMac = {};
 	var assoc = data.assoc || {};
@@ -2084,8 +2080,19 @@ return view.extend({
 			stack.push(this.updateCard(data));
 		stack.push(kpis);
 		stack.push(verdictCard(data, wifi, mem, storage, wan));
-		if (ds.topo !== '0')
+		if (ds.topo !== '0') {
 			stack.push(pathCard(data, wan, lan, data.wifi, hostname));
+			/* the curves are measured from laid-out boxes, so a resize — or the
+			   sidebar collapsing under the width rule — leaves them pointing at
+			   where the boxes used to be. One listener, replaced each render. */
+			if (window._lucentGraphResize)
+				window.removeEventListener('resize', window._lucentGraphResize);
+			window._lucentGraphResize = function () {
+				clearTimeout(window._lucentGraphTimer);
+				window._lucentGraphTimer = setTimeout(drawGraphLinks, 250);
+			};
+			window.addEventListener('resize', window._lucentGraphResize);
+		}
 		if (data.rates && Number(data.rates.enabled) === 1)
 			stack.push(talkersCard(data));
 		if (ds.trend !== '0')
