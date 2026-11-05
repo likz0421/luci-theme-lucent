@@ -165,5 +165,34 @@ done
 suite "$ROOT/install.sh" "install.sh"
 suite "$ROOT/scripts/onekey-template.sh" "onekey-template.sh"
 
+echo "--- download payload validation"
+# The 0.4 check used od, which BusyBox builds vary in supporting; a real
+# router then rejected the genuine 171 KB package. The check must accept any
+# package shape with no od at all, and still refuse an HTML page.
+W=$(mktemp -d)
+awk -v fn=is_package '$0 ~ "^"fn"\\(\\) *\\{" { infn=1 } infn { print } infn && /^}/ { infn=0 }' "$ROOT/install.sh" > "$W/is_package.sh"
+. "$W/is_package.sh"
+
+printf '\037\213\010\000payload' > "$W/gzip.apk"
+printf '\050\265\057\375payload' > "$W/zstd.apk"
+printf '<!DOCTYPE html><html>portal</html>' > "$W/portal.html"
+: > "$W/empty.apk"
+
+is_package "$W/gzip.apk" && ok "gzip package accepted" || no "gzip package accepted" "rejected a real package"
+is_package "$W/zstd.apk" && ok "zstd package accepted" || no "zstd package accepted" "rejected"
+is_package "$W/portal.html" && no "html page rejected" "accepted a portal page" || ok "html page rejected"
+is_package "$W/empty.apk" && no "empty file rejected" "accepted" || ok "empty file rejected"
+
+# and it must not consult od at all
+SAV=$PATH
+mkdir -p "$W/bin"
+for t in od hexdump xxd; do printf '#!/bin/sh\necho "%s must not be used" >&2\nexit 127\n' "$t" > "$W/bin/$t"; done
+chmod +x "$W/bin"/*
+PATH="$W/bin:$PATH"
+is_package "$W/gzip.apk" && ok "works without od" || no "works without od" "rejected"
+PATH="$SAV"
+
+rm -rf "$W"
+
 echo
 [ "$fails" = 0 ] && echo "all logic checks passed" || { echo "$fails FAILED"; exit 1; }

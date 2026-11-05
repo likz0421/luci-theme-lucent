@@ -8,6 +8,31 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.5 — 2026-11-05
+
+### Fixed
+
+- **The download check was rejecting real packages.** On a real router every
+  source returned the same 171,681-byte file — the download was fine — and the
+  installer still aborted with "返回内容无法识别". The check read the header
+  with `od -An -tx1 -N4`, and BusyBox `od` does not reliably support those
+  options, so it produced nothing and an empty result was treated as "not a
+  package". The validator now reads one byte with `dd` and rejects only a
+  leading `<` (an HTML portal or error page); anything else is handed to
+  apk/opkg, whose own errors are more accurate than our guess. If even that
+  one byte cannot be read, the file is accepted rather than rejected —
+  a false rejection bricks the install, a false acceptance only produces a
+  clear package-manager error.
+
+### Verified
+
+- `sh tests/install-logic.sh`: new payload-validation section — a gzip package,
+  a zstd package, an HTML page and an empty file are each classified
+  correctly, and the check is re-run with `od`, `hexdump` and `xxd` all
+  stubbed to fail, proving it no longer depends on any of them.
+- `sh tests/install-apk-retry.sh`, `sh tests/uninstall-audit.sh` and
+  `node tests/run-harness.js` (15 scenarios / 844 assertions) remain clean.
+
 ## 0.4 — 2026-11-05
 
 ### Fixed

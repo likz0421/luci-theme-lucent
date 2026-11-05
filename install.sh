@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="0.4-r1"
-LUCENT_TAG_DEFAULT="v0.4"
+LUCENT_VERSION_DEFAULT="0.5-r1"
+LUCENT_TAG_DEFAULT="v0.5"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -187,24 +187,27 @@ resolve_latest() {
 }
 
 # 尝试从多个地址下载某个文件
-# apk/ipk/tar.gz 都是压缩容器：gzip（ipk、tar.gz、多数 apk）或 zstd
-# （apk-tools 3 某些构建的默认）。头两/四字节就能分清，不必解压。
+# 容器识别不能依赖 od：BusyBox 的 od 对 -N/-t 的支持随构建而变，读不出头部
+# 就会把真安装包误判成"不是安装包"（实测三个源都拿到了同一个 171KB 的包）。
+# 这里只做一个判断 —— 首字节是 "<" 说明是 HTML/XML 错误页，一定不是包；
+# 其余情况交给 apk/opkg 自己校验，它们的报错比我们的猜测准。
 is_package() {
-	local m
-	[ -f "$1" ] || return 1
-	m=$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')
-	case "$m" in
-		1f8b*|28b52ffd) return 0 ;;
-	esac
-	printf '%s' "$m" > "$1.magic" 2>/dev/null || true
-	return 1
+	local sig
+	[ -s "$1" ] || return 1
+	sig=$(dd if="$1" bs=1 count=1 2>/dev/null)
+	# 读不到（ash 对某些控制字节会丢内容）就当没判断出来，不要误杀
+	[ -n "$sig" ] || return 0
+	if [ "$sig" = "<" ]; then
+		printf 'html' > "$1.kind" 2>/dev/null || true
+		return 1
+	fi
+	return 0
 }
 
 try_download() {
 	fname="$1"; dest="$2"
-	# 每个候选都必须过内容校验。门户页、GitHub 的重定向页、镜像的错误页都是
-	# 非空文件 —— 只判断"下下来没有"会让第一个候选直接"成功"，后面的镜像一次
-	# 都轮不到，这正是"下载到的内容不是安装包"却不去试镜像的原因。
+	# 每个候选都要过校验：门户页、重定向页、镜像的错误页都是非空文件，
+	# 只看"有没有下下来"会让第一个候选直接"成功"，后面的镜像一次都轮不到。
 	if [ -n "$LUCENT_BASE_URL" ]; then
 		log "  下载 $LUCENT_BASE_URL/$fname"
 		if fetch "$LUCENT_BASE_URL/$fname" "$dest" && is_package "$dest"; then
@@ -226,15 +229,14 @@ try_download() {
 }
 
 report_bad() {
-	# 说清拿到了什么，否则用户只能看到"不是安装包"却不知道为什么
+	local size kind
 	[ -s "$1" ] || return 0
 	size=$(wc -c < "$1" 2>/dev/null | tr -d ' ')
-	magic=$(cat "$1.magic" 2>/dev/null)
-	rm -f "$1.magic"
-	case "$magic" in
-		3c21*) log "  返回的是 HTML 页面（$size 字节）：多半是被门户页/代理拦截，或该版本资源已删除" ;;
-		'') log "  返回内容无法识别（$size 字节）" ;;
-		*) log "  返回内容不是压缩包（$size 字节，头部 $magic）" ;;
+	kind=$(cat "$1.kind" 2>/dev/null)
+	rm -f "$1.kind"
+	case "$kind" in
+		html) log "  返回的是 HTML 页面（$size 字节）：多半被门户页/代理拦截，或该版本资源已删除" ;;
+		*) log "  返回内容校验未通过（$size 字节）" ;;
 	esac
 }
 
