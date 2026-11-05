@@ -144,5 +144,54 @@ grep -q -- "--force-overwrite" "$FAKE/apk.log" && no "no force-overwrite when th
 
 rm -rf "$FAKE"
 
+echo "--- a poisoned first mirror must fall through to the next"
+# The bug: fetch() counted "file is not empty" as success, so a redirect page
+# from github.com made try_download return, the gzip check then aborted, and
+# the mirror list never got a single attempt.
+FAKE=$(mktemp -d)
+BIN="$FAKE/bin"
+mkdir -p "$BIN" "$FAKE/etc" "$FAKE/tmp" "$FAKE/usr/share/ucode/luci"
+printf 'VERSION="25.12.0"\n' > "$FAKE/etc/openwrt_release"
+printf '#!/bin/sh\n[ "$1" = -u ] && echo 0 && exit 0\nexit 0\n' > "$BIN/id"
+printf '#!/bin/sh\nexit 0\n' > "$BIN/uci"
+cat > "$BIN/wget" <<EOF
+#!/bin/sh
+out=""; prev=""; url=""
+for a in "\$@"; do
+	[ "\$prev" = "-O" ] && out="\$a"
+	prev="\$a"
+done
+case "\$a" in http*) url="\$a" ;; esac
+{ echo "fetch \$*"; } >> "$FAKE/fetch.log"
+case "\$url" in
+	*latest.txt*) printf 'luci-theme-lucent-0.4-r1.apk\n' > "\$out"; exit 0 ;;
+esac
+# only the direct GitHub endpoint is poisoned; the mirrors (whose URL merely
+# contains github.com after the proxy prefix) serve a real package
+case "\$url" in
+	https://github.com/*) printf '<!DOCTYPE html><html>redirect</html>' > "\$out"; exit 0 ;;
+	*) printf '\037\213realkernel' > "\$out"; exit 0 ;;
+esac
+exit 0
+EOF
+printf '#!/bin/sh\ncase "$1" in\n\tinfo) exit 1 ;;\n\tadd) { echo "apk $*"; } >> %s/apk.log; exit 0 ;;\nesac\nexit 0\n' "$FAKE" > "$BIN/apk"
+chmod +x "$BIN"/*
+sed -e 's|/www/|@F@/www/|g' -e 's|/usr/|@F@/usr/|g' -e 's|/etc/|@F@/etc/|g' \
+	-e 's|/tmp/|@F@/tmp/|g' -e 's|/var/|@F@/var/|g' \
+	"$ROOT/install.sh" | sed "s|@F@|$FAKE|g" > "$FAKE/install.sh"
+PATH="$BIN:$PATH"
+OUT4=$(sh "$FAKE/install.sh" install 2>&1)
+RC4=$?
+
+grep -q 'ghfast.top' "$FAKE/fetch.log" && ok "the mirror list is still tried after a bad first response" || no "mirror tried after bad response" "$(tr '\n' ' ' < "$FAKE/fetch.log" | cut -c1-200)"
+case "$OUT4" in
+	*"不是安装包"*) no "does not abort on the first bad body" "$(printf '%s' "$OUT4" | tail -3 | tr '\n' ' ')" ;;
+	*) ok "does not abort on the first bad body" ;;
+esac
+grep -q 'apk add' "$FAKE/apk.log" && ok "install proceeds with the package from the mirror" || no "install proceeds" "$(cat "$FAKE/apk.log" 2>/dev/null)"
+[ "$RC4" = "0" ] && ok "install completes" || no "install completes" "rc=$RC4"
+
+rm -rf "$FAKE"
+
 echo
 [ "$fails" = 0 ] && echo "apk retry behaves" || { echo "$fails FAILED"; exit 1; }

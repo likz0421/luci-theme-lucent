@@ -36,8 +36,8 @@
 set -e
 
 # ---- 版本与仓库（由 build-onekey.sh 在发布时替换）--------------------------
-LUCENT_VERSION_DEFAULT="0.3-r1"
-LUCENT_TAG_DEFAULT="v0.3"
+LUCENT_VERSION_DEFAULT="0.4-r1"
+LUCENT_TAG_DEFAULT="v0.4"
 LUCENT_REPO="likz0421/luci-theme-lucent"
 # -------------------------------------------------------------------------
 
@@ -92,13 +92,6 @@ fetch() {
 		return 1
 	fi
 	[ -s "$out" ]
-}
-
-# apk/ipk/tar.gz are gzip containers, so the first two bytes tell a real package
-# from a portal page or an HTML error body.
-is_gzip() {
-	[ -f "$1" ] || return 1
-	[ "$(od -An -tx1 -N2 "$1" 2>/dev/null | tr -d ' \n')" = "1f8b" ]
 }
 
 # 构造候选下载地址列表（release 资源）
@@ -194,22 +187,55 @@ resolve_latest() {
 }
 
 # 尝试从多个地址下载某个文件
+# apk/ipk/tar.gz 都是压缩容器：gzip（ipk、tar.gz、多数 apk）或 zstd
+# （apk-tools 3 某些构建的默认）。头两/四字节就能分清，不必解压。
+is_package() {
+	local m
+	[ -f "$1" ] || return 1
+	m=$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')
+	case "$m" in
+		1f8b*|28b52ffd) return 0 ;;
+	esac
+	printf '%s' "$m" > "$1.magic" 2>/dev/null || true
+	return 1
+}
+
 try_download() {
 	fname="$1"; dest="$2"
-
+	# 每个候选都必须过内容校验。门户页、GitHub 的重定向页、镜像的错误页都是
+	# 非空文件 —— 只判断"下下来没有"会让第一个候选直接"成功"，后面的镜像一次
+	# 都轮不到，这正是"下载到的内容不是安装包"却不去试镜像的原因。
 	if [ -n "$LUCENT_BASE_URL" ]; then
 		log "  下载 $LUCENT_BASE_URL/$fname"
-		fetch "$LUCENT_BASE_URL/$fname" "$dest" && return 0
+		if fetch "$LUCENT_BASE_URL/$fname" "$dest" && is_package "$dest"; then
+			return 0
+		fi
+		report_bad "$dest"
 		return 1
 	fi
 
 	for base in $(rel_bases); do
 		log "  尝试 $base/$fname"
-		if fetch "$base/$fname" "$dest"; then
+		if fetch "$base/$fname" "$dest" && is_package "$dest"; then
 			return 0
 		fi
+		report_bad "$dest"
+		rm -f "$dest"
 	done
 	return 1
+}
+
+report_bad() {
+	# 说清拿到了什么，否则用户只能看到"不是安装包"却不知道为什么
+	[ -s "$1" ] || return 0
+	size=$(wc -c < "$1" 2>/dev/null | tr -d ' ')
+	magic=$(cat "$1.magic" 2>/dev/null)
+	rm -f "$1.magic"
+	case "$magic" in
+		3c21*) log "  返回的是 HTML 页面（$size 字节）：多半是被门户页/代理拦截，或该版本资源已删除" ;;
+		'') log "  返回内容无法识别（$size 字节）" ;;
+		*) log "  返回内容不是压缩包（$size 字节，头部 $magic）" ;;
+	esac
 }
 
 # ---- 版本比较与在线检查 ----------------------------------------------------
@@ -341,9 +367,10 @@ get_latest() {
 	# 自建镜像优先：完全按用户指定的地址，不去碰 GitHub
 	if [ -n "$LUCENT_BASE_URL" ]; then
 		if fetch "$LUCENT_BASE_URL/$f" "$TMP/latest"; then
-			sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n'
-			mark_via "base-url"
-			return 0
+			v=$(sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n')
+			case "$v" in
+				[0-9]*) printf '%s' "$v"; mark_via "base-url"; return 0 ;;
+			esac
 		fi
 		return 1
 	fi
@@ -355,6 +382,12 @@ get_latest() {
 				ptr=$(sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n') ;;
 			*) log "  检查 $base/$f"; fetch "$base/$f" "$TMP/latest" && \
 				ptr=$(sed -e 's/.*luci-theme-lucent[-_]//' -e 's/\.apk$//' -e 's/_all\.ipk$//' -e 's/\.ipk$//' "$TMP/latest" | tr -d ' \t\r\n') ;;
+		esac
+		# 门户页/错误页也会是非空文件，解析出来就是一串乱字符；版本号必须
+		# 以数字开头，否则当作没拿到
+		case "$ptr" in
+			[0-9]*) : ;;
+			*) ptr="" ;;
 		esac
 		[ -n "$ptr" ] && { mark_via "pointer-file"; break; }
 	done
@@ -488,19 +521,11 @@ do_install() {
 
 	if ! try_download "$PKGFILE" "$TMP/$PKGFILE"; then
 		log ""
-		log "所有地址都无法下载 $PKGFILE。" >&2
+		log "所有地址都无法下载到可用的 $PKGFILE。" >&2
 		log "国内网络可尝试：  LUCENT_CN=1 sh install.sh" >&2
 		log "或指定镜像：      LUCENT_BASE_URL=https://你的镜像 sh install.sh" >&2
 		log "HTTPS 失败时先装证书：  apk add ca-bundle ca-certificates  (或 opkg install ca-bundle)" >&2
-		exit 1
-	fi
-
-	# apk/ipk/tar.gz are all gzip containers. A captive portal or a mirror that
-	# answers 200 with an HTML error page would otherwise be fed to the package
-	# manager as an installable file.
-	if ! is_gzip "$TMP/$PKGFILE"; then
-		log "下载到的内容不是安装包（可能是登录门户、镜像错误页，或该版本已被删除）。" >&2
-		log "用最新发布版的地址重装即可：wget -qO- https://github.com/$LUCENT_REPO/releases/latest/download/lucent-install.sh | sh" >&2
+		log "也可以直接用最新发布版的引导脚本：wget -qO- https://github.com/$LUCENT_REPO/releases/latest/download/lucent-install.sh | sh" >&2
 		exit 1
 	fi
 

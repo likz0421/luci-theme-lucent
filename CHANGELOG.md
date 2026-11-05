@@ -8,6 +8,38 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.4 — 2026-11-05
+
+### Fixed
+
+- **A bad first response stopped the mirror list dead.** `fetch()` counted any
+  non-empty file as success, so when `github.com` answered with a redirect or
+  interception page, `try_download` returned immediately, the package check
+  then aborted the install, and **none of the domestic mirrors were ever
+  tried** — exactly the "下载到的内容不是安装包" dead end on a real router.
+  Validation now happens per candidate: a response that is not a package is
+  discarded and the next source is tried.
+- **apk v3 zstd containers are accepted.** The check only recognised gzip
+  magic; `mkpkg` in some apk-tools 3 builds emits zstd, which would have been
+  rejected as "not a package".
+- **The failure now says what came back** — byte count and header — and lists
+  the concrete next steps (`LUCENT_CN=1`, `LUCENT_BASE_URL`, the
+  release-asset bootstrap).
+- **A poisoned pointer file can no longer invent a version.** The parsed
+  pointer must start with a digit; an HTML body parsed into garbage is dropped
+  instead of becoming `LUCENT_VERSION`.
+
+### Verified
+
+- `tests/install-apk-retry.sh`: new scenario where only the direct GitHub
+  endpoint answers with an HTML page — asserts the mirrors are still tried,
+  the install proceeds from the mirror, and the run does not abort on the
+  first bad body. Writing it also caught that the mirror URLs *contain*
+  `github.com` after the proxy prefix, so matching on the substring would
+  poison every candidate; the stub matches the real URL instead.
+- `sh tests/install-logic.sh`, `sh tests/uninstall-audit.sh` and
+  `node tests/run-harness.js` (15 scenarios / 844 assertions) remain clean.
+
 ## 0.3 — 2026-11-05
 
 A second pass over the same install/remove cycle, because 0.2 fixed the
