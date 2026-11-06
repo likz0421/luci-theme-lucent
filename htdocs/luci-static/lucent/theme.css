@@ -152,7 +152,6 @@ body:has(.ltc-wall) .ltc-lbox{background:color-mix(in srgb,var(--card) var(--gla
 }
 
 .ltc-brand{display:flex;align-items:center;gap:11px;padding:4px 8px 12px;color:inherit;text-decoration:none!important}
-.ltc-mini{display:none!important}
 .ltc-mark{flex:none;width:38px;height:38px;display:grid;place-items:center}
 .ltc-mark svg{width:38px;height:38px}
 .ltc-mark rect{fill:var(--accent)}
@@ -533,11 +532,8 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 /* 宽屏下左右卡片按 1.55:1 分宽:内容多的左卡更宽,右卡变窄后留白明显减少 */
 @media (min-width:1280px){.ltc-grid{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
 .ltc-grid>section:only-child{grid-column:1/-1}
-.ltc-span-2{grid-column:span 2}
 .ltc-stack{display:flex;flex-direction:column;gap:16px}
 .ltc-row{display:flex;align-items:center;gap:10px;min-width:0}
-.ltc-between{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
-.ltc-badges{display:flex;flex-wrap:wrap;gap:5px}
 .ltc-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:99px;background:var(--card-2);color:var(--text-2);font-size:11px;white-space:nowrap}
 .ltc-badge.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
 .ltc-badge.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
@@ -616,46 +612,30 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-stack>*:nth-child(4){animation-delay:.15s}
 .ltc-stack>*:nth-child(5){animation-delay:.2s}
 .ltc-stack>*:nth-child(6){animation-delay:.25s}
-.ltc-kpi{position:relative;padding:14px 40px 14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0;display:flex;flex-direction:column}
+.ltc-kpi{position:relative;padding:14px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);min-width:0;display:flex;flex-direction:column}
 /* the reference ticks every tile that passes: a wall of green is itself the
-   answer, and one amber exclamation draws the eye straight to the problem */
+   answer, and one amber exclamation draws the eye straight to the problem.
+   The mark sits in front of the label, the way the reference reads it, rather
+   than floating in the corner where the eye has to find it. */
 .ltc-kcheck{
-	position:absolute;right:13px;top:12px;width:20px;height:20px;border-radius:7px;
+	width:18px;height:18px;border-radius:6px;flex:none;
 	display:flex;align-items:center;justify-content:center;
 	background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)
 }
-.ltc-kcheck svg{width:12px;height:12px}
+.ltc-kcheck svg{width:11px;height:11px}
 .ltc-kcheck.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
 .ltc-kcheck.warn svg{display:none}
-.ltc-kcheck.warn::after{content:"!";font:700 13px/1 var(--mono)}
-.ltc-kpi small{display:block;color:var(--text-3);font-size:11.5px;margin-bottom:4px}
+.ltc-kcheck.warn::after{content:"!";font:700 12px/1 var(--mono)}
+.ltc-kpi small{display:flex;align-items:center;gap:7px;color:var(--text-3);font-size:11.5px;margin-bottom:5px}
 .ltc-kpi b{display:block;font:600 19px/1.25 var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ltc-kpi b span{white-space:nowrap}
 .ltc-kpi > span{display:block;color:var(--text-3);font-size:11.5px;margin-top:auto;padding-top:3px;overflow-wrap:anywhere}
 .ltc-kmeter{display:block;height:4px;margin-top:8px;border-radius:99px;background:var(--card-2);overflow:hidden;flex:none}
 .ltc-kmeter u{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .7s var(--ease)}
 
-.ltc-topo{display:flex;align-items:flex-start;gap:2px;margin:6px 0 14px;min-width:0}
 
 /* network path: clickable node cards joined by live-rate links */
-.ltc-path{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap}
-.ltc-pnode{flex:1 1 150px;min-width:0;display:flex;flex-direction:column;gap:2px;padding:12px 13px;
-	border:1px solid var(--line);border-radius:14px;background:var(--card);color:inherit;text-decoration:none!important;
-	transition:transform .16s var(--ease),border-color .16s,box-shadow .16s}
-.ltc-pnode:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow)}
-.ltc-pnode .ic{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--card-2);color:var(--text-2);margin-bottom:4px}
-.ltc-pnode .ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.ltc-pnode.me{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:var(--tint)}
-.ltc-pnode.me .ic{background:var(--accent);color:var(--on-accent)}
-.ltc-pnode b{font-size:13px}
-.ltc-pnode small{font-size:11.5px;color:var(--text-2);overflow-wrap:anywhere}
-.ltc-pnode small.ltc-muted{color:var(--text-3)}
-.ltc-wirebox{flex:0 0 96px;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-	font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
-.ltc-wirebox .ltc-wire{width:100%;padding-top:0;flex:none}
 @media (max-width:720px){
-	.ltc-wirebox{flex-basis:100%;flex-direction:row;gap:10px;padding:2px 0}
-	.ltc-wirebox .ltc-wire{width:auto;flex:1}
 }
 
 /* path summary strip */
@@ -681,62 +661,6 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .ltc-cpubox small{color:var(--text-3);font-size:11px;white-space:nowrap}
 .ltc-cpubars{flex:1;display:flex;align-items:flex-end;gap:3px;height:26px}
 .ltc-cpubars i{flex:1;min-width:3px;border-radius:3px 3px 1px 1px;background:color-mix(in srgb,var(--accent) 70%,transparent);transition:height .5s var(--ease)}
-.ltc-node{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
-.ltc-node .ic{width:clamp(38px,9vw,48px);height:clamp(38px,9vw,48px);display:grid;place-items:center;border-radius:14px;background:var(--card-2);color:var(--text-2)}
-.ltc-node .ic svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.ltc-node.me .ic{background:var(--accent);color:var(--on-accent)}
-.ltc-node.bad .ic{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
-.ltc-node.ok .ic{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
-.ltc-node b{font-weight:600;font-size:11.5px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ltc-node small{color:var(--text-3);font-size:11px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ltc-wire{flex:0 0 14px;width:14px;min-width:0;display:flex;flex-direction:column;align-items:center;padding-top:20px}
-.ltc-wire i{position:relative;display:block;width:100%;height:2px;background:repeating-linear-gradient(90deg,var(--line) 0 5px,transparent 5px 10px)}
-.ltc-wire:not(.down) i::after{content:"";position:absolute;top:-2px;left:0;width:5px;height:6px;border-radius:50%;background:var(--accent);animation:ltc-flow 2.4s var(--ease) infinite}
-@keyframes ltc-flow{0%{left:-4px;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:calc(100% + 4px);opacity:0}}
-.ltc-wire.down i{background:repeating-linear-gradient(90deg,var(--bad) 0 5px,transparent 5px 10px);opacity:.65}
-.ltc-wire em{font-size:10px;color:var(--text-3);font-style:normal;margin-top:7px;white-space:nowrap}
-
-/* ------------------------------------------------------------ LAN tree */
-.ltc-tree{list-style:none;display:flex;flex-direction:column;gap:8px;margin:16px 0 0;padding:0}
-.ltc-tree ul{list-style:none;margin:0;padding:0}
-.ltc-tree li{position:relative;min-width:0;padding-left:22px;animation:ltc-rise .3s var(--ease) backwards}
-.ltc-tree li::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:1px;background:var(--line)}
-.ltc-tree li::after{content:"";position:absolute;left:8px;top:22px;width:13px;height:1px;background:var(--line)}
-.ltc-tree li:last-child::before{bottom:auto;height:22px}
-.ltc-tree>li{padding-left:0}
-.ltc-tree>li::before,.ltc-tree>li::after{display:none}
-/* a live branch pulses, so the shape of the LAN reads at a glance */
-.ltc-tree li:has(> .ltc-tnode.up)::after{background:linear-gradient(90deg,var(--accent),transparent);animation:ltc-branch 2.8s var(--ease) infinite}
-@keyframes ltc-branch{0%{opacity:.2}55%{opacity:1}100%{opacity:.2}}
-.ltc-tkids{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px}
-.ltc-tnode{
-	display:flex;align-items:center;gap:9px;min-width:0;min-height:38px;padding:8px 11px;border:1px solid var(--line);
-	border-radius:12px;background:var(--card);color:inherit;text-decoration:none!important;font-size:12.5px;
-	transition:background .2s,border-color .2s,transform .2s,box-shadow .2s;
-}
-a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--tint);border-color:var(--accent);transform:translateX(3px);box-shadow:0 6px 16px -12px var(--accent)}
-.ltc-tnode .ic{flex:none;width:24px;height:24px;display:grid;place-items:center;border-radius:9px;background:var(--card-2);color:var(--text-2);transition:background .2s,color .2s}
-.ltc-tnode .ic svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.ltc-tnode .tname{min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ltc-tnode .tmeta{margin-left:auto;max-width:54%;color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ltc-tnode .tmeta.dim{opacity:.62}
-.ltc-tnode .tcount{flex:none;min-width:20px;padding:2px 6px;border-radius:99px;background:var(--tint);color:var(--text-2);font:600 10.5px var(--mono);text-align:center}
-.ltc-tnode .trate{margin-left:auto;font:500 10.5px var(--mono);color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
-.ltc-tnode .trate:empty{display:none}
-.ltc-tnode.root{background:var(--card-2)}
-.ltc-tnode.root .ic{background:var(--accent);color:var(--on-accent)}
-.ltc-tnode.up .ic{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
-.ltc-tnode.wifi .ic{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent-2)}
-.ltc-tnode.down{opacity:.55}
-.ltc-tnode.down:hover{opacity:1}
-.ltc-tnode.leaf{padding:6px 10px;font-size:12px;min-height:32px}
-.ltc-tnode.leaf .ic{width:20px;height:20px;border-radius:7px}
-.ltc-tnode.leaf .ic svg{width:13px;height:13px}
-.ltc-tree-empty{padding:10px 0;font-size:12px}
-.ltc-tnode.more{cursor:pointer;border-style:dashed;background:none;color:var(--text-3);font-size:11.5px;min-height:32px}
-.ltc-tnode.other{cursor:pointer}
-.ltc-tnode.other .ic{background:var(--card-2)}
-.ltc-tnode.more .ic svg{transform:rotate(-90deg)}
 
 /* top talkers */
 .ltc-talkers{display:flex;flex-direction:column;gap:7px;list-style:none;margin:0;padding:0}
@@ -759,9 +683,12 @@ a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--
 .ltc-netcell b{font-size:12px;font-weight:600}
 .ltc-netcell small{font:10.5px var(--mono);color:var(--text-3)}
 /* clients table, the reference's five columns */
-.ltc-searchrow{display:flex;align-items:center;gap:8px;margin:6px 0 12px}
-.ltc-searchbox{position:relative;flex:1;display:flex;min-width:0}
-.ltc-searchbox input{width:100%;padding-right:34px}
+.ltc-searchrow{display:flex;align-items:center;gap:8px;margin:6px 0 12px;min-width:0}
+/* an SVG with no size of its own takes the whole flex line: the search glyph
+   measured 271px wide and pushed the input to nothing */
+.ltc-searchrow > svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--text-3);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ltc-searchbox{position:relative;flex:1 1 auto;display:flex;min-width:0}
+.ltc-searchbox input{width:100%;min-width:0;padding-right:34px}
 .ltc-keychip{
 	position:absolute;right:9px;top:50%;transform:translateY(-50%);pointer-events:none;
 	font:10px var(--mono);color:var(--text-3);border:1px solid var(--line);border-radius:6px;
@@ -769,6 +696,11 @@ a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--
 }
 .ltc-keychip.on{opacity:1;color:var(--accent);border-color:var(--accent)}
 .ltc-funnel{flex:none;padding:5px 8px}
+/* an icon in a button has to be told to draw with strokes: the default svg
+   fill renders an open path — the sliders glyph on the filter button — as
+   nothing at all, and the control looks like a broken button */
+.ltc-btn svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
+	stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ltc-funnel.on{border-color:var(--accent);color:var(--accent);background:var(--tint)}
 .ltc-count{font-size:12.5px;color:var(--text-2);white-space:nowrap}
 .ltc-clients th:nth-child(1){width:32%}
@@ -776,6 +708,27 @@ a.ltc-tnode:hover,.ltc-tnode.more:hover,.ltc-tnode.other:hover{background:var(--
 .ltc-clients th:nth-child(3){width:14%}
 .ltc-clients th:nth-child(4){width:20%}
 .ltc-clients th:nth-child(5){width:15%}
+/* The devices list on a phone. The generic two-cells-per-line table left the
+   rate bar half a screen wide and the timestamp alone on a line of its own;
+   the reference reads as "who, and when" first, then where it hangs off, then
+   how loud it is — so that is the order the cells are placed in. */
+@media (max-width:980px){
+	.ltc-clients .tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 12px;
+		align-items:center;padding:9px 0}
+	/* the header row is the only way to change the sort, so on a phone it turns
+	   into a row of chips rather than disappearing with the columns */
+	.ltc-clients .tr.table-titles{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 10px}
+	.ltc-clients .tr.table-titles .th{display:inline-flex;align-items:center;flex:0 0 auto;
+		min-height:36px;padding:6px 11px;border:1px solid var(--line);border-radius:99px;
+		background:var(--card-2);font-size:12px;color:var(--text-2);width:auto}
+	.ltc-clients .tr.table-titles .th.on{border-color:var(--accent);color:var(--accent);background:var(--tint)}
+	.ltc-clients .td{display:block;padding:2px 0;min-width:0}
+	.ltc-clients .td:nth-child(1){grid-column:1;grid-row:1}
+	.ltc-clients .td:nth-child(5){grid-column:2;grid-row:1;text-align:right;color:var(--text-2)}
+	.ltc-clients .td:nth-child(2){grid-column:1;grid-row:2}
+	.ltc-clients .td:nth-child(3){grid-column:2;grid-row:2;text-align:right;color:var(--text-2)}
+	.ltc-clients .td:nth-child(4){grid-column:1 / -1;grid-row:3;padding-top:4px}
+}
 .ltc-rate .tot{font-weight:600;color:var(--text)}
 .ltc-rate .du{font-size:10px;color:var(--text-3)}
 .ltc-kico.off{opacity:.42}
@@ -1003,26 +956,41 @@ body:has(.ltc-login){background:var(--bg)}
 	   dead space under it, which read as a broken page on phones. */
 	.ltc-content{padding-bottom:88px}
 	.cbi-page-actions{bottom:calc(66px + env(safe-area-inset-bottom,0px))}
+	/* A finger is not a mouse: the measured minimum on a 390px screen was 24px
+	   for the panel buttons and 30px for menu rows and small buttons, all of
+	   them under what anyone can hit reliably on glass. */
+	.ltc-nav a{min-height:44px}
+	.ltc-nav ul.dropdown-menu a{min-height:40px;padding:9px 9px}
+	.ltc-modes a{min-height:40px}
+	.ltc-si-btn{width:34px;height:34px}
+	.ltc-btn.sm{min-height:38px}
+	.ltc-gnode.leaf{min-height:36px}
+	.ltc-gnode{max-width:214px}
+	/* card header links measured 19px tall and the funnel 22px wide — both are
+	   things a thumb is asked to hit */
+	.ltc-card-h .ltc-link{display:inline-flex;align-items:center;min-height:34px;padding:0 6px}
+	.ltc-funnel{min-width:38px}
 }
 
 @media (max-width:720px){
-	.ltc-topo{gap:0}
-	.ltc-node{width:52px}
-	.ltc-node .ic{width:40px;height:40px}
-	.ltc-node .ic svg{width:21px;height:21px}
-	.ltc-wire{min-width:6px}
-	.ltc-tree li{padding-left:15px}
-	.ltc-tree li::before,.ltc-tree li::after{left:5px}
-	.ltc-tree li::after{width:9px}
-	.ltc-tnode{padding:6px 9px}
-	.ltc-tnode .tmeta{max-width:46%}
 	.ltc-talker{grid-template-columns:minmax(56px,1fr) auto;gap:7px}
 	.ltc-talker .bar{display:none}
 	.ltc-talker .age{grid-column:2}
 	.ltc-content{padding-left:14px;padding-right:14px}
 	.ltc-bar{padding-left:14px;padding-right:14px}
 	.ltc-hero{grid-template-columns:minmax(0,1fr);padding:18px}
-	.ltc-span-2{grid-column:auto}
+	/* one column now: the "live" pill goes under the identity line as a row of
+	   its own, and the Customize link is a duplicate of the Appearance button
+	   that already sits in the actions row */
+	.ltc-hero-side{
+		flex-direction:row;align-items:center;justify-content:space-between;
+		width:100%;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2)
+	}
+	.ltc-hero-custom{display:none}
+	.ltc-hero-live{border-bottom:0;padding:0;margin:0}
+	/* a sentence and two buttons never fit 355px side by side; let them stack */
+	.ltc-update .ltc-row{flex-wrap:wrap;gap:8px}
+	.ltc-pathsum{grid-template-columns:repeat(2,minmax(0,1fr))}
 	.cbi-value{display:block;padding:11px 0}
 	.cbi-value-title{max-width:none;padding:0 0 5px}
 	.cbi-value-field{width:100%}
@@ -1052,12 +1020,6 @@ body:has(.ltc-login){background:var(--bg)}
 	.ltc-acts{grid-template-columns:minmax(0,1fr)}
 	.ltc-swatches{grid-template-columns:repeat(2,minmax(0,1fr))}
 	.ltc-kpis{grid-template-columns:minmax(0,1fr)}
-	.ltc-topo{gap:0}
-	.ltc-node{width:38px}
-	.ltc-node .ic{width:32px;height:32px}
-	.ltc-node .ic svg{width:17px;height:17px}
-	.ltc-wire{min-width:3px}
-	.ltc-wire em{display:none}
 	.ltc-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
 	.ltc-ring .dial{width:64px;height:64px}
 	.ltc-ring .dial b{font-size:14px}
@@ -1101,7 +1063,6 @@ body:has(.ltc-login){background:var(--bg)}
 .ltc-search-empty{padding:18px;text-align:center;color:var(--text-3)}
 .ltc-search-foot{display:flex;gap:14px;padding:8px 16px;border-top:1px solid var(--line);font:11px var(--mono);color:var(--text-3)}
 body.ltc-search-open{overflow:hidden}
-@media(max-width:720px){.ltc-search-btn{display:none}}
 
 /* ---------------------------------------------------------------- fallbacks */
 /* dvh and color-mix are newer than the WebKit still shipped in some phone
@@ -1142,9 +1103,6 @@ body.ltc-search-open{overflow:hidden}
 .ltc-tdot.good{background:var(--ok)}
 .ltc-tdot.ok{background:var(--warn)}
 .ltc-tdot.weak{background:var(--bad)}
-.ltc-tnode.leaf{display:flex;align-items:center;gap:8px}
-.ltc-tnode.leaf .ic{width:auto;height:auto;background:none}
-.ltc-tnode.priv .tname{font-style:italic;opacity:.85}
 .tsig{
 	flex:none;font:10.5px var(--mono);color:var(--text-3);padding:1px 6px;border-radius:7px;
 	background:color-mix(in srgb,var(--card-2) 70%,transparent);
@@ -1255,7 +1213,31 @@ body.ltc-search-open{overflow:hidden}
 @media (max-width:980px){
 	.ltc-grow{flex-direction:column;align-items:stretch;gap:8px}
 	.ltc-gnode{max-width:none;width:100%}
-	.ltc-gkids{margin-left:12px;padding-left:10px;border-left:1px solid var(--line)}
+	/* the desktop graph keeps its own content width inside a scroller; on a
+	   phone the list must fit the screen instead, and a flex card will not
+	   shrink below a max-content child unless both are told to allow it */
+	.ltc-graph{min-width:0}
+	.ltc-graphwrap{overflow:visible;min-width:0}
+	/* and the real culprit: a 170px floor on every box plus 22px of indent at
+	   each level, which five levels deep is 60px wider than the card */
+	.ltc-grow,.ltc-gkids{min-width:0}
+	.ltc-gnode{min-width:0}
+	.ltc-gkids{margin-left:0;padding-left:12px;border-left:1px solid var(--line);box-sizing:border-box}
+	/* every box in the graph sizes to the screen, not to a width remembered
+	   from the desktop fan-out; without this the leaf pills kept 170px floors
+	   and the whole card hung off the right edge of the phone */
+	.ltc-gnode,.ltc-gnode.leaf,.ltc-gnode.ssid,.ltc-gnode.more,.ltc-gnode.other{
+		max-width:none;width:100%;box-sizing:border-box;min-width:0
+	}
+	/* a branch wears its rate on a line of its own, pinned to 100% of the box
+	   plus a 25px indent: on a phone that line is 25px wider than the box that
+	   holds it, so the number hung past the edge of the card. Allowing it to
+	   shrink makes flex pay for the indent instead of overflowing. */
+	.ltc-gnode > .grate{flex:1 1 100%;min-width:0;max-width:100%}
+	/* the 112px name cap belongs to the desktop fan-out, where the box is the
+	   same width everywhere; on a full-width phone row it cut a MAC to
+	   "DD:EE:FF:00:00:…" while two hundred pixels of the row sat empty */
+	.ltc-gnode.leaf .gtxt b{max-width:none;flex:0 1 auto;min-width:0}
 	.ltc-glinks{display:none}
 	.ltc-graph::before{display:none}
 }

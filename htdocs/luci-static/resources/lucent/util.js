@@ -374,9 +374,8 @@ var BUILTIN_MENU = [
 /* One line says which code drew the sidebar menu and when, so a plain
    screenshot answers "is the new JS running?", "did the tree ever load here?"
    and "how long did it actually take?" — the three things that could not be
-   told apart from the outside. It is written wherever a `[data-ltc-menu]`
-   host exists: the footer on every page, and the Updates card on the home
-   page, which is the one place users already look at and screenshot. */
+   told apart from the outside. See debugOn(): it is painted only when asked
+   for, and the state object is always on the console as __lucentMenu. */
 /* Whether this browser will let us keep anything at all. Private mode, and a
    few stripped embedded browsers, refuse localStorage outright — and then the
    instant menu paint can never happen, which looks exactly like a broken
@@ -399,12 +398,30 @@ function paintMenu(el, st) {
 }
 
 function menuMark() {
-	var el = E('i', { 'class': 'ltc-heromenu', 'data-ltc-menu': '1' });
+	if (!debugOn())
+		return null;
+
+	var el = E('i', { 'class': 'ltc-heromenu', 'data-ltc-menu-mark': '1' });
 
 	if (window.__lucentMenu)
 		paintMenu(el, window.__lucentMenu);
 
 	return el;
+}
+
+/* The menu line is a diagnostic, not content: a router footer that reads
+   "menu:tree 147ms #menu12" looks like a build left mid-debug. It is painted
+   only when someone asks for it — the harness sets the flag itself, and a user
+   can turn it on from the console with localStorage['lucent.debug'] = '1'. */
+function debugOn() {
+	if (window.__lucentDebug)
+		return true;
+
+	try {
+		return localStorage.getItem('lucent.debug') === '1';
+	} catch (e) {
+		return false;
+	}
 }
 
 function markMenu(src, owner, first, note) {
@@ -425,10 +442,10 @@ function markMenu(src, owner, first, note) {
 
 	window.__lucentMenu = st;
 
-	if (host && !host.querySelector('[data-ltc-menu]'))
-		host.appendChild(E('i', { 'data-ltc-menu': '1' }));
+	if (host && debugOn() && !host.querySelector('[data-ltc-menu-mark]'))
+		host.appendChild(E('i', { 'data-ltc-menu-mark': '1' }));
 
-	document.querySelectorAll('[data-ltc-menu]').forEach(function (el) { paintMenu(el, st); });
+	document.querySelectorAll('[data-ltc-menu-mark]').forEach(function (el) { paintMenu(el, st); });
 
 	return st;
 }

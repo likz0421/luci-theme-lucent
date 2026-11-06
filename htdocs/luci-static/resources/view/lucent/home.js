@@ -26,11 +26,14 @@ function heroChain(model, release, when, clients) {
    reads faster than a label that has to be matched to a number by eye. */
 function kpi(label, value, sub, key, meter, word, state) {
 	return E('div', { 'class': 'ltc-kpi' }, [
-		E('small', {}, label),
 		/* the reference marks every tile that passes and leaves the failing
-		   ones plain, so a wall of green is itself the answer */
-		E('i', { 'class': 'ltc-kcheck ' + (state || 'ok'), 'data-live': key ? key + '-state' : undefined },
-			util.icon('check')),
+		   ones plain, so a wall of green is itself the answer — and the mark
+		   sits in front of the label, which is where the eye reads it */
+		E('small', {}, [
+			E('i', { 'class': 'ltc-kcheck ' + (state || 'ok'), 'data-live': key ? key + '-state' : undefined },
+				util.icon('check')),
+			label
+		]),
 		E('b', {}, [word ? E('em', { 'class': 'kword' }, word + ' ') : '',
 			E('span', key ? { 'data-live': key } : {}, value)]),
 		E('span', key ? { 'data-live': key + '-sub' } : {}, sub),

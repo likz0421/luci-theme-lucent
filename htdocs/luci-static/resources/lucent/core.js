@@ -57,13 +57,18 @@ return baseclass.extend({
 		});
 
 		body.addEventListener('click', function (ev) {
+			/* a tap on an icon reaches this handler as the svg or its path, not
+			   as the button the pointer appears to have hit, so the dismissal has
+			   to work from whatever element was targeted — the phone test taps an
+			   icon on purpose */
+			var host = ev.target;
+
 			if (body.classList.contains('ltc-menu-open') &&
-			    !ev.target.closest('.ltc-side') &&
-			    !ev.target.closest('[data-ltc-menu]'))
+			    !host.closest('.ltc-side') &&
+			    !host.closest('[data-ltc-menu]'))
 				body.classList.remove('ltc-menu-open');
 
-			var link = ev.target.closest('.ltc-side a, .ltc-dock a');
-			if (link)
+			if (host.closest('.ltc-side a, .ltc-dock a'))
 				body.classList.remove('ltc-menu-open');
 		});
 

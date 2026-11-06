@@ -27,7 +27,8 @@ const TYPES = {
 
 const ALL = ['#base', '#dhcpwan', '#menu-reject', '#menu-empty', '#menu-noclass', '#menu-throw',
 	'#menu-noload', '#menu-nomatch', '#menu-hang', '#menu-cache', '#menu-nostore', '#manyports',
-	'#tree-noisy', '#rail', '#rail-auto', '#drawer'];
+	'#tree-noisy', '#rail', '#rail-auto', '#drawer', '#phone', '#phone-open', '#phone-tall',
+	'#phone-clients'];
 
 const wantShot = process.argv.includes('--shot');
 const only = process.argv.slice(2).filter(a => !a.startsWith('--') && a !== '');
@@ -64,10 +65,16 @@ function report(dom) {
 function drive(url, opt, out) {
 	const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'lucent-harness-'));
 	const fd = fs.openSync(out, 'w');
+	/* --window-size is in PHYSICAL pixels. On a display at 125% or 150%
+	   scaling a "390px" phone window becomes 480 or 585 CSS pixels wide, so
+	   every mobile scenario silently ran as a tablet and mobile overflow bugs
+	   could not be seen at all. Ask Edge for the device pixels. */
+	const scale = parseFloat(process.env.LUCENT_FORCE_DEVICE_SCALE || '1');
 	const args = [
 		'--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+		'--force-device-scale-factor=' + scale,
 		'--user-data-dir=' + profile, '--virtual-time-budget=' + opt.budget,
-		'--window-size=' + opt.width + ',' + opt.height,
+		'--window-size=' + Math.round(opt.width * scale) + ',' + Math.round(opt.height * scale),
 		opt.shot ? '--screenshot=' + opt.shot : '--dump-dom',
 		url
 	];
@@ -101,21 +108,39 @@ async function run(port) {
 		   enough to photograph the whole dashboard in one picture */
 		const base = (flag === '#base' || flag === '#tall') ? '' : flag;
 		const tall = flag === '#tall';
+		/* the same photographing aid at phone width: the whole dashboard in one
+		   tall picture, because a 844px window hides everything below the tiles */
+		const phoneTall = flag === '#phone-tall';
 		const graph = flag === '#graph';
-		const narrow = base === '#drawer';
+		const narrow = /^#(drawer|phone)/.test(base);
 		/* a laptop window: wide enough for the desktop shell, narrow enough
 		   that the width rule is supposed to collapse the sidebar by itself */
 		const laptop = base === '#rail-auto';
 		const opt = {
 			/* #menu-noload waits 19 s for the core.js watchdog and the other menu
 			   scenarios wait out the 8 s source deadlines — that is virtual time,
-			   not wall clock */
-			budget: base === '#menu-noload' ? 34000 : (/^#menu-/.test(base) ? 24000 : 13000),
-			width: narrow ? 390 : (laptop ? 1100 : 1500),
-			height: narrow ? 844 : (tall ? 2700 : (graph ? 1400 : 900))
+			   not wall clock. Framed runs pay for the parent's poll loop too. */
+			budget: base === '#menu-noload' ? 34000
+				: (/^#menu-/.test(base) ? 24000 : (narrow ? 17000 : 13000)),
+			width: narrow ? (Number(process.env.LUCENT_PHONE_WIDTH) || 390) : (laptop ? 1100 : 1500),
+			height: narrow ? (phoneTall ? 2600 : 844) : (tall ? 2700 : (graph ? 1400 : 900))
 		};
 
-		const url = 'http://127.0.0.1:' + port + '/tests/harness.html' + base;
+		/* Phone scenarios are loaded inside a frame of exact CSS pixels: the
+		   window itself cannot be made that narrow, so this is the only way the
+		   page sees a real 390px viewport. */
+		let url;
+
+		if (narrow) {
+			url = 'http://127.0.0.1:' + port + '/tests/frame.html?w=' + opt.width +
+				'&h=' + opt.height + '&src=' + encodeURIComponent('/tests/harness.html' + base);
+			/* the outer window only has to be wide enough not to be clamped */
+			opt.width += 90;
+			opt.height += 40;
+		}
+		else {
+			url = 'http://127.0.0.1:' + port + '/tests/harness.html' + base;
+		}
 
 		if (wantShot) {
 			/* --screenshot and --dump-dom cannot share one run */
@@ -135,10 +160,21 @@ async function run(port) {
 			continue;
 		}
 
+		/* an empty report is not a clean one: the runner printing "0 failed"
+		   over a page that never reported anything is how a broken scenario
+		   looks like a passing one */
+		if (!lines.length) {
+			console.log('%s  EMPTY REPORT — page produced no assertions', flag.padEnd(15));
+			bad++;
+			continue;
+		}
+
 		const fails = lines.filter(l => !/^PASS/.test(l));
 
 		console.log('%s  %d checks, %d failed', flag.padEnd(15), lines.length, fails.length);
-		fails.forEach(l => console.log('    ' + l));
+		/* LUCENT_VERBOSE prints the PASS lines too, so a scenario that quietly
+		   lost assertions looks different from one that passed them */
+		(process.env.LUCENT_VERBOSE ? lines : fails).forEach(l => console.log('    ' + l));
 		bad += fails.length;
 	}
 

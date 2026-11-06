@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>FRAME_PENDING</title>
+<style>
+html,body{margin:0;padding:0;background:#141820}
+iframe{display:block;border:0}
+#report{display:none}
+</style>
+</head>
+<body>
+<pre id="report"></pre>
+<script>
+/* Headless Edge will not make a window narrower than roughly 480 CSS px, and
+   Windows DPI scaling multiplies whatever it does allow, so "--window-size=390"
+   has always produced a ~477px page. That is wide enough to skip every phone
+   media query, which is exactly how the mobile overflow bugs stayed invisible.
+   A frame sized in CSS px is the one mechanism that gives a true 390px
+   viewport, because media queries read the frame, not the window.
+   usage: frame.html?w=390&h=844&src=/tests/harness.html#phone  */
+var q = new URLSearchParams(location.search);
+var W = parseInt(q.get('w'), 10) || 390;
+var H = parseInt(q.get('h'), 10) || 844;
+var src = q.get('src') || '/tests/harness.html';
+/* timed so the "never said it was done" line always lands before the dump */
+var LIMIT = parseInt(q.get('limit'), 10) || 800;
+
+var frame = document.createElement('iframe');
+frame.style.cssText = 'width:' + W + 'px;height:' + H + 'px';
+document.body.appendChild(frame);
+frame.src = src;
+
+var tries = 0, injected = false, last = -1, stable = 0, lines = [];
+
+function finish(extra) {
+	document.getElementById('report').textContent =
+		(extra ? extra + '\n' : '') + lines.join('\n');
+	document.title = 'FRAME_DONE';
+	clearInterval(timer);
+}
+
+var timer = setInterval(function () {
+	var d, w, el, now;
+
+	if (++tries > LIMIT) {
+		/* say how far it got: a scenario that hangs after the last written
+		   assertion points at the check that never returns */
+		var seen = [];
+		try {
+			var part = frame.contentDocument.getElementById('report');
+			seen = (part ? part.textContent : '').split('\n').filter(function (l) { return l.trim(); });
+		} catch (e) {}
+		lines = seen;
+		return finish('FAIL frame: the harness never said it was done (' + src + ') — ' +
+			seen.length + ' assertions written, last: ' + (seen[seen.length - 1] || 'none'));
+	}
+
+	try {
+		d = frame.contentDocument;
+		w = frame.contentWindow;
+	} catch (e) {
+		return;
+	}
+
+	/* the harness rewrites its own pathname, so recognise the document by what
+	   it contains rather than by its url */
+	if (!d || !d.head || !d.getElementById('report'))
+		return;
+
+	if (d.getElementById('lucent-frame-chrome'))
+		injected = true;
+
+	/* A desktop page reserves room for a classic scrollbar, and that 15px does
+	   not come off the media-query width — the content area ends up 15px
+	   narrower than the layout was written for, and every box looks like it
+	   overflows. A phone uses overlay scrollbars; hiding ours makes 390 mean 390. */
+	if (!injected) {
+		var s = d.createElement('style');
+		s.id = 'lucent-frame-chrome';
+		s.textContent = 'html{scrollbar-width:none}::-webkit-scrollbar{display:none;width:0;height:0}';
+		d.head.appendChild(s);
+		injected = true;
+	}
+
+	if (!w.__lucentDone)
+		return;
+
+	el = d.getElementById('report');
+	now = (el ? el.textContent : '').split('\n').filter(function (l) { return l.trim(); });
+
+	/* the report is finished, but a couple of checks are written by a fetch
+	   chain that is not awaited — keep reading until the count stops growing */
+	lines = now;
+
+	if (now.length === last && ++stable > 3)
+		return finish('PASS frame: a real ' + d.documentElement.clientWidth +
+			'px viewport reached the page');
+
+	last = now.length;
+}, 20);
+</script>
+</body>
+</html>

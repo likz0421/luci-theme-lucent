@@ -8,6 +8,57 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.12 — 2026-11-06
+
+The phone round. The reason it took this long is that the phone tests were not
+running on a phone: headless Edge will not make a window narrower than about
+477 CSS px, so every `#phone` scenario had been rendering as a small tablet and
+the ≤720/≤980 rules were never exercised. Once the page really is 390 px wide,
+the overflow bugs measure themselves.
+
+### Fixed — phone
+
+- **The network path card was wider than the screen.** A branch wears its rate
+  on a line of its own, pinned to 100% of the box plus a 25 px indent — 25 px
+  wider than the box that holds it, so the number hung past the edge of the
+  card. It is allowed to shrink now.
+- The desktop graph keeps its own content width inside a horizontal scroller;
+  below 980 px the list now sizes to the screen instead, and the connector
+  layer, which would have crossed the whole phone, is dropped for an indented
+  column.
+- **Client names were cut to 112 px** — `DD:EE:FF:00:00:…` — while two hundred
+  pixels of the row sat empty. The cap is a desktop fan-out number and is not
+  applied to a full-width row.
+- The devices list on a phone used the generic two-cells-per-line table, which
+  left the rate bar half a screen wide and the timestamp alone on its own line.
+  It is now who-and-when, where-and-how-loud, then the bar across the full row.
+- **The table header was the only way to change the sort, and it was hidden on
+  phones.** It turns into a row of chips instead.
+- The filter button looked like an empty box: the icon set is drawn with
+  strokes, and an `svg` left at its defaults fills an open path to nothing.
+  Icons inside buttons are stroked now, and the harness checks it.
+- The search entry was hidden below 720 px, so the command palette had no way
+  in on a phone. The overlay is already responsive.
+- Drawer dismissal is asserted rather than assumed: the burger opens it, a tap
+  inside leaves it open, a tap outside — on an icon, which is what a finger
+  actually hits — closes it.
+
+### Fixed — desktop parity
+
+- The KPI tick now sits in front of the label, the way the reference reads it,
+  instead of floating in the corner of the tile.
+
+### Changed
+
+- The `menu:tree 155ms #menu12` line is no longer printed in the footer and the
+  Updates card in normal use. It was a debug affordance that shipped as
+  content; ask for it with `localStorage['lucent.debug'] = '1'`, and the
+  harness asks for itself.
+- `tests/frame.html` runs the phone scenarios inside a frame of exact CSS
+  pixels, so 390 means 390 — verified at 390, 360 and 320.
+- Ten rules whose class the theme never emits are gone, and
+  `tests/deadcss.js` reports any that come back.
+
 ## 0.11 — 2026-11-06
 
 A full re-audit of the repository — frontend, shell, packaging, ACL — plus the
