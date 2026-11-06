@@ -395,6 +395,11 @@ a.ltc-si-row:hover b{color:var(--accent-2)}
 .ltc-btn.danger,.cbi-button-negative,.cbi-button-reset{color:var(--bad)}
 .ltc-btn.block{width:100%}
 .ltc-btn.sm{min-height:30px;padding:0 10px;font-size:12px;border-radius:8px}
+/* the global input rule hands every input the full column width, which is
+   right for a text field and wrong for a button: in a table's action cell it
+   stretched Edit and Remove across the whole cell, and a row of buttons no
+   longer looked like a row of buttons */
+input.ltc-btn,input.btn,input.cbi-button{width:auto}
 .cbi-button[disabled],.btn[disabled],.ltc-btn[disabled]{opacity:.45;pointer-events:none}
 
 /* ---------------------------------------------------------------- forms */
@@ -426,7 +431,18 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .cbi-dynlist>.item::after{content:"×";color:var(--text-3);cursor:pointer;padding:0 4px}
 .cbi-dynlist>.add-item{display:flex;gap:6px}
 .cbi-dynlist>.add-item>input,.cbi-dynlist>.add-item>.cbi-dropdown{flex:1;min-width:0}
+/* the "+" beside a dynamic list is a button, not a field: left to the global
+   input width it took half the row and pushed the text field into it */
+.cbi-dynlist>.add-item>input[type=button],.cbi-dynlist>.add-item>input[type=submit]{flex:none;width:auto;min-width:44px;padding:0 12px}
 .cbi-select,.cbi-dropdown{max-width:100%}
+/* A dropdown sits in the same column as a text input, so it has to be as wide
+   as that input: shrink-wrapped to its content it leaves a ragged right edge
+   down the form — the single most visible "the layout is misaligned" on
+   Network → Interfaces. Action dropdowns (.cbi-button) are buttons and keep
+   their own width. */
+.cbi-value-field>.cbi-dropdown:not(.cbi-button):not(.btn),
+.cbi-value-field>div>.cbi-dropdown:not(.cbi-button):not(.btn),
+.cbi-section-table-cell .cbi-dropdown:not(.cbi-button):not(.btn){width:100%}
 .cbi-dropdown{display:inline-flex!important;position:relative;align-items:stretch;min-height:38px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);cursor:pointer;max-width:100%}
 .cbi-dropdown.btn,.cbi-dropdown.cbi-button{border-radius:9px;min-height:34px}
 .cbi-dropdown>ul{display:flex;overflow:hidden;width:100%;list-style:none;margin:0;padding:0}
@@ -480,6 +496,30 @@ fieldset{min-width:0;border:0;margin:0;padding:0}
 .network-status-table .ifacebox-body em{font-style:normal;color:var(--text-3)}
 .network-status-table .ifacebox-body .ifacebadge{margin-top:4px}
 .zonebadge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:99px;background:var(--tint);font-size:11px}
+
+/* ------------------------------------------------- LuCI's own page widgets */
+/* These containers are emitted by LuCI views this repository does not touch —
+   the wireless tree, the pending-changes list, the small status badges. They
+   arrived with bootstrap's floats and no min-width, so on a phone they were
+   the widest thing on the page. Nothing here was styled at all before. */
+.node-tree{list-style:none;margin:0 0 14px;padding:0 0 0 14px;border-left:1px solid var(--line-2);min-width:0}
+.node-tree .node-tree{margin:6px 0 0}
+.node-tree>li{padding:8px 0;min-width:0}
+.node-tree .node-name{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:13px;overflow-wrap:anywhere}
+.node-tree .node-status,.node-tree .node-desc{color:var(--text-3);font-size:12px;overflow-wrap:anywhere}
+.node-tree .node-desc{margin-top:2px}
+.node-tree .ifacebadge,.node-tree .zonebadge{margin:4px 4px 0 0}
+.uci-change-list{font:12.5px var(--mono);margin:0 0 14px;overflow-wrap:anywhere;min-width:0}
+.uci-change-list>div{padding:3px 0}
+.uci-change-list var{font-style:normal;color:var(--text-2);margin-right:6px}
+.uci-change-list ins,.uci-change-list del,.uci-change-list>div>span{display:inline-block;padding:1px 6px;border-radius:6px;font-size:12px}
+.uci-change-list ins{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok);text-decoration:none}
+.uci-change-list del{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.uci-change-list>div>span{background:var(--card-2);color:var(--text-2)}
+.uci-change-legend{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 10px;font:11.5px var(--sans);color:var(--text-3)}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:7px;background:var(--card-2);color:var(--text-2);font:11.5px var(--mono);white-space:nowrap}
+.notice,.alert-info{padding:10px 13px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;background:var(--card);color:var(--text-2);font-size:13px;margin:0 0 12px;overflow-wrap:anywhere}
+.notice.error,.alert-error{border-left-color:var(--bad)}
 
 /* native tooltips: global body-level popup (JS toggles opacity) + inline badges in .cbi-tooltip-container */
 .cbi-tooltip{position:absolute;left:0;top:0;z-index:1000;opacity:0;pointer-events:none;transition:opacity .12s ease;max-width:min(340px,82vw);padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);box-shadow:var(--shadow-pop);font-size:11.5px;line-height:1.55;white-space:normal;text-align:left}
@@ -970,6 +1010,15 @@ body:has(.ltc-login){background:var(--bg)}
 	   things a thumb is asked to hit */
 	.ltc-card-h .ltc-link{display:inline-flex;align-items:center;min-height:34px;padding:0 6px}
 	.ltc-funnel{min-width:38px}
+	/* the Appearance page's segmented controls — theme mode, palette, wallpaper
+	   source — were 30px, the shortest thing on the page a thumb is asked to
+	   aim at, and four of them sit in a row with 4px between them */
+	.ltc-seg button{min-height:38px;padding:0 14px}
+	.ltc-seg{gap:6px}
+	/* the media card's two buttons were 26px — and those are the ones that
+	   change what the router actually serves as wallpaper */
+	.ltc-media-acts button{min-height:38px;font-size:12px}
+	.ltc-media-acts{padding:0 8px 8px}
 }
 
 @media (max-width:720px){
@@ -1003,6 +1052,20 @@ body:has(.ltc-login){background:var(--bg)}
 	.table .tr:first-child{border-top:0}
 	.table .th,.table .td{flex:1 1 50%;max-width:100%;display:block;border-top:0!important;padding:4px 5px;min-width:0}
 	.tr.table-titles,.cbi-section-table-titles{display:none}
+	/* the status boxes are a grid on every screen; the collapse rule above
+	   turns every table into blocks, and a rules table and an interface grid
+	   share the .table class, so the grid has to be said again after it */
+	.network-status-table{display:grid}
+	/* a collapsed table has no header left, so every value would be a number
+	   with nothing saying what it is. core.js stamps the column name onto the
+	   cell and this prints it above the value. The theme's own devices list
+	   arranges its cells deliberately and is left out. */
+	.table:not(.ltc-clients) .td[data-ltc-label]::before{
+		content:attr(data-ltc-label);display:block;font-size:10.5px;color:var(--text-3);
+		letter-spacing:.03em;margin-bottom:2px
+	}
+	.node-tree{padding-left:10px}
+	.cbi-value-field>.cbi-dropdown,.cbi-dynlist{width:100%}
 	.ltc-swatches{grid-template-columns:repeat(3,minmax(0,1fr))}
 	.ltc-rings{gap:4px}
 	.ltc-ring .dial{width:70px;height:70px}

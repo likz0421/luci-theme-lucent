@@ -8,6 +8,74 @@ removed; the version numbering restarts at **0.1** from here. The feature notes
 below describe what the theme does today — the 3.x history is kept underneath
 for reference.
 
+## 0.13 — 2026-11-06
+
+The rest of the web UI. 0.12 fixed the theme's own pages; this round went after
+the pages the theme *inherits* — cbi forms, abstract tables, the wireless tree,
+the status boxes, the apply dialog, the login screen — plus the Appearance page,
+which had never been laid out at all. None of it had ever been measured: the
+harness only rendered home and clients.
+
+### Added — verification
+
+- `tests/harness.html` now renders a **generic LuCI page**: a cbi map with text,
+  checkbox, dropdown and dynamic-list fields, a five-column firewall-style
+  `table.cbi-section-table`, the wireless `.node-tree`, the `.ifacebox` grid of
+  status → overview, the pending `.uci-change-list`, alerts and badges.
+- The **login screen is measured from the shipped template** — `sysauth.ut` is
+  fetched, its ucode tags resolved, and the real markup is what gets sized, so
+  the mock cannot drift from what is installed.
+- The **apply-changes dialog** and the **command palette** are measured in their
+  open state; the palette is opened through its own button, so the test drives
+  the real code path.
+- The **Appearance page** (`settings.js`) is rendered with media and plugin
+  lists, at every width.
+- The geometry scan — sticks / clips / card-eaten / sideways scroll — runs at
+  **every** width, not only the phone ones, and `--width=NNN` sweeps any
+  scenario through an exact CSS-pixel viewport. Verified: 1500, 1280, 1100, 980,
+  900, 760, 720, 560, 430, 390, 360, 320.
+- New assertions that a widget is *themed*, not merely laid out: an unstyled
+  `.badge` or `.uci-change-list` fits the screen perfectly and still arrives in
+  bootstrap's look, which is the failure a geometry check cannot see.
+
+### Fixed — generic LuCI pages
+
+- **A dropdown in a form was 121px wide inside an 849px field column.** Every
+  control in a field column now fills it, so a form reads as one straight edge.
+  Action dropdowns keep their button width.
+- `input[type=button]` inherited the global full-width input rule, so a table's
+  Edit/Remove buttons stretched across their cell and a dynamic list's "+"
+  button took half the row. Buttons are content-width again; `.block` still
+  opts in to full width.
+- **Collapsed tables had no labels at all.** Below 720px the header row is
+  hidden, which left a firewall rule reading as "traffic Accept" with nothing
+  saying which was which. `core.js` now stamps the column name onto each cell —
+  driven by mutation, because LuCI rebuilds those tables on its own poll — and
+  the cell prints its label above its value.
+- `.node-tree`, `.uci-change-list`, `.uci-change-legend`, `.badge`, `.notice`
+  and bare alert states had **no rules anywhere**; they are themed now, with
+  `min-width:0` and `overflow-wrap` so long option names cannot widen a row.
+- The status boxes on System → Overview are a grid at every width: the collapse
+  rule that turns tables into blocks was cancelling it wherever an element
+  carried both `.table` and `.network-status-table`.
+
+### Fixed — Appearance page
+
+- The segmented controls (theme mode, palette, wallpaper source) were **30px
+  tall with 4px between them**, and the media card's Use/Remove buttons were
+  26px — the shortest targets on the page, on the controls that change what the
+  router serves. Both are thumb-sized on phones now.
+
+### Fixed — checks that were wrong
+
+- "no card eats its own content" flagged the desktop graph at 1100px, which is
+  inside a horizontal scroller on purpose. Content with a scrollable ancestor is
+  no longer counted as an overflow — and the check still fails when the scroller
+  is removed, which was verified by mutation.
+- "the status boxes form one aligned row" demanded a single row at every width;
+  `auto-fit` wrapping is correct behaviour. It now requires that each row's
+  boxes share a width and stay on the page, which still catches the ragged case.
+
 ## 0.12 — 2026-11-06
 
 The phone round. The reason it took this long is that the phone tests were not

@@ -177,6 +177,18 @@ var MOCK = {
 	'luci.lucent.theme_check': { current: '3.7.2-r1', latest: '3.7.3', available: true },
 	'luci.lucent.theme_status': { running: 0, code: -1, log: '' },
 	'luci.lucent.pkg_updates': { count: 4 },
+	/* the Appearance page's own two lists: without these the settings view
+	   renders empty and its rows are never measured */
+	'luci.lucent.media_list': { items: [
+		{ kind: 'image', name: 'dune-2026-11-05.jpg', size: 482113, mtime: 1762300000 },
+		{ kind: 'image', name: 'aurora-over-the-router.png', size: 1284561, mtime: 1762200000 },
+		{ kind: 'icon', name: 'lucent-logo.svg', size: 2048, mtime: 1761000000 }
+	] },
+	'luci.lucent.plugin_check': { items: [
+		{ name: 'openclash', pkg: 'luci-app-openclash', installed: true },
+		{ name: 'passwall', pkg: 'luci-app-passwall', installed: false },
+		{ name: 'adguardhome', pkg: 'luci-app-adguardhome', installed: false }
+	] },
 	'luci.lucent.topology': {
 		bridge: 'br-lan',
 		wan_device: 'eth0',
@@ -382,11 +394,209 @@ if (menuNoStore) {
 	localStorage.setItem = function () { throw new Error('QuotaExceededError (mock private mode)'); };
 }
 
+/* ---------------------------------------------------------------------------
+   A generic LuCI page. Interfaces, Wireless, Firewall rules and Software are
+   drawn by LuCI's own JS against cbi/DML markup: nothing in this repository
+   writes those class names, which is also why nothing in this repository had
+   ever measured them. The structure below is the real one — .cbi-value rows,
+   a .table.cbi-section-table with as many columns as a rules table gets, the
+   .node-tree of the wireless page, the .ifacebox grid of status → overview
+   and the pending-changes list the apply banner shows.
+--------------------------------------------------------------------------- */
+function genericPage() {
+	function field(type, value, cls) {
+		var i = E('input', { 'type': type, 'class': cls || 'cbi-input-text' });
+		if (value != null)
+			i.value = value;
+		return i;
+	}
+
+	function dropdown(items, chosen) {
+		var ul = E('ul', { 'class': 'dropdown' });
+
+		items.forEach(function (t) {
+			ul.appendChild(E('li', { 'data-value': t, 'selected': t === chosen ? '1' : null }, t));
+		});
+
+		/* LuCI shows the current selection in a li marked with a `display`
+		   attribute; without it the closed dropdown is an empty box, and the
+		   mock would then be measuring a widget the real page never renders */
+		return E('div', { 'class': 'cbi-dropdown', 'tabindex': '0' }, [
+			E('ul', {}, [E('li', { 'display': '1' }, chosen)]),
+			ul, E('span', { 'class': 'more' }, '▾'), E('span', { 'class': 'open' }, '▾')
+		]);
+	}
+
+	function dynlist(values) {
+		var box = E('div', { 'class': 'cbi-dynlist' });
+
+		values.forEach(function (v) {
+			box.appendChild(E('div', { 'class': 'item' }, [E('span', {}, v)]));
+		});
+		box.appendChild(E('div', { 'class': 'add-item' }, [
+			field('text', ''), E('input', { 'type': 'button', 'class': 'cbi-button cbi-button-add', 'value': '+' })
+		]));
+		return box;
+	}
+
+	function valueRow(title, f, descr) {
+		return E('div', { 'class': 'cbi-value' }, [
+			E('label', { 'class': 'cbi-value-title' }, title),
+			E('div', { 'class': 'cbi-value-field' }, [f, descr ? E('div', { 'class': 'cbi-value-description' }, descr) : ''])
+		]);
+	}
+
+	var form = E('div', { 'class': 'cbi-map' }, [
+		E('h2', {}, 'Interface Configuration'),
+		E('div', { 'class': 'cbi-map-descr' }, 'General setup of the WAN interface. A description long enough to wrap is normal here and must not push the field column sideways.'),
+		E('div', { 'class': 'cbi-section' }, [
+			E('h3', {}, 'General Configuration'),
+			E('div', { 'class': 'cbi-section-descr' }, 'These settings apply to the interface itself.'),
+			E('div', { 'class': 'cbi-section-node' }, [
+				valueRow('Interface name', field('text', 'wan')),
+				valueRow('PMTU / MTU bytes', field('text', '1492'), 'Set to 1492 for PPPoE connections; leave empty to use the driver default.'),
+				valueRow('Override MAC address', field('text', '00:11:22:33:44:55')),
+				valueRow('Bring up on boot', E('span', {}, [field('checkbox'), E('label', {}, 'enabled')])),
+				valueRow('Protocol', dropdown(['static', 'dhcp', 'pppoe', 'PPTP VPN'], 'pppoe')),
+				valueRow('DNS servers', dynlist(['223.5.5.5', '119.29.29.29', '8.8.8.8']))
+			])
+		]),
+		E('div', { 'class': 'cbi-page-actions' }, [
+			E('input', { 'type': 'submit', 'class': 'btn cbi-button cbi-button-apply', 'value': 'Save & Apply' }),
+			E('input', { 'type': 'submit', 'class': 'btn cbi-button cbi-button-reset', 'value': 'Cancel' })
+		])
+	]);
+
+	var heads = ['Name', 'Protocol', 'Source zone', 'Destination zone', 'Action'];
+	var titles = E('tr', { 'class': 'tr table-titles' });
+	var table = E('table', { 'class': 'table cbi-section-table' }, titles);
+
+	heads.forEach(function (h) { titles.appendChild(E('th', { 'class': 'th' }, h)); });
+
+	[['Allow LAN to router', 'traffic', 'lan', '(input)', 'Accept'],
+	 ['Allow ICMP from WAN with a very long rule name that has to wrap', 'traffic', 'wan', '(input)', 'Accept'],
+	 ['Forward LAN to WAN', 'traffic', 'lan', 'wan', 'Reject']]
+		.forEach(function (r) {
+			var row = E('tr', { 'class': 'tr cbi-section-table-row' });
+
+			r.forEach(function (c, i) {
+				row.appendChild(E('td', { 'class': 'td cbi-section-table-cell' },
+					i === 0 ? E('span', { 'class': 'cbi-value-data' }, [field('text', c)]) : c));
+			});
+			row.appendChild(E('td', { 'class': 'td cbi-section-actions' }, [
+				E('input', { 'type': 'button', 'class': 'cbi-button cbi-button-edit', 'value': 'Edit' }),
+				E('input', { 'type': 'button', 'class': 'cbi-button cbi-button-remove', 'value': 'Remove' })
+			]));
+			table.appendChild(row);
+		});
+
+	var tree = E('ul', { 'class': 'node-tree' }, [
+		E('li', { 'class': 'node' }, [
+			E('span', { 'class': 'node-name' }, 'radio0 (chan 36 / 160MHz)'),
+			E('span', { 'class': 'node-status' }, 'running - 8 clients'),
+			E('div', { 'class': 'node-desc' }, 'MyHome-5G - WPA3-SAE, 192.168.1.1/24, isolated from lan'),
+			E('div', { 'class': 'ifacebadge' }, [E('em', {}, 'tx'), E('b', {}, '43.2 Mbit/s')]),
+			E('div', { 'class': 'ifacebadge' }, [E('em', {}, 'rx'), E('b', {}, '118.7 Mbit/s')])
+		]),
+		E('li', { 'class': 'node' }, [
+			E('span', { 'class': 'node-name' }, 'radio1 (chan 1 / 40MHz)'),
+			E('span', { 'class': 'node-status' }, 'disabled'),
+			E('div', { 'class': 'node-desc' }, 'MyHome-2.4G')
+		])
+	]);
+
+	function ifacebox(name, proto, up, badges) {
+		return E('div', { 'class': 'ifacebox' }, [
+			E('div', { 'class': 'ifacebox-head ' + (up ? 'active' : '') }, [E('strong', {}, name), E('span', {}, proto)]),
+			E('div', { 'class': 'ifacebox-body' }, [
+				E('span', {}, up ? 'up' : 'down'), E('br'),
+				E('em', {}, '192.168.1.1/24'), E('br')
+			].concat(badges.map(function (b) { return E('div', { 'class': 'ifacebadge' }, b); })))
+		]);
+	}
+
+	var netstat = E('div', { 'class': 'network-status-table' }, [
+		ifacebox('wan', 'PPPoE', true, ['down 1.2 MiB/s', 'up 304 KiB/s']),
+		ifacebox('lan', 'static', true, ['4 clients']),
+		ifacebox('wlan0', 'ap', true, ['8 clients', '5 GHz'])
+	]);
+
+	var changes = E('div', { 'class': 'uci-change-list' }, [
+		E('div', { 'class': 'uci-change-legend' }, [
+			E('div', {}, [E('ins', {}, 'added'), E('span', {}, 'added')]),
+			E('div', {}, [E('del', {}, 'removed'), E('span', {}, 'removed')])
+		]),
+		E('div', {}, [E('var', {}, 'network.wan'), E('ins', {}, "option mtu '1492'")]),
+		E('div', {}, [E('var', {}, 'firewall'), E('del', {}, 'rule @rule[3]')]),
+		E('div', {}, [E('var', {}, 'wireless.radio0'), E('span', {}, "channel '36'")])
+	]);
+
+	var alerts = E('div', { 'class': 'ltc-stack' }, [
+		E('div', { 'class': 'alert-message error' }, 'Configuration could not be applied: netifd rejected the wireless section.'),
+		E('div', { 'class': 'notice' }, 'The system is in fail-safe mode.'),
+		E('table', { 'class': 'table' }, [
+			E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td' }, 'kernel'),
+				E('td', { 'class': 'td' }, [E('span', { 'class': 'badge' }, '6.12.112')]),
+				E('td', { 'class': 'td' }, 'uptime 12h 50m')
+			])
+		])
+	]);
+
+	return E('div', { 'class': 'ltc-generic' }, [form, table,
+		E('h3', {}, 'Wireless Overview'), tree,
+		E('h3', {}, 'Status'), netstat,
+		E('h3', {}, 'Pending changes'), changes, alerts]);
+}
+
+/* The login screen is the theme's own template, so read the real file instead
+   of re-typing it: the mock cannot then drift from what ships. Control tags
+   are dropped and their bodies kept, which also exercises the error branch. */
+function loginBlock() {
+	var box = E('div', { 'class': 'ltc-login-mock' });
+
+	return fetch('../ucode/template/themes/lucent/sysauth.ut')
+		.then(function (r) { return r.ok ? r.text() : ''; })
+		.then(function (tpl) {
+			var html = String(tpl)
+				.replace(/\{%[\s\S]*?%\}/g, '')
+				.replace(/\{\{\s*_\('([^']*)'\)\s*\}\}/g, '$1')
+				.replace(/\{\{[\s\S]*?\}\}/g, '');
+
+			box.innerHTML = html;
+			return box.children.length ? box : null;
+		});
+}
+
+/* The apply-changes dialog is LuCI's own overlay: it is fixed, it holds a
+   scrollable list, and its buttons are the last thing a user has to hit. */
+function modalBlock() {
+	var list = E('div', { 'class': 'uci-change-list' });
+
+	for (var i = 0; i < 12; i++)
+		list.appendChild(E('div', {}, [E('var', {}, 'network.wan' + i), E('ins', {}, "option mtu '1492'")]));
+
+	return E('div', { 'id': 'modal_overlay' }, [
+		E('div', { 'class': 'modal dlg' }, [
+			E('h3', {}, 'Apply configuration changes'),
+			E('div', { 'class': 'modal-body' }, [
+				E('p', {}, 'LuCI will commit the following changes and restart the affected services.'),
+				list
+			]),
+			E('div', { 'class': 'btn-container right' }, [
+				E('input', { 'type': 'button', 'class': 'btn cbi-button cbi-button-apply', 'value': 'Apply' }),
+				E('input', { 'type': 'button', 'class': 'btn cbi-button-reset', 'value': 'Dismiss' })
+			])
+		])
+	]);
+}
+
 (async function () {
 	registry.util = await mod(base + 'lucent/util.js');
 	registry.core = await mod(base + 'lucent/core.js');
 	var home = await mod(base + 'view/lucent/home.js');
 	var clients = await mod(base + 'view/lucent/clients.js');
+	var settings = await mod(base + 'view/lucent/settings.js');
 
 	/* menu failure scenarios: the sidebar must never end up blank */
 	var menuFail = /#menu-(reject|empty|noclass|hang|throw|noload|cache)/.test(FLAGS);
@@ -490,6 +700,41 @@ if (menuNoStore) {
 		var c = Object.create(clients);
 		return c.load().then(function (cd) {
 			document.getElementById('view').appendChild(c.render(cd));
+		});
+	}).then(function () {
+		/* the theme's own pages are only half of what a user sees: most of LuCI
+		   is cbi forms and abstract tables this repository does not write */
+		if (!/generic/.test(FLAGS))
+			return;
+
+		document.getElementById('view').appendChild(genericPage());
+		document.getElementById('view').appendChild(modalBlock());
+
+		/* tabs go into the container LuCI itself uses, and with the number of
+		   interfaces a real box has — that row is where they break */
+		var tabBar = E('ul', { 'class': 'cbi-tabmenu' });
+
+		['Control Mode', 'wan', 'wan6', 'lan', 'br-lan', 'pppoe-wan', 'wwan'].forEach(function (t, i) {
+			tabBar.appendChild(E('li', { 'class': i === 0 ? 'cbi-tab' : 'cbi-tab-disabled' },
+				E('a', { 'href': '#' }, t)));
+		});
+		document.getElementById('tabmenu').appendChild(tabBar);
+
+		return loginBlock().then(function (lb) {
+			if (lb)
+				document.getElementById('view').appendChild(lb);
+		});
+	}).then(function () {
+		/* Appearance is the theme's own third page — swatches, sliders, a media
+		   list and plugin rows — and until now nothing had laid it out */
+		if (!/settings|generic/.test(FLAGS))
+			return;
+
+		var st = Object.create(settings);
+
+		return st.load().then(function (d) {
+			document.getElementById('view').appendChild(st.render(d));
+			window.__settings = st;
 		});
 	}).then(function () { return wait(menuSkip ? 19000 : (menuFail ? 11000 : 1300)); }).then(function () {
 		/* sidebar traffic: two more samples with moved counters */
@@ -789,8 +1034,11 @@ if (menuNoStore) {
 		check('talker rates formatted', !!first && /↓/.test(first.querySelector('.val').textContent),
 			first && first.querySelector('.val').textContent);
 
-		/* ---- devices page: the reference's five columns ---- */
-		var heads = document.querySelectorAll('.ltc-content .table .table-titles .th');
+		/* ---- devices page: the reference's five columns ----
+		   scoped to .ltc-clients: on a page that also carries a firewall-style
+		   abstract table, counting every head on the page measures the wrong
+		   table and can be satisfied by the other one */
+		var heads = document.querySelectorAll('.ltc-clients .table-titles .th');
 		var rateCells = document.querySelectorAll('.ltc-rate');
 		var linkCells = document.querySelectorAll('.ltc-linkcell b');
 		var headText = Array.prototype.map.call(heads, function (h) { return h.textContent; }).join('|');
@@ -868,11 +1116,22 @@ if (menuNoStore) {
 			return bottom <= navEl.scrollHeight + 1;
 		})(), navEl ? 'scrollHeight ' + navEl.scrollHeight : 'no nav');
 
-		/* ---- phone geometry ----
+		/* ---- viewport geometry ----
 		   Measured in pixels rather than eyeballed: what sticks out of the
 		   viewport, what clips its own content, what is too small for a thumb,
-		   and whether the page scrolls sideways at all. */
-		if (/#phone/.test(FLAGS)) {
+		   and whether the page scrolls sideways at all. It runs at every width,
+		   not only the phone ones — a card that overflows its own grid cell on a
+		   desktop is the same class of bug and was invisible until now. */
+		{
+			/* the command palette is a fixed overlay with a scrolling list, and
+			   it is the one thing users open with one hand while holding the
+			   phone in the other — so it gets measured with everything else */
+			if (/generic/.test(FLAGS)) {
+				var sb = document.querySelector('[data-ltc-search]');
+				if (sb)
+					sb.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+			}
+
 			function scrollable(el) {
 				var n = el.parentElement;
 
@@ -888,8 +1147,11 @@ if (menuNoStore) {
 			   scrollbar, so anything sitting under it looked "inside the
 			   viewport" while the user saw it cut off */
 			var vw = document.documentElement.clientWidth;
+			var isPhone = vw <= 430;
 
-			check('phone: the window really is a phone', vw >= 300 && vw <= 430, 'clientWidth ' + vw);
+			if (/#phone/.test(FLAGS))
+				check('phone: the window really is a phone', isPhone, 'clientWidth ' + vw);
+
 			var sticks = [], clips = [], hits = [], eaten = [];
 
 			function clipper(el) {
@@ -934,14 +1196,21 @@ if (menuNoStore) {
 					   count */
 					el.textContent.trim() && !/ellipsis/.test(cs.textOverflow))
 					clips.push(cls + ' ' + el.scrollWidth + '>' + el.clientWidth);
-				if (/^(A|BUTTON|INPUT|SELECT)$/.test(el.tagName) && r.height > 4 &&
-					(r.height < 32 || r.width < 30))
+				/* a checkbox is 18px on every platform and is not what a thumb
+				   aims at — its label is — so only controls that are the whole
+				   target are measured */
+				if (/^(A|BUTTON|INPUT|SELECT)$/.test(el.tagName) &&
+					!/^(checkbox|radio|range|hidden|file)$/.test(el.type || '') &&
+					r.height > 4 && (r.height < 32 || r.width < 30))
 					hits.push(cls + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
 
 				/* the bug a viewport check cannot see: content that runs past the
 				   right edge of the card it belongs to, so the words are eaten by
-				   the page frame and nothing ever reports an overflow */
-				var cut = clipper(el);
+				   the page frame and nothing ever reports an overflow. Content
+				   inside a horizontal scroller is allowed to be wider than the
+				   card — that is what the scroller is for, and the graph keeps
+				   one at desktop widths on purpose. */
+				var cut = scrollable(el) ? null : clipper(el);
 
 				if (cut && el.textContent.trim()) {
 					var cr = cut.getBoundingClientRect();
@@ -953,22 +1222,245 @@ if (menuNoStore) {
 				}
 			});
 
-			check('phone: nothing sticks out of the viewport', !sticks.length, sticks.slice(0, 3).join(' / ') || 'clean');
-			check('phone: no box clips its own content', !clips.length, clips.slice(0, 3).join(' / ') || 'clean');
-			check('phone: no card eats its own content', !eaten.length, eaten.slice(0, 4).join(' / ') || 'clean');
-			check('phone: every control is big enough to hit', !hits.length, hits.slice(0, 4).join(' / ') || 'clean');
-			check('phone: the page does not scroll sideways',
+			check('geometry at ' + vw + 'px: nothing sticks out of the viewport',
+				!sticks.length, sticks.slice(0, 4).join(' / ') || 'clean');
+			check('geometry at ' + vw + 'px: no box clips its own content',
+				!clips.length, clips.slice(0, 4).join(' / ') || 'clean');
+			check('geometry at ' + vw + 'px: no card eats its own content',
+				!eaten.length, eaten.slice(0, 5).join(' / ') || 'clean');
+			check('geometry at ' + vw + 'px: the page does not scroll sideways',
 				document.documentElement.scrollWidth <= vw + 1,
 				document.documentElement.scrollWidth + ' vs ' + vw);
 
-			var side = document.querySelector('.ltc-side');
-			check('phone: the drawer leaves the page visible beside it',
-				!!side && side.getBoundingClientRect().width <= vw * 0.87,
-				side ? Math.round(side.getBoundingClientRect().width) + 'px of ' + innerWidth : 'no sidebar');
+			/* a thumb only exists on a narrow screen; on a desktop a 28px tool
+			   button is normal and flagging it would be noise */
+			if (isPhone)
+				check('phone: every control is big enough to hit', !hits.length,
+					hits.slice(0, 4).join(' / ') || 'clean');
 
-			/* geometry cannot say whether the drawer can actually be shut. The
-			   outside tap used to land on an SVG — which has no closest() — and
-			   throw, leaving the drawer stuck over the page with no way back. */
+			/* the collapsed firewall-style table is only readable if each cell
+			   says which column it belongs to — the header row is gone with the
+			   columns, and a bare "traffic Accept" is not an answer */
+			if (isPhone && /generic/.test(FLAGS)) {
+				var labelled = document.querySelectorAll(
+					'.ltc-generic .table:not(.ltc-clients) .td[data-ltc-label]');
+				var firstCell = labelled.length ? labelled[0] : null;
+
+				check('generic: collapsed cells carry their column name',
+					labelled.length >= 4 && !!firstCell &&
+					getComputedStyle(firstCell, '::before').content.indexOf('Name') === 1,
+					labelled.length + ' cells' + (firstCell ? ' · ' + firstCell.getAttribute('data-ltc-label') : ''));
+			}
+
+			/* ---- the alignment a screenshot cannot be trusted for ----
+			   A form column whose controls shrink-wrap to their content is the
+			   "卡片错位" the user sees as a ragged right edge; measuring each
+			   control against the column it sits in says so in one number. */
+			if (/generic/.test(FLAGS)) {
+				var ragged = [];
+
+				document.querySelectorAll('.ltc-generic .cbi-value-field').forEach(function (f) {
+					var col = f.getBoundingClientRect().width;
+
+					Array.prototype.forEach.call(f.children, function (c) {
+						if (c.classList.contains('cbi-value-description'))
+							return;
+						/* a checkbox with its label is content-width by design */
+						if (c.querySelector && c.querySelector('input[type=checkbox],input[type=radio]'))
+							return;
+
+						var w = c.getBoundingClientRect().width;
+
+						if (w > 4 && col - w > 2)
+							ragged.push((c.className || c.tagName) + ' ' + Math.round(w) + ' of ' + Math.round(col));
+					});
+				});
+
+				check('generic: every control fills its field column', !ragged.length,
+					ragged.slice(0, 4).join(' / ') || 'clean');
+
+				var boxes = Array.prototype.slice.call(
+					document.querySelectorAll('.ltc-generic .network-status-table .ifacebox'));
+				var rows = {};
+
+				/* auto-fit is allowed to wrap; what it is never allowed to do is
+				   put two boxes in one row at different widths, or one off the
+				   page — which is what a card grid without minmax(0,) does */
+				boxes.forEach(function (b) {
+					var r = b.getBoundingClientRect();
+					var key = Math.round(r.top);
+
+					(rows[key] = rows[key] || []).push(r);
+				});
+
+				var uneven = [], offPage = [];
+
+				Object.keys(rows).forEach(function (k) {
+					var list = rows[k];
+
+					list.forEach(function (r) {
+						if (Math.abs(r.width - list[0].width) > 2)
+							uneven.push('row@' + k + ' ' + Math.round(r.width) + ' vs ' + Math.round(list[0].width));
+						if (r.right > vw + 1 || r.width < 60)
+							offPage.push('row@' + k + ' ' + Math.round(r.width) + '..' + Math.round(r.right));
+					});
+				});
+
+				check('generic: the status boxes line up in their rows',
+					boxes.length >= 3 && !uneven.length && !offPage.length,
+					boxes.length + ' boxes in ' + Object.keys(rows).length + ' row(s)' +
+						(uneven.length ? ' · ' + uneven.slice(0, 3).join(' / ') : '') +
+						(offPage.length ? ' · ' + offPage.slice(0, 3).join(' / ') : ''));
+
+				var gtable = document.querySelector('.ltc-generic .cbi-section-table');
+				var gheads = gtable ? gtable.querySelectorAll('.table-titles .th').length : 0;
+				var grows = gtable ? gtable.querySelectorAll('tr:not(.table-titles)').length : 0;
+				var gcells = gtable ? gtable.querySelectorAll('tr:not(.table-titles) > td').length : 0;
+
+				check('generic: the rules table keeps its columns',
+					gheads === 5 && grows === 3 && gcells === grows * (gheads + 1),
+					gheads + ' heads, ' + grows + ' rows, ' + gcells + ' cells');
+
+				var tree = document.querySelector('.ltc-generic .node-tree');
+				var treeW = tree ? tree.getBoundingClientRect().width : 0;
+
+				check('generic: the wireless tree fits the page',
+					!!tree && treeW > 0 && treeW <= vw + 1 &&
+					!!tree.querySelector('.node-name'), Math.round(treeW) + 'px');
+
+				/* the login card comes from the shipped template, so this is the
+				   real markup — and the password eye is the one control users
+				   hit without aiming */
+				var login = document.querySelector('.ltc-login');
+				var card = document.querySelector('.ltc-login-card');
+				var eye = document.querySelector('.ltc-eye');
+				var loginFields = document.querySelectorAll('.ltc-login input[type=text],.ltc-login input[type=password]');
+				var fieldRagged = [];
+
+				Array.prototype.forEach.call(loginFields, function (f) {
+					var w = f.getBoundingClientRect().width;
+					var col = f.closest('.ltc-field') ? f.closest('.ltc-field').getBoundingClientRect().width : 0;
+					if (col && col - w > 2)
+						fieldRagged.push(f.name + ' ' + Math.round(w) + ' of ' + Math.round(col));
+				});
+
+				check('login: the shipped template rendered', !!login && !!card && loginFields.length === 2,
+					card ? Math.round(card.getBoundingClientRect().width) + 'px card' : 'no card');
+				check('login: fields fill their labels', !fieldRagged.length, fieldRagged.join(' / ') || 'clean');
+				check('login: the eye button is hittable',
+					!!eye && eye.getBoundingClientRect().height >= (isPhone ? 34 : 28),
+					eye ? Math.round(eye.getBoundingClientRect().width) + 'x' + Math.round(eye.getBoundingClientRect().height) : 'no eye');
+
+				/* the dialog is fixed over the page: if it is wider than the
+				   screen the buttons below the list cannot be reached at all */
+				var modal = document.getElementById('modal_overlay');
+				var dlg = modal ? modal.querySelector('.modal') : null;
+				var dlgR = dlg ? dlg.getBoundingClientRect() : null;
+				var dlgBtns = dlg ? dlg.querySelectorAll('input[type=button]') : [];
+
+				check('dialog: stays inside the screen',
+					!!dlgR && dlgR.left >= -1 && dlgR.right <= vw + 1 && dlgR.bottom <= innerHeight + 1,
+					dlgR ? Math.round(dlgR.left) + '..' + Math.round(dlgR.right) + ' of ' + vw : 'no dialog');
+				check('dialog: its buttons are reachable',
+					dlgBtns.length === 2 && Array.prototype.every.call(dlgBtns, function (b) {
+						var r = b.getBoundingClientRect();
+						return r.bottom <= innerHeight + 1 && r.height >= (isPhone ? 36 : 30);
+					}),
+					Array.prototype.map.call(dlgBtns, function (b) {
+						return Math.round(b.getBoundingClientRect().height) + '@' + Math.round(b.getBoundingClientRect().bottom);
+					}).join(' / ') || 'no buttons');
+
+				/* seven interface tabs on a 320px screen: they may wrap, but the
+				   active one must still be marked and none may hang off the edge */
+				var tabs = document.querySelectorAll('#tabmenu .cbi-tabmenu > li');
+				var tabTops = {};
+				var tabBad = [];
+
+				Array.prototype.forEach.call(tabs, function (li) {
+					var r = li.getBoundingClientRect();
+					var a = li.querySelector('a');
+
+					if (r.right > vw + 1 || r.width < 20)
+						tabBad.push((a ? a.textContent : '?') + ' ' + Math.round(r.width) + '..' + Math.round(r.right));
+
+					tabTops[Math.round(r.top)] = (tabTops[Math.round(r.top)] || 0) + 1;
+				});
+
+				check('tabs: the interface tab row stays on screen',
+					tabs.length === 7 && !tabBad.length,
+					tabs.length + ' tabs in ' + Object.keys(tabTops).length + ' row(s)' +
+						(tabBad.length ? ' · ' + tabBad.slice(0, 3).join(' / ') : ''));
+				check('tabs: the active tab is marked',
+					!!document.querySelector('#tabmenu .cbi-tab > a') &&
+					getComputedStyle(document.querySelector('#tabmenu .cbi-tab > a')).borderBottomColor !== 'transparent',
+					document.querySelector('#tabmenu .cbi-tab > a')
+						? getComputedStyle(document.querySelector('#tabmenu .cbi-tab > a')).borderBottomWidth : 'none');
+
+				/* fitting on the screen is not the same as being themed: with no
+				   rule at all these widgets still lay out fine, they just arrive
+				   in bootstrap's look. Each predicate below is one thing only
+				   this stylesheet could have done. */
+				var unthemed = [];
+				var THEME = [
+					['.ltc-generic .uci-change-list ins', function (cs) { return cs.backgroundColor !== 'rgba(0, 0, 0, 0)'; }, 'added line'],
+					['.ltc-generic .uci-change-legend', function (cs) { return cs.display === 'flex'; }, 'change legend'],
+					['.ltc-generic .badge', function (cs) { return parseFloat(cs.borderTopLeftRadius) > 0; }, 'badge'],
+					['.ltc-generic .notice', function (cs) { return parseFloat(cs.borderLeftWidth) >= 2; }, 'notice'],
+					['.ltc-generic .node-tree', function (cs) { return cs.listStyleType === 'none'; }, 'wireless tree'],
+					['.ltc-generic .node-tree', function (cs) { return parseFloat(cs.borderLeftWidth) > 0; }, 'tree guide line'],
+					['.ltc-generic .cbi-section', function (cs) { return parseFloat(cs.borderTopLeftRadius) > 0; }, 'form section'],
+					['.ltc-generic .cbi-page-actions', function (cs) { return cs.position === 'sticky'; }, 'sticky save bar'],
+					['.ltc-generic .cbi-dropdown', function (cs) { return parseFloat(cs.borderTopLeftRadius) > 0; }, 'dropdown'],
+					['.ltc-login-card', function (cs) { return parseFloat(cs.borderTopLeftRadius) > 0; }, 'login card']
+				];
+
+				THEME.forEach(function (t) {
+					var el = document.querySelector(t[0]);
+
+					if (!el) { unthemed.push(t[2] + ' missing'); return; }
+					if (!t[1](getComputedStyle(el)))
+						unthemed.push(t[2] + ' not themed');
+				});
+
+				check('generic: the widgets are themed, not just laid out',
+					!unthemed.length, unthemed.join(' / ') || 'all 10 styled');
+
+				var loginCard = document.querySelector('.ltc-login-card');
+				var loginR = loginCard ? loginCard.getBoundingClientRect() : null;
+
+				check('login: the card leaves room on both sides',
+					!!loginR && loginR.left >= -1 && loginR.width <= vw * 0.95 && loginR.width > 200,
+					loginR ? Math.round(loginR.left) + '..' + Math.round(loginR.right) + ' of ' + vw : 'no card');
+
+				/* the palette: an input that cannot be reached, or a list that
+				   runs past the screen, is the whole feature failing */
+				var pal = document.querySelector('.ltc-search');
+				var palBox = pal ? pal.querySelector('.ltc-search-box') : null;
+				var palInput = pal ? pal.querySelector('input') : null;
+
+				check('palette: it opened', !!pal && pal.classList.contains('show') &&
+					document.body.classList.contains('ltc-search-open'),
+					pal ? pal.className : 'no overlay built');
+				check('palette: the box fits the screen',
+					!!palBox && palBox.getBoundingClientRect().left >= -1 &&
+					palBox.getBoundingClientRect().right <= vw + 1 &&
+					palBox.getBoundingClientRect().bottom <= innerHeight + 1,
+					palBox ? Math.round(palBox.getBoundingClientRect().width) + 'x' +
+						Math.round(palBox.getBoundingClientRect().height) : 'no box');
+				check('palette: the field is focusable and empty',
+					!!palInput && palInput.value === '' && palInput.getBoundingClientRect().height >= (isPhone ? 30 : 24),
+					palInput ? Math.round(palInput.getBoundingClientRect().height) + 'px' : 'no input');
+			}
+
+			if (isPhone) {
+				var side = document.querySelector('.ltc-side');
+				check('phone: the drawer leaves the page visible beside it',
+					!!side && side.getBoundingClientRect().width <= vw * 0.87,
+					side ? Math.round(side.getBoundingClientRect().width) + 'px of ' + innerWidth : 'no sidebar');
+			}
+
+			/* geometry cannot say whether the drawer can actually be shut: a tap
+			   outside must close it, a tap inside must not */
 			if (/#phone-open/.test(FLAGS)) {
 				var tapErr = null;
 				var onError = function (ev) { tapErr = tapErr || String(ev.message || ev.error); };
@@ -1153,6 +1645,29 @@ if (menuNoStore) {
 			var ct = document.querySelector('.ltc-clients');
 			if (ct)
 				ct.scrollIntoView({ block: 'start' });
+		}
+		/* the generic page is appended after the theme's own views, so a shot of
+		   the top of the document would show none of it */
+		if (/generic/.test(FLAGS)) {
+			/* measured above; taken out now so the picture shows the page and
+			   not the dialog that was only there to be sized */
+			var mo = document.getElementById('modal_overlay');
+			if (mo)
+				mo.parentNode.removeChild(mo);
+
+			document.body.classList.remove('ltc-search-open');
+			var so = document.querySelector('.ltc-search');
+			if (so)
+				so.classList.remove('show');
+
+			var gp = document.querySelector('.ltc-generic');
+			if (gp)
+				gp.scrollIntoView({ block: 'start' });
+		}
+		if (/settings/.test(FLAGS)) {
+			var sp = document.querySelector('.ltc-plugins');
+			if (sp)
+				sp.scrollIntoView({ block: 'start' });
 		}
 
 		document.title = /FAIL|THREW/.test(REPORT.join('\n')) ? 'HARNESS_FAILED' : 'HARNESS_READY';

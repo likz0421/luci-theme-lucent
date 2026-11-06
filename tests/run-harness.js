@@ -28,9 +28,14 @@ const TYPES = {
 const ALL = ['#base', '#dhcpwan', '#menu-reject', '#menu-empty', '#menu-noclass', '#menu-throw',
 	'#menu-noload', '#menu-nomatch', '#menu-hang', '#menu-cache', '#menu-nostore', '#manyports',
 	'#tree-noisy', '#rail', '#rail-auto', '#drawer', '#phone', '#phone-open', '#phone-tall',
-	'#phone-clients'];
+	'#phone-clients', '#generic', '#phone-generic', '#settings', '#phone-settings'];
 
 const wantShot = process.argv.includes('--shot');
+/* --width=900 runs every scenario inside a frame of that exact CSS width, so
+   the breakpoint band between the phone and the desktop can be swept instead
+   of guessed at. */
+const forced = (process.argv.find(a => a.startsWith('--width=')) || '').split('=')[1];
+const forcedWidth = forced ? parseInt(forced, 10) : 0;
 const only = process.argv.slice(2).filter(a => !a.startsWith('--') && a !== '');
 const scenarios = only.length ? only.map(a => (a.startsWith('#') ? a : '#' + a)) : ALL;
 
@@ -107,7 +112,7 @@ async function run(port) {
 		/* #tall is a viewport choice rather than a scenario: the same page, tall
 		   enough to photograph the whole dashboard in one picture */
 		const base = (flag === '#base' || flag === '#tall') ? '' : flag;
-		const tall = flag === '#tall';
+		const tall = /-tall$/.test(flag) || flag === '#tall';
 		/* the same photographing aid at phone width: the whole dashboard in one
 		   tall picture, because a 844px window hides everything below the tiles */
 		const phoneTall = flag === '#phone-tall';
@@ -122,16 +127,17 @@ async function run(port) {
 			   not wall clock. Framed runs pay for the parent's poll loop too. */
 			budget: base === '#menu-noload' ? 34000
 				: (/^#menu-/.test(base) ? 24000 : (narrow ? 17000 : 13000)),
-			width: narrow ? (Number(process.env.LUCENT_PHONE_WIDTH) || 390) : (laptop ? 1100 : 1500),
+			width: forcedWidth || (narrow ? (Number(process.env.LUCENT_PHONE_WIDTH) || 390) : (laptop ? 1100 : 1500)),
 			height: narrow ? (phoneTall ? 2600 : 844) : (tall ? 2700 : (graph ? 1400 : 900))
 		};
 
 		/* Phone scenarios are loaded inside a frame of exact CSS pixels: the
 		   window itself cannot be made that narrow, so this is the only way the
-		   page sees a real 390px viewport. */
+		   page sees a real 390px viewport. --width frames everything. */
+		const framed = narrow || forcedWidth;
 		let url;
 
-		if (narrow) {
+		if (framed) {
 			url = 'http://127.0.0.1:' + port + '/tests/frame.html?w=' + opt.width +
 				'&h=' + opt.height + '&src=' + encodeURIComponent('/tests/harness.html' + base);
 			/* the outer window only has to be wide enough not to be clamped */

@@ -133,6 +133,7 @@ return baseclass.extend({
 
 		this.markActive();
 		this.observeMenu();
+		this.observeTables();
 		this.initSearch();
 		this.initRail();
 		this.watchMenu();
@@ -370,6 +371,67 @@ return baseclass.extend({
 			self.decorateIcons();
 			self.markActive();
 		}, 250);
+	},
+
+	/* A collapsed table has no header row left, so every value becomes a number
+	   with nothing saying what it is — firewall rules, installed packages, the
+	   lease list. Stamp the column name onto the cell and CSS prints it above
+	   the value. LuCI rebuilds those tables on its own poll, so this is driven
+	   by mutation, not once at load. */
+	labelCells: function () {
+		var narrow = window.innerWidth <= 720;
+
+		document.querySelectorAll('.table').forEach(function (t) {
+			/* the theme's own devices list arranges its cells deliberately */
+			if (t.classList.contains('ltc-clients'))
+				return;
+
+			var titles = t.querySelector('.table-titles,.cbi-section-table-titles');
+			var heads = [];
+
+			if (titles) {
+				Array.prototype.forEach.call(titles.children, function (th) {
+					heads.push((th.textContent || '').trim());
+				});
+			}
+
+			if (!heads.some(function (h) { return h; }))
+				return;
+
+			Array.prototype.forEach.call(t.rows, function (tr) {
+				if (tr === titles)
+					return;
+
+				Array.prototype.forEach.call(tr.cells, function (td, i) {
+					if (!narrow) {
+						td.removeAttribute('data-ltc-label');
+					}
+					else if (heads[i]) {
+						/* only when it changed: an attribute write is a mutation,
+						   and mutating inside the observer that reads it is a loop */
+						if (td.getAttribute('data-ltc-label') !== heads[i])
+							td.setAttribute('data-ltc-label', heads[i]);
+					}
+				});
+			});
+		});
+	},
+
+	observeTables: function () {
+		var self = this;
+		var stage = document.querySelector('.ltc-content') || document.body;
+
+		function later() {
+			clearTimeout(self._labelTimer);
+			self._labelTimer = setTimeout(function () { self.labelCells(); }, 250);
+		}
+
+		later();
+
+		if (window.MutationObserver)
+			new MutationObserver(later).observe(stage, { childList: true, subtree: true });
+
+		window.addEventListener('resize', later);
 	},
 
 	/* LuCI builds the menu as plain text links; prepend a small SVG glyph to
